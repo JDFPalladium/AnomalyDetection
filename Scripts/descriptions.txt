@@ -1,0 +1,1 @@
+This directory contains all scripts including development/exploratory scripts, scripts used for validation, and the final script to be delivered
