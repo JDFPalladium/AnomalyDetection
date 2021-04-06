@@ -1,0 +1,1 @@
+This directory will contain any script outputs, including model estimates
