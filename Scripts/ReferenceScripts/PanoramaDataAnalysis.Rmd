@@ -92,7 +92,7 @@ tidy1 <- panorama %>%
 ```
 
 ```{r}
-tidy2 <- test_tidy %>%
+tidy2 <- tidy1 %>%
   pivot_wider(names_from = "Indicator", values_from = "Count")
 panorama_processed <- tidy2
 ```
