@@ -1,0 +1,134 @@
+---
+title: "MER_Data_Pipeline.Rmd"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load in libraries
+
+```{r}
+library(readr)
+library(dplyr)
+library(knitr)
+library(tidyr)
+```
+
+### Prepare the data ###
+
+```{r}
+# Importing MER data
+
+setwd("C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection")
+filepath <- "C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection/"
+mer_png_raw <- read.csv(paste0(filepath, "PNG FY20 Q1 MER Data Release for Data.FI_4.13.2021.csv"), stringsAsFactors = FALSE)
+
+```
+
+
+
+```{r}
+# Select numeric columns of interest
+cols_to_keep <- c(23,24,31,34,28,35,39,40,48,49)
+mer_png <- mer_png_raw[, cols_to_keep]
+
+```
+
+# Sex
+
+```{r}
+# select columns of interest
+cols_to_keep <- c(2,5,7,10)
+mer_png_sex <- mer_png[, cols_to_keep]
+
+# filter out entries where facility is N/A
+mer_png_sex <- mer_png_sex %>% filter(sex == "Male" | sex == "Female" | sex == "Unknown Sex")
+
+# set NA to 0
+mer_png_sex[is.na(mer_png_sex)] = 0
+
+mer_png_sex_tidy <- mer_png_sex %>%
+  pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
+mer_png_sex_processed <- mer_png_sex_tidy
+```
+
+
+# Age
+
+```{r}
+# select columns of interest
+cols_to_keep <- c(2,6,5,10)
+mer_png_age <- mer_png[, cols_to_keep]
+
+# filter out entries where facility is N/A
+mer_png_age <- mer_png_age %>% filter(ageasentered != "")
+
+# set NA to 0
+mer_png_age[is.na(mer_png_age)] = 0
+
+mer_png_age_tidy <- mer_png_age %>%
+  pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
+mer_png_age_processed <- mer_png_age_tidy
+```
+
+
+# Sex and Age
+
+```{r}
+# select columns of interest
+cols_to_keep <- c(2,7,6,5,10)
+mer_png_age_sex <- mer_png[, cols_to_keep]
+
+# filter out entries where facility is N/A
+mer_png_age_sex <- mer_png_age_sex %>% filter(ageasentered != "")
+mer_png_age_sex <- mer_png_age_sex %>% filter(sex == "Male" | sex == "Female" | sex == "Unknown Sex")
+
+# set NA to 0
+mer_png_age_sex[is.na(mer_png_age_sex)] = 0
+
+mer_png_age_sex_tidy <- mer_png_age_sex %>%
+  pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
+mer_png_age_sex_processed <- mer_png_age_sex_tidy
+```
+
+
+# Key Pop
+
+```{r}
+# filter based on KeyPop/HIVStatus disaggregate
+mer_png_kp <- mer_png %>% filter(disaggregate == "KeyPop/HIVStatus")
+
+# select columns of interest
+cols_to_keep <- c(2,4,5,10)
+mer_png_kp <- mer_png_kp[, cols_to_keep]
+
+# set NA to 0
+mer_png_kp[is.na(mer_png_kp)] = 0
+
+mer_png_kp_tidy <- mer_png_kp %>%
+  pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
+mer_png_kp_processed <- mer_png_kp_tidy
+```
+
+
+# Total Indicator
+
+```{r}
+# filter based on TotalNumerator disaggregate
+mer_png_tn <- mer_png %>% filter(disaggregate == "Total Numerator")
+
+# select columns of interest
+cols_to_keep <- c(2,5,10)
+mer_png_tn <- mer_png_tn[, cols_to_keep]
+
+# set NA to 0
+mer_png_tn[is.na(mer_png_tn)] = 0
+
+mer_png_tn_tidy <- mer_png_tn %>%
+  pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
+mer_png_tn_processed <- mer_png_tn_tidy
+```
+
