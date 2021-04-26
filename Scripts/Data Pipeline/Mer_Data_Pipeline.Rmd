@@ -54,6 +54,9 @@ mer_png_sex[is.na(mer_png_sex)] = 0
 mer_png_sex_tidy <- mer_png_sex %>%
   pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
 mer_png_sex_processed <- mer_png_sex_tidy
+
+write.csv(mer_png_sex_processed, file = "mer_png_sex.csv")
+
 # any NAs are ones that were created by the pivot wider
 ```
 
@@ -74,6 +77,8 @@ mer_png_age[is.na(mer_png_age)] = 0
 mer_png_age_tidy <- mer_png_age %>%
   pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
 mer_png_age_processed <- mer_png_age_tidy
+
+write.csv(mer_png_age_processed, file = "mer_png_age.csv")
 ```
 
 
@@ -94,6 +99,8 @@ mer_png_age_sex[is.na(mer_png_age_sex)] = 0
 mer_png_age_sex_tidy <- mer_png_age_sex %>%
   pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
 mer_png_age_sex_processed <- mer_png_age_sex_tidy
+
+write.csv(mer_png_age_sex_processed, file = "mer_png_age_sex.csv")
 ```
 
 
@@ -113,6 +120,8 @@ mer_png_kp[is.na(mer_png_kp)] = 0
 mer_png_kp_tidy <- mer_png_kp %>%
   pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
 mer_png_kp_processed <- mer_png_kp_tidy
+
+write.csv(mer_png_kp_processed, file = "mer_png_kp.csv")
 ```
 
 
@@ -132,5 +141,7 @@ mer_png_tn[is.na(mer_png_tn)] = 0
 mer_png_tn_tidy <- mer_png_tn %>%
   pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
 mer_png_tn_processed <- mer_png_tn_tidy
+
+write.csv(mer_png_tn_processed, file = "mer_png_tn.csv")
 ```
 
