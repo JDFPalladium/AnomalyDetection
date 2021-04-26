@@ -39,7 +39,7 @@ panorama <- panorama_raw[, cols_to_keep]
 # filter out entries where facility is N/A
 panorama <- panorama %>% filter(Facility != "N/A")
 
-# set "" to N/A
+# set "" to 0
 panorama[panorama == ""] <- 0
 
 # rename columns 
@@ -79,7 +79,7 @@ panorama <- panorama %>% rename(
 col <- list(colnames(panorama))
 columns <- list("Q1Q22015","Q32015","Q42015","Q12016","Q22016","Q32016","Q42016","Q12017",    "Q22017","Q32017","Q42017","Q12018","Q22018","Q32018","Q42018","Q12019","Q22019","Q32019",
 "Q42019","Q12020","Q22020","Q32020","Q42020","Q12021")
-columns
+
 ```
 
 
@@ -95,6 +95,12 @@ tidy1 <- panorama %>%
 tidy2 <- tidy1 %>%
   pivot_wider(names_from = "Indicator", values_from = "Count")
 panorama_processed <- tidy2
+
+# values are NA if the facility did not report on that indicator for any of the quarters
+# values are 0 for cells that were blank in the panorama_raw file
+
+#panorama_processed[is.na(panorama_processed)] <- 0
+write.csv(panorama_processed, file = "panorama_processed.csv")
 ```
 
 
