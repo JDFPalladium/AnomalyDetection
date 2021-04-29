@@ -28,8 +28,6 @@ panorama_raw <- read.csv(paste0(filepath, "SitePerformanceFY2016-FY2021.csv"), s
 
 ```
 
-
-
 ```{r}
 # Select numeric columns of interest
 cols_to_keep <- c(2,3,4,5,7:30)
@@ -39,8 +37,6 @@ panorama <- panorama_raw[, cols_to_keep]
 # filter out entries where facility is N/A
 panorama <- panorama %>% filter(Facility != "N/A")
 
-# set "" to 0
-panorama[panorama == ""] <- 0
 
 # rename columns 
 panorama <- panorama %>% rename(
@@ -96,8 +92,7 @@ tidy2 <- tidy1 %>%
   pivot_wider(names_from = "Indicator", values_from = "Count")
 panorama_processed <- tidy2
 
-# values are NA if the facility did not report on that indicator for any of the quarters
-# values are 0 for cells that were blank in the panorama_raw file
+panorama_processed <- panorama_processed %>% mutate_all(na_if,"")
 
 #panorama_processed[is.na(panorama_processed)] <- 0
 write.csv(panorama_processed, file = "panorama_processed.csv")
