@@ -49,7 +49,7 @@ mer_png_sex <- mer_png[, cols_to_keep]
 mer_png_sex <- mer_png_sex %>% filter(sex == "Male" | sex == "Female" | sex == "Unknown Sex")
 
 # set NA to 0
-mer_png_sex[is.na(mer_png_sex)] = 0
+#mer_png_sex[is.na(mer_png_sex)] = 0
 
 mer_png_sex_tidy <- mer_png_sex %>%
   pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
@@ -72,7 +72,7 @@ mer_png_age <- mer_png[, cols_to_keep]
 mer_png_age <- mer_png_age %>% filter(ageasentered != "")
 
 # set NA to 0
-mer_png_age[is.na(mer_png_age)] = 0
+#mer_png_age[is.na(mer_png_age)] = 0
 
 mer_png_age_tidy <- mer_png_age %>%
   pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
@@ -94,7 +94,7 @@ mer_png_age_sex <- mer_png_age_sex %>% filter(ageasentered != "")
 mer_png_age_sex <- mer_png_age_sex %>% filter(sex == "Male" | sex == "Female" | sex == "Unknown Sex")
 
 # set NA to 0
-mer_png_age_sex[is.na(mer_png_age_sex)] = 0
+#mer_png_age_sex[is.na(mer_png_age_sex)] = 0
 
 mer_png_age_sex_tidy <- mer_png_age_sex %>%
   pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
@@ -115,7 +115,7 @@ cols_to_keep <- c(2,4,5,10)
 mer_png_kp <- mer_png_kp[, cols_to_keep]
 
 # set NA to 0
-mer_png_kp[is.na(mer_png_kp)] = 0
+#mer_png_kp[is.na(mer_png_kp)] = 0
 
 mer_png_kp_tidy <- mer_png_kp %>%
   pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
@@ -136,7 +136,7 @@ cols_to_keep <- c(2,5,10)
 mer_png_tn <- mer_png_tn[, cols_to_keep]
 
 # set NA to 0
-mer_png_tn[is.na(mer_png_tn)] = 0
+#mer_png_tn[is.na(mer_png_tn)] = 0
 
 mer_png_tn_tidy <- mer_png_tn %>%
   pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
