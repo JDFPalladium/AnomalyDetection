@@ -1,0 +1,148 @@
+---
+title: "Panorama_Covariance_Anomaly Detection"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# run on panorama then png separately
+```
+
+```{r}
+library(readr)
+library(htmltools)
+library(dplyr)
+library(knitr)
+library(tidyr)
+library(modi)
+library(htmltools)
+library(magrittr)
+```
+
+```{r}
+# Read in data
+setwd("C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection")
+panorama_processed <- read.csv("panorama_processed.csv")
+```
+
+# All ---------------------------------------------------------
+```{r}
+# drop observations where most variables are missing and variables where most observations are missing; this section deals with sparsity
+site_spread <- panorama_processed
+obs_count <- apply(site_spread[, 5:ncol(site_spread)], 1, function(x) length(which(!is.na(x)))) # drops the facilities for which all values are missing
+count_present <- apply(site_spread[, 5:ncol(site_spread)], 2, function(x) length(which(!is.na(x)))) # tells us how many rows have each indicator reported
+cols_to_keep <- which(count_present > (nrow(site_spread)*.10))+4 # keep variables present at least 10% of the time
+obs_to_keep <- which(obs_count > 4) # keep observations with at least four present values
+site_keep <- cbind(site_spread[obs_to_keep, 1:4], site_spread[obs_to_keep, cols_to_keep])
+```
+
+```{r}
+# filter just for Nigeria
+site_keep <- filter(site_keep, Country == "Nigeria")
+```
+
+
+```{r}
+# get sparse mu (vector of means)
+# alternatively use g sub to replace commas with blanks, the convert using as numeric
+library(magrittr)
+i <- c(6,7,8,9,10,11,12,13,14,15,16,17,18)
+site_keep[,i]  %<>% lapply(function(x) as.numeric(as.character(x)))
+sum_sparse <- colSums(site_keep[, 6:ncol(site_keep)], na.rm = TRUE) # sum of present values by variable; use na.rm so we remove NAs
+count_present_keep <- count_present[cols_to_keep-5] # count of present values by variable
+mu <- sum_sparse / count_present_keep # means
+k <- length(mu) # number of variables (indicators)
+
+N <- matrix(0, k, k) # set up k by k matrix; the diagonal is the number of observations; look at the paper
+diag(N) <- count_present_keep # diagonal initiated with count of present values
+
+i_mat <- matrix(0, k, k) # set up identity matrix
+diag(i_mat) <- 1
+
+S <- matrix(0, k, k) # N is the counts, s is where we store the covariances, and I is useful for some calculations
+
+for (i in 1:nrow(site_keep)){
+  dat <- site_keep[i, ]
+  inds <- which(!is.na(dat[6:ncol(site_keep)])) # inds returns the index of the columns that have non NA values
+  yt <- dat[6:ncol(site_keep)][inds] # yt are the actual values that are associated with the indices in inds
+  yt_mu <- as.matrix(yt - mu[inds]) # yt_mu subtracts the mu for each indicator from yt for each indicator
+  
+  Hyt <- as.matrix(i_mat[inds, ]) # hyt is a matrix that has the number of present values as rows and the numbers of all variables as columns
+  if(dim(Hyt)[2] == 1){Hyt <- t(Hyt)} #this relevant if we set the threshold too high and we only have 1 indicator column coming through
+  
+  S <- S + (t(Hyt) %*% (t(yt_mu) %*% yt_mu) %*% Hyt)
+}
+
+N_sqrt <- sqrt(N)
+diag(N_sqrt) <- 1/(diag(N_sqrt))
+R <- (N_sqrt %*% S %*% N_sqrt)
+```
+
+```{r}
+# Calculate Mahalanobis distance
+site_sparse <- site_keep
+site_sparse$MD_sp <- MDmiss(site_sparse[, 6:ncol(site_sparse)], center = mu, cov = R)
+cv<-qchisq(.95,df=ncol(site_sparse)-1)
+site_sparse$outlier_sp <- ifelse(site_sparse$MD_sp>cv, 1, 0)
+```
+
+```{r}
+# Predict present values - xt is the value to predict, yt are the other present values
+# value will be Rxtyt %*% Ryt_inv %*% yt-uyt + uxt
+preds <- matrix(data = NA, nrow = nrow(site_keep), ncol = k) # set up matrix to hold estimates
+```
+
+
+```{r}
+
+# Loop through each row
+for (i in 1:nrow(site_keep)){
+ 
+  # Get present values and index of present values
+  dat <- site_keep[i, ]
+  inds <- which(!is.na(dat[6:ncol(site_keep)]))
+  
+  # loop through index of present values
+  for (j in inds){
+    
+    # Get Rxtyt - covariance of other present values with selected present values
+    Rxtyt <- R[j, inds[!(inds %in% j)]]
+    # Get Ryt_inv
+    Ryt <- R[inds[!(inds %in% j)], inds[!(inds %in% j)]]
+    if (length(Ryt) > 1){
+    Ryt_inv <- matlib::inv(Ryt)  
+    } else {Ryt_inv <- 1/Ryt} # if Ryt is scalar, take the inverse of Ryt
+    
+    #Get yt-uyt
+    yt <- dat[6:ncol(site_keep)][inds[!(inds %in% j)]]
+    yt_mu <- as.matrix(yt - mu[inds[!(inds %in% j)]])
+    # uxt
+    uxt <- mu[j]
+    
+    # Get estimated value
+    preds[i,j] <- Rxtyt %*% Ryt_inv %*% t(yt_mu) + uxt
+    
+  }
+   
+  
+}
+
+# dimensions currently aren't working for row 120 - think about the dimensions of each component of preds; if we only have one other value present, what dimensions do we get for each component
+```
+
+
+```{r}
+preds_df <- data.frame(preds)
+names(preds_df) <- paste0("E_", names(site_sparse)[6:18])
+site_all <- cbind(site_sparse, preds_df)
+
+# Take the difference between estimate and actual and normalize by dividing by sample variance
+deviation <- abs(site_all[, 21:33] - site_all[, 6:18])
+deviation <- mapply('/', deviation, diag(R))
+deviation <- data.frame(deviation)
+names(deviation) <- paste0("D_", names(site_sparse)[6:18])
+site_out <- cbind(site_all, deviation)
+
+write_xlsx(site_out, './anomaly_recommender.xlsx')
+```
+
