@@ -47,12 +47,16 @@ mer_png_sex <- mer_png[, cols_to_keep]
 
 # filter out entries where facility is N/A
 mer_png_sex <- mer_png_sex %>% filter(sex == "Male" | sex == "Female" | sex == "Unknown Sex")
+mer_png_sex$facility <- as.factor(mer_png_sex$facility)
+mer_png_sex$indicator <- as.factor(mer_png_sex$indicator)
+mer_png_sex$sex <- as.factor(mer_png_sex$sex)
 
-# set NA to 0
-#mer_png_sex[is.na(mer_png_sex)] = 0
+mer_png_sex <- mer_png_sex %>% group_by(facility, indicator, sex) %>% 
+  summarise(qtr1sum = sum(qtr1, na.rm = TRUE))
+
 
 mer_png_sex_tidy <- mer_png_sex %>%
-  pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
+  pivot_wider(names_from = "indicator", values_from = "qtr1sum", values_fn = sum)
 mer_png_sex_processed <- mer_png_sex_tidy
 
 write.csv(mer_png_sex_processed, file = "mer_png_sex.csv")
