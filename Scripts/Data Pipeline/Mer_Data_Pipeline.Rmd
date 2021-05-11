@@ -3,10 +3,54 @@ title: "MER_Data_Pipeline.Rmd"
 output: html_document
 ---
 
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+# create key data frame thats 1:7, and model data frame that is 8:end; split based on the variable of interest
+# c bind at the end of the loop; after the loop, row bind the male and female tables together
 ```
+
+
+# Exploration and notes
+```{r}
+
+# anything that has de dup will be tagged as that 
+
+# full data set, agg disag, sex disag, kp disag, clinic vs hospital disagg
+
+# create a column for every disagg we want (key pop yes/no column, facility type clinic/hospital column) (if we do a different age disagg then the bands they have, we'd do it this way)
+
+# call columns by name that we want instead of by number reference (use is.numeric() to reference which columns in the data set have numbers vs names)
+
+# filter(mer_png_raw, facility == "Lawes Road Clinic" & sex == "Female" & ageasentered == "15+" & indicator == "TX_PVLS"))
+
+# testing to see which columns to drop
+unique(mer_png$disaggregate)
+mer_png_kp <- mer_png %>% filter(disaggregate %in% c("KeyPop/Result", "KeyPop/HIVStatus"))
+unique(mer_png$indicator)
+
+# testing to make sure no data is lost after the pivot
+
+# total data reported is 23,958 before pivot
+mer_png_test <- mer_png_full
+cols_to_keep <- c(9,21)
+mer_png_test <- mer_png_test[, cols_to_keep]
+mer_png_test[is.na(mer_png_test)] = 0
+mer_png_indicator_counts_pre <- mer_png_test %>%
+  group_by(indicator) %>%
+  summarise_each(funs(sum))
+
+# total data reported is 23,958 after pivot
+cols_to_keep <- c(8:22)
+mer_png_test_post <- mer_png_full_processed[, cols_to_keep]
+mer_png_test_post[is.na(mer_png_test_post)] = 0
+mer_png_indicator_counts_post <- colSums(mer_png_test_post)
+sum(mer_png_indicator_counts_post)
+
+# run this after and it will equal the number of rows
+n_distinct(mer_png_full_processed[,c("facility", "ageasentered", "sex")])
+
+```
+
 
 # Load in libraries
 
@@ -15,53 +59,86 @@ library(readr)
 library(dplyr)
 library(knitr)
 library(tidyr)
+library(openxlsx)
 ```
+
 
 ### Prepare the data ###
 
 ```{r}
 # Importing MER data
-
 setwd("C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection")
 filepath <- "C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection/"
 mer_png_raw <- read.csv(paste0(filepath, "PNG FY20 Q1 MER Data Release for Data.FI_4.13.2021.csv"), stringsAsFactors = FALSE)
+mer_png <- mer_png_raw %>% filter(numeratordenom == "N")
 
 ```
-
 
 
 ```{r}
-# Select numeric columns of interest
-#call columns by name that we want instead of by number reference (use is.numeric() to reference which columns in the data set have numbers vs names)
-cols_to_keep <- c(23,24,31,34,28,35,39,40,48,49)
+# only keep rows for which there is more than one unique value
+cols_to_keep <- c(1,2,20,21,23,24,25,27,28,30,31,32,33,34,35,36,37,38,39,40,49)
 mer_png <- mer_png_raw[, cols_to_keep]
 
+# remove the rows that report on Total Numerator or Total Denominator data
+mer_png_full <- mer_png %>% filter(!disaggregate %in% c("Total Numerator", "Total Denominator"))
+
+# edit this code
+# group by facility, age, sex, and indicator, and then summarize qtr 1 (before pivot); drop status HIV
+mer_png_tn <- mer_png_tn %>% group_by(facility, indicator) %>% 
+  summarise(qtr1sum = sum(qtr1, na.rm = TRUE))
+
+# create a column for the key population disaggregate
+mer_png_full <- mer_png_full %>% 
+  mutate(kp = ifelse(disaggregate == "KeyPop/Result" | disaggregate == "KeyPop/HIVStatus", "Yes", "No"))
+
+# create a column for the facility type disaggregate
+mer_png_full <- mer_png_full %>% 
+  mutate(facility_type = ifelse(facility == "Gerehu Hospital", "Hospital", "Clinic"))
+
 ```
+
+# Full dataset - no disags
+
+```{r}
+# covert type of the columns to factor
+mer_png_full$facility <- as.factor(mer_png_full$facility)
+mer_png_full$indicator <- as.factor(mer_png_full$indicator)
+mer_png_full$disaggregate <- as.factor(mer_png_full$disaggregate)
+mer_png_full$sex <- as.factor(mer_png_full$sex)
+mer_png_full$ageasentered <- as.factor(mer_png_full$ageasentered)
+mer_png_full$kp <- as.factor(mer_png_full$kp)
+mer_png_full$facility_type <- as.factor(mer_png_full$facility_type)
+
+# pivot wider
+mer_png_full_tidy <- mer_png_full %>%
+  pivot_wider(names_from = "indicator", values_from = "qtr1")
+mer_png_full_processed <- mer_png_full_tidy
+
+mer_png_full_processed[mer_png_full_processed == 0] <- NA
+
+# select columns of interest
+cols_to_keep <- c(6,10,14,18:36)
+mer_png_full_processed <- mer_png_full_processed[, cols_to_keep]
+
+
+write.xlsx(mer_png_full_processed, file = "mer_png_full.xlsx")
+
+```
+
 
 # Sex
 
 ```{r}
 # select columns of interest
 cols_to_keep <- c(2,5,7,10)
-mer_png_sex <- mer_png[, cols_to_keep]
+mer_png_sex <- mer_png_full_processed[, cols_to_keep]
 
-# filter out entries where facility is N/A
+# filter out entries where sex is missing
 mer_png_sex <- mer_png_sex %>% filter(sex == "Male" | sex == "Female" | sex == "Unknown Sex")
-mer_png_sex$facility <- as.factor(mer_png_sex$facility)
-mer_png_sex$indicator <- as.factor(mer_png_sex$indicator)
-mer_png_sex$sex <- as.factor(mer_png_sex$sex)
 
-mer_png_sex <- mer_png_sex %>% group_by(facility, indicator, sex) %>% 
-  summarise(qtr1sum = sum(qtr1, na.rm = TRUE))
+write.xlsx(mer_png_sex_processed, file = "mer_png_sex.xlsx")
 
-
-mer_png_sex_tidy <- mer_png_sex %>%
-  pivot_wider(names_from = "indicator", values_from = "qtr1sum", values_fn = sum)
-mer_png_sex_processed <- mer_png_sex_tidy
-
-write.csv(mer_png_sex_processed, file = "mer_png_sex.csv")
-
-# any NAs are ones that were created by the pivot wider
 ```
 
 
@@ -70,19 +147,13 @@ write.csv(mer_png_sex_processed, file = "mer_png_sex.csv")
 ```{r}
 # select columns of interest
 cols_to_keep <- c(2,6,5,10)
-mer_png_age <- mer_png[, cols_to_keep]
+mer_png_age <- mer_png_full_processed[, cols_to_keep]
 
-# filter out entries where facility is N/A
+# filter out entries where age is missing
 mer_png_age <- mer_png_age %>% filter(ageasentered != "")
 
-# set NA to 0
-#mer_png_age[is.na(mer_png_age)] = 0
+write.xlsx(mer_png_age_processed, file = "mer_png_age.xlsx")
 
-mer_png_age_tidy <- mer_png_age %>%
-  pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
-mer_png_age_processed <- mer_png_age_tidy
-
-write.csv(mer_png_age_processed, file = "mer_png_age.csv")
 ```
 
 
@@ -91,45 +162,41 @@ write.csv(mer_png_age_processed, file = "mer_png_age.csv")
 ```{r}
 # select columns of interest
 cols_to_keep <- c(2,7,6,5,10)
-mer_png_age_sex <- mer_png[, cols_to_keep]
+mer_png_age_sex <- mer_png_full_processed[, cols_to_keep]
 
-# filter out entries where facility is N/A
+# filter out entries where sex or age is missing
 mer_png_age_sex <- mer_png_age_sex %>% filter(ageasentered != "")
 mer_png_age_sex <- mer_png_age_sex %>% filter(sex == "Male" | sex == "Female" | sex == "Unknown Sex")
 
-# set NA to 0
-#mer_png_age_sex[is.na(mer_png_age_sex)] = 0
 
-mer_png_age_sex_tidy <- mer_png_age_sex %>%
-  pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
-mer_png_age_sex_processed <- mer_png_age_sex_tidy
-
-write.csv(mer_png_age_sex_processed, file = "mer_png_age_sex.csv")
+write.xlsx(mer_png_age_sex_processed, file = "mer_png_age_sex.xlsx")
 ```
 
 
 # Key Pop
 
 ```{r}
-# filter based on KeyPop/HIVStatus disaggregate
-mer_png_kp <- mer_png %>% filter(disaggregate == "KeyPop/HIVStatus")
+# select columns of interest
+cols_to_keep <- c(2,4,5,10)
+mer_png_kp <- mer_png_kp_processed[, cols_to_keep]
 
+write.xlsx(mer_png_kp_processed, file = "mer_png_kp.xlsx")
+```
+
+
+
+# Facility Type
+
+```{r}
 # select columns of interest
 cols_to_keep <- c(2,4,5,10)
 mer_png_kp <- mer_png_kp[, cols_to_keep]
 
-# set NA to 0
-#mer_png_kp[is.na(mer_png_kp)] = 0
-
-mer_png_kp_tidy <- mer_png_kp %>%
-  pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
-mer_png_kp_processed <- mer_png_kp_tidy
-
-write.csv(mer_png_kp_processed, file = "mer_png_kp.csv")
+write.xlsx(mer_png_kp_processed, file = "mer_png_facility_type.xlsx")
 ```
 
 
-# Total Indicator
+# Code Archive 
 
 ```{r}
 # filter based on TotalNumerator disaggregate
@@ -139,12 +206,14 @@ mer_png_tn <- mer_png %>% filter(disaggregate == "Total Numerator")
 cols_to_keep <- c(2,5,10)
 mer_png_tn <- mer_png_tn[, cols_to_keep]
 
-# set NA to 0
-#mer_png_tn[is.na(mer_png_tn)] = 0
+mer_png_tn$facility <- as.factor(mer_png_tn$facility)
+mer_png_tn$indicator <- as.factor(mer_png_tn$indicator)
 
 mer_png_tn_tidy <- mer_png_tn %>%
-  pivot_wider(names_from = "indicator", values_from = "qtr1", values_fn = sum)
+  pivot_wider(names_from = "indicator", values_from = "qtr1sum", values_fn = sum)
 mer_png_tn_processed <- mer_png_tn_tidy
+
+mer_png_tn_processed[mer_png_tn_processed == 0] <- NA
 
 write.csv(mer_png_tn_processed, file = "mer_png_tn.csv")
 ```
