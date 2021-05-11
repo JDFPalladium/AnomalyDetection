@@ -83,11 +83,6 @@ mer_png <- mer_png_raw[, cols_to_keep]
 # remove the rows that report on Total Numerator or Total Denominator data
 mer_png_full <- mer_png %>% filter(!disaggregate %in% c("Total Numerator", "Total Denominator"))
 
-# edit this code
-# group by facility, age, sex, and indicator, and then summarize qtr 1 (before pivot); drop status HIV
-mer_png_tn <- mer_png_tn %>% group_by(facility, indicator) %>% 
-  summarise(qtr1sum = sum(qtr1, na.rm = TRUE))
-
 # create a column for the key population disaggregate
 mer_png_full <- mer_png_full %>% 
   mutate(kp = ifelse(disaggregate == "KeyPop/Result" | disaggregate == "KeyPop/HIVStatus", "Yes", "No"))
@@ -96,11 +91,6 @@ mer_png_full <- mer_png_full %>%
 mer_png_full <- mer_png_full %>% 
   mutate(facility_type = ifelse(facility == "Gerehu Hospital", "Hospital", "Clinic"))
 
-```
-
-# Full dataset - no disags
-
-```{r}
 # covert type of the columns to factor
 mer_png_full$facility <- as.factor(mer_png_full$facility)
 mer_png_full$indicator <- as.factor(mer_png_full$indicator)
@@ -110,21 +100,29 @@ mer_png_full$ageasentered <- as.factor(mer_png_full$ageasentered)
 mer_png_full$kp <- as.factor(mer_png_full$kp)
 mer_png_full$facility_type <- as.factor(mer_png_full$facility_type)
 
+# group by facility, age, sex, and indicator, and then summarize qtr 1 (before pivot)
+mer_png_full <- mer_png_full %>% group_by(facility, ageasentered, sex, indicator, kp, facility_type) %>% 
+  summarise(qtr1sum = sum(qtr1, na.rm = TRUE)) 
+
+```
+
+# Full dataset - no disags
+
+```{r}
 # pivot wider
 mer_png_full_tidy <- mer_png_full %>%
-  pivot_wider(names_from = "indicator", values_from = "qtr1")
+  pivot_wider(names_from = "indicator", values_from = "qtr1sum")
 mer_png_full_processed <- mer_png_full_tidy
 
 mer_png_full_processed[mer_png_full_processed == 0] <- NA
 
-# select columns of interest
-cols_to_keep <- c(6,10,14,18:36)
-mer_png_full_processed <- mer_png_full_processed[, cols_to_keep]
-
-
 write.xlsx(mer_png_full_processed, file = "mer_png_full.xlsx")
 
 ```
+
+
+# Ignore below - hasn't been updated and is no longer needed
+
 
 
 # Sex
