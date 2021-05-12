@@ -1,0 +1,393 @@
+---
+title: "PNG_Covariance_Anomaly_Detection"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(readr)
+library(htmltools)
+library(dplyr)
+library(knitr)
+library(tidyr)
+library(modi)
+library(htmltools)
+library(magrittr)
+library(openxlsx)
+library(readxl)
+```
+
+# All - age, sex, and HIV status ---------------------------------------------------------
+```{r}
+# Read in and prepare the data
+
+setwd("C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection")
+filepath <- "C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection/"
+
+mer_png_full <- read_excel("mer_png_full.xlsx")
+
+```
+
+
+```{r}
+# drop observations where most variables are missing and variables where most observations are missing; this section deals with sparsity
+site_spread <- mer_png_full
+obs_count <- apply(site_spread[, 6:ncol(site_spread)], 1, function(x) length(which(!is.na(x)))) # drops the facilities for which all values are missing
+count_present <- apply(site_spread[, 6:ncol(site_spread)], 2, function(x) length(which(!is.na(x)))) # tells us how many rows have each indicator reported
+cols_to_keep <- which(count_present > (nrow(site_spread)*.05))+5 # keep variables present at least 5% of the time (was originally 10%)
+obs_to_keep <- which(obs_count > 1) # keep observations with at least one present values (was originally 4)
+site_keep <- cbind(site_spread[obs_to_keep, 1:5], site_spread[obs_to_keep, cols_to_keep])
+```
+
+
+```{r}
+# get sparse mu (vector of means)
+# alternatively use g sub to replace commas with blanks, the convert using as numeric
+sum_sparse <- colSums(site_keep[, 6:ncol(site_keep)], na.rm = TRUE) # sum of present values by variable; use na.rm so we remove NAs
+count_present_keep <- count_present[cols_to_keep-5] # count of present values by variable
+mu <- sum_sparse / count_present_keep # means
+k <- length(mu) # number of variables (indicators)
+
+N <- matrix(0, k, k) # set up k by k matrix; the diagonal is the number of observations; look at the paper
+diag(N) <- count_present_keep # diagonal initiated with count of present values
+
+i_mat <- matrix(0, k, k) # set up identity matrix
+diag(i_mat) <- 1
+
+S <- matrix(0, k, k) # N is the counts, s is where we store the covariances, and I is useful for some calculations
+
+for (i in 1:nrow(site_keep)){
+  dat <- site_keep[i, ]
+  inds <- which(!is.na(dat[6:ncol(site_keep)])) # inds returns the index of the columns that have non NA values
+  yt <- dat[6:ncol(site_keep)][inds] # yt are the actual values that are associated with the indices in inds
+  yt_mu <- as.matrix(yt - mu[inds]) # yt_mu subtracts the mu for each indicator from yt for each indicator
+  
+  Hyt <- as.matrix(i_mat[inds, ]) # hyt is a matrix that has the number of present values as rows and the numbers of all variables as columns
+  if(dim(Hyt)[2] == 1){Hyt <- t(Hyt)} #this relevant if we set the threshold too high and we only have 1 indicator column coming through
+  
+  S <- S + (t(Hyt) %*% (t(yt_mu) %*% yt_mu) %*% Hyt)
+}
+
+N_sqrt <- sqrt(N)
+diag(N_sqrt) <- 1/(diag(N_sqrt))
+R <- (N_sqrt %*% S %*% N_sqrt)
+```
+
+```{r}
+# Calculate Mahalanobis distance
+site_sparse <- site_keep
+site_sparse$MD_sp <- MDmiss(site_sparse[, 6:ncol(site_sparse)], center = mu, cov = R)
+cv<-qchisq(.95,df=ncol(site_sparse)-1)
+site_sparse$outlier_sp <- ifelse(site_sparse$MD_sp>cv, 1, 0)
+```
+
+```{r}
+# Predict present values - xt is the value to predict, yt are the other present values
+# value will be Rxtyt %*% Ryt_inv %*% yt-uyt + uxt
+preds <- matrix(data = NA, nrow = nrow(site_keep), ncol = k) # set up matrix to hold estimates
+```
+
+
+```{r}
+
+# Loop through each row
+for (i in 1:nrow(site_keep)){
+ 
+  # Get present values and index of present values
+  dat <- site_keep[i, ]
+  inds <- which(!is.na(dat[6:ncol(site_keep)]))
+  
+  # loop through index of present values
+  for (j in inds){
+    
+    # Get Rxtyt - covariance of other present values with selected present values
+    Rxtyt <- R[j, inds[!(inds %in% j)]]
+    # Get Ryt_inv
+    Ryt <- R[inds[!(inds %in% j)], inds[!(inds %in% j)]]
+    if (length(Ryt) > 1){
+    Ryt_inv <- matlib::inv(Ryt)  
+    } else {Ryt_inv <- 1/Ryt} # if Ryt is scalar, take the inverse of Ryt
+    
+    #Get yt-uyt
+    yt <- dat[6:ncol(site_keep)][inds[!(inds %in% j)]]
+    yt_mu <- as.matrix(yt - mu[inds[!(inds %in% j)]])
+    # uxt
+    uxt <- mu[j]
+    
+    # Get estimated value
+    preds[i,j] <- Rxtyt %*% Ryt_inv %*% t(yt_mu) + uxt
+    
+  }
+   
+  
+}
+
+```
+
+
+
+```{r}
+preds_df <- data.frame(preds)
+names(preds_df) <- paste0("E_", names(site_sparse)[6:17])
+site_all <- cbind(site_sparse, preds_df)
+
+# Take the difference between estimate and actual and normalize by dividing by sample variance
+deviation <- abs(site_all[, 20:31] - site_all[, 6:17])
+deviation <- mapply('/', deviation, diag(R))
+deviation <- data.frame(deviation)
+names(deviation) <- paste0("D_", names(site_sparse)[6:17])
+site_out_total <- cbind(site_all, deviation)
+
+write.xlsx(site_out_total, file = "png_total_anomaly_recommender.xlsx")
+
+```
+
+
+
+# Disaggregate by age ---------------------------------------------------------
+```{r}
+# Read in data
+setwd("C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection")
+mer_png_age <- read.csv("mer_png_age.csv")
+
+```
+
+
+```{r}
+# drop observations where most variables are missing and variables where most observations are missing; this section deals with sparsity
+site_spread <- mer_png_age
+obs_count <- apply(site_spread[, 4:ncol(site_spread)], 1, function(x) length(which(!is.na(x)))) # drops the facilities for which all values are missing
+count_present <- apply(site_spread[, 4:ncol(site_spread)], 2, function(x) length(which(!is.na(x)))) # tells us how many rows have each indicator reported
+cols_to_keep <- which(count_present > (nrow(site_spread)*.10))+3 # keep variables present at least 10% of the time
+obs_to_keep <- which(obs_count > 4) # keep observations with at least four present values
+site_keep <- cbind(site_spread[obs_to_keep, 1:3], site_spread[obs_to_keep, cols_to_keep])
+```
+
+
+```{r}
+# get sparse mu (vector of means)
+# alternatively use g sub to replace commas with blanks, the convert using as numeric
+sum_sparse <- colSums(site_keep[, 4:ncol(site_keep)], na.rm = TRUE) # sum of present values by variable; use na.rm so we remove NAs
+count_present_keep <- count_present[cols_to_keep-3] # count of present values by variable
+mu <- sum_sparse / count_present_keep # means
+k <- length(mu) # number of variables (indicators)
+
+N <- matrix(0, k, k) # set up k by k matrix; the diagonal is the number of observations; look at the paper
+diag(N) <- count_present_keep # diagonal initiated with count of present values
+
+i_mat <- matrix(0, k, k) # set up identity matrix
+diag(i_mat) <- 1
+
+S <- matrix(0, k, k) # N is the counts, s is where we store the covariances, and I is useful for some calculations
+
+for (i in 1:nrow(site_keep)){
+  dat <- site_keep[i, ]
+  inds <- which(!is.na(dat[4:ncol(site_keep)])) # inds returns the index of the columns that have non NA values
+  yt <- dat[4:ncol(site_keep)][inds] # yt are the actual values that are associated with the indices in inds
+  yt_mu <- as.matrix(yt - mu[inds]) # yt_mu subtracts the mu for each indicator from yt for each indicator
+  
+  Hyt <- as.matrix(i_mat[inds, ]) # hyt is a matrix that has the number of present values as rows and the numbers of all variables as columns
+  if(dim(Hyt)[2] == 1){Hyt <- t(Hyt)} #this relevant if we set the threshold too high and we only have 1 indicator column coming through
+  
+  S <- S + (t(Hyt) %*% (t(yt_mu) %*% yt_mu) %*% Hyt)
+}
+
+N_sqrt <- sqrt(N)
+diag(N_sqrt) <- 1/(diag(N_sqrt))
+R <- (N_sqrt %*% S %*% N_sqrt)
+```
+
+```{r}
+# Calculate Mahalanobis distance
+site_sparse <- site_keep
+site_sparse$MD_sp <- MDmiss(site_sparse[, 4:ncol(site_sparse)], center = mu, cov = R)
+cv<-qchisq(.95,df=ncol(site_sparse)-1)
+site_sparse$outlier_sp <- ifelse(site_sparse$MD_sp>cv, 1, 0)
+```
+
+```{r}
+# Predict present values - xt is the value to predict, yt are the other present values
+# value will be Rxtyt %*% Ryt_inv %*% yt-uyt + uxt
+preds <- matrix(data = NA, nrow = nrow(site_keep), ncol = k) # set up matrix to hold estimates
+```
+
+
+```{r}
+
+# Loop through each row
+for (i in 1:nrow(site_keep)){
+ 
+  # Get present values and index of present values
+  dat <- site_keep[i, ]
+  inds <- which(!is.na(dat[4:ncol(site_keep)]))
+  
+  # loop through index of present values
+  for (j in inds){
+    
+    # Get Rxtyt - covariance of other present values with selected present values
+    Rxtyt <- R[j, inds[!(inds %in% j)]]
+    # Get Ryt_inv
+    Ryt <- R[inds[!(inds %in% j)], inds[!(inds %in% j)]]
+    if (length(Ryt) > 1){
+    Ryt_inv <- matlib::inv(Ryt)  
+    } else {Ryt_inv <- 1/Ryt} # if Ryt is scalar, take the inverse of Ryt
+    
+    #Get yt-uyt
+    yt <- dat[4:ncol(site_keep)][inds[!(inds %in% j)]]
+    yt_mu <- as.matrix(yt - mu[inds[!(inds %in% j)]])
+    # uxt
+    uxt <- mu[j]
+    
+    # Get estimated value
+    preds[i,j] <- Rxtyt %*% Ryt_inv %*% t(yt_mu) + uxt
+    
+  }
+   
+  
+}
+
+```
+
+
+```{r}
+preds_df <- data.frame(preds)
+names(preds_df) <- paste0("E_", names(site_sparse)[4:11])
+site_all <- cbind(site_sparse, preds_df)
+
+# Take the difference between estimate and actual and normalize by dividing by sample variance
+deviation <- abs(site_all[, 14:21] - site_all[, 4:11])
+deviation <- mapply('/', deviation, diag(R))
+deviation <- data.frame(deviation)
+names(deviation) <- paste0("D_", names(site_sparse)[4:11])
+site_out_age <- cbind(site_all, deviation)
+
+write.csv(site_out_age, file = "png_age_anomaly_recommender.csv")
+
+```
+
+
+# Disaggregate by sex ---------------------------------------------------------
+```{r}
+# Read in data
+setwd("C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection")
+mer_png_sex <- read.csv("mer_png_sex.csv")
+
+```
+
+
+```{r}
+# drop observations where most variables are missing and variables where most observations are missing; this section deals with sparsity
+site_spread <- mer_png_sex
+obs_count <- apply(site_spread[, 4:ncol(site_spread)], 1, function(x) length(which(!is.na(x)))) # drops the facilities for which all values are missing
+count_present <- apply(site_spread[, 4:ncol(site_spread)], 2, function(x) length(which(!is.na(x)))) # tells us how many rows have each indicator reported
+cols_to_keep <- which(count_present > (nrow(site_spread)*.05))+3 # keep variables present at least 5% of the time
+obs_to_keep <- which(obs_count > 2) # keep observations with at least four present values
+site_keep <- cbind(site_spread[obs_to_keep, 1:3], site_spread[obs_to_keep, cols_to_keep])
+```
+
+
+```{r}
+# get sparse mu (vector of means)
+# alternatively use g sub to replace commas with blanks, the convert using as numeric
+sum_sparse <- colSums(site_keep[, 4:ncol(site_keep)], na.rm = TRUE) # sum of present values by variable; use na.rm so we remove NAs
+count_present_keep <- count_present[cols_to_keep-3] # count of present values by variable
+mu <- sum_sparse / count_present_keep # means
+k <- length(mu) # number of variables (indicators)
+
+N <- matrix(0, k, k) # set up k by k matrix; the diagonal is the number of observations; look at the paper
+diag(N) <- count_present_keep # diagonal initiated with count of present values
+
+i_mat <- matrix(0, k, k) # set up identity matrix
+diag(i_mat) <- 1
+
+S <- matrix(0, k, k) # N is the counts, s is where we store the covariances, and I is useful for some calculations
+
+for (i in 1:nrow(site_keep)){
+  dat <- site_keep[i, ]
+  inds <- which(!is.na(dat[4:ncol(site_keep)])) # inds returns the index of the columns that have non NA values
+  yt <- dat[4:ncol(site_keep)][inds] # yt are the actual values that are associated with the indices in inds
+  yt_mu <- as.matrix(yt - mu[inds]) # yt_mu subtracts the mu for each indicator from yt for each indicator
+  
+  Hyt <- as.matrix(i_mat[inds, ]) # hyt is a matrix that has the number of present values as rows and the numbers of all variables as columns
+  if(dim(Hyt)[2] == 1){Hyt <- t(Hyt)} #this relevant if we set the threshold too high and we only have 1 indicator column coming through
+  
+  S <- S + (t(Hyt) %*% (t(yt_mu) %*% yt_mu) %*% Hyt)
+}
+
+N_sqrt <- sqrt(N)
+diag(N_sqrt) <- 1/(diag(N_sqrt))
+R <- (N_sqrt %*% S %*% N_sqrt)
+```
+
+```{r}
+# Calculate Mahalanobis distance
+site_sparse <- site_keep
+site_sparse$MD_sp <- MDmiss(site_sparse[, 4:ncol(site_sparse)], center = mu, cov = R)
+cv<-qchisq(.95,df=ncol(site_sparse)-1)
+site_sparse$outlier_sp <- ifelse(site_sparse$MD_sp>cv, 1, 0)
+```
+
+```{r}
+# Predict present values - xt is the value to predict, yt are the other present values
+# value will be Rxtyt %*% Ryt_inv %*% yt-uyt + uxt
+preds <- matrix(data = NA, nrow = nrow(site_keep), ncol = k) # set up matrix to hold estimates
+```
+
+
+```{r}
+
+# Loop through each row
+for (i in 1:nrow(site_keep)){
+ 
+  # Get present values and index of present values
+  dat <- site_keep[i, ]
+  inds <- which(!is.na(dat[4:ncol(site_keep)]))
+  
+  # loop through index of present values
+  for (j in inds){
+    
+    # Get Rxtyt - covariance of other present values with selected present values
+    Rxtyt <- R[j, inds[!(inds %in% j)]]
+    # Get Ryt_inv
+    Ryt <- R[inds[!(inds %in% j)], inds[!(inds %in% j)]]
+    if (length(Ryt) > 1){
+    Ryt_inv <- matlib::inv(Ryt)  
+    } else {Ryt_inv <- 1/Ryt} # if Ryt is scalar, take the inverse of Ryt
+    
+    #Get yt-uyt
+    yt <- dat[4:ncol(site_keep)][inds[!(inds %in% j)]]
+    yt_mu <- as.matrix(yt - mu[inds[!(inds %in% j)]])
+    # uxt
+    uxt <- mu[j]
+    
+    # Get estimated value
+    preds[i,j] <- Rxtyt %*% Ryt_inv %*% t(yt_mu) + uxt
+    
+  }
+   
+  
+}
+
+```
+
+
+```{r}
+preds_df <- data.frame(preds)
+names(preds_df) <- paste0("E_", names(site_sparse)[4:11])
+site_all <- cbind(site_sparse, preds_df)
+
+# Take the difference between estimate and actual and normalize by dividing by sample variance
+deviation <- abs(site_all[, 14:21] - site_all[, 4:11])
+deviation <- mapply('/', deviation, diag(R))
+deviation <- data.frame(deviation)
+names(deviation) <- paste0("D_", names(site_sparse)[4:11])
+site_out_sex <- cbind(site_all, deviation)
+
+write.csv(site_out_sex, file = "png_sex_anomaly_recommender.csv")
+
+```
+
