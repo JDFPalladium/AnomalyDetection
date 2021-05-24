@@ -3,11 +3,41 @@ title: "PNG_Covariance_Anomaly_Detection"
 output: html_document
 ---
 
+# disaggregations we will run: 
+# 1. overall
+# 2. sex
+# 3. age (using 5 year age bands) (grouped by life stages - 0-14; 15-24; 25-49; 50+) (grouped by life stages - 0-14; 15-49; 50+)
+# 4. sex and age (grouped by life stages - 0-14; 15-49; 50+) 
+# 5. facility type (clinic vs hospital)
+# 6. key pop vs non key pop
+
+# run covariance on panorama - generate and save R for male and R for female
+# when I bring it to PNG, drop the variables that aren't relevant to PNG and drop those variables
+# PNG full, age, and sex into an excel sheet that looks nice
+# if det(R) = 0, read in global R instead
+
+# Notes and To Do ----------------------------------------------
+```{r}
+# turn it into a workbook with one data frame per tab; on the landing page join each of the 6 dataframes together (the landing page data frame will have the descriptive data rows, the original values for each indicator, and then the 1/0 flag for each run - one column for each of these)
+# left join the output table from the sex run to site_spread (join on all five of the unique columns)
+# if you left join and get more than 270, there was something in your right table that appeared more than once
+# the tabs can have the output from the run (they don't have to have 270)
+# all 6 tabs should have 134 in theory
+# for the excel; input should be the exact same csv file you output from the covariance
+# in line 32, your data is your sheet; columnIndex is the columns of the original indicators
+# split apply combine; lapply takes in a list and returns a list
+# first drop the columns; bind it to site keep; then drop the observations
+# also try with only dropping empty rows; turn on Ryt if else
+```
+
+
+# Set up Rmd -------------------------------------------
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
+# Import necessary libraries ---------------------------
 ```{r}
 library(readr)
 library(htmltools)
@@ -21,10 +51,9 @@ library(openxlsx)
 library(readxl)
 ```
 
-# All - age, sex, and HIV status ---------------------------------------------------------
-```{r}
-# Read in and prepare the data
 
+# Read in and prepare the data ----------------------------
+```{r}
 setwd("C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection")
 filepath <- "C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection/"
 
@@ -33,18 +62,16 @@ mer_png_full <- read_excel("mer_png_full.xlsx")
 ```
 
 
+# All - facility name, age, sex, kp, and facility type -----------------------------------------
 ```{r}
 # drop observations where most variables are missing and variables where most observations are missing; this section deals with sparsity
 site_spread <- mer_png_full
 obs_count <- apply(site_spread[, 6:ncol(site_spread)], 1, function(x) length(which(!is.na(x)))) # drops the facilities for which all values are missing
 count_present <- apply(site_spread[, 6:ncol(site_spread)], 2, function(x) length(which(!is.na(x)))) # tells us how many rows have each indicator reported
-cols_to_keep <- which(count_present > (nrow(site_spread)*.05))+5 # keep variables present at least 5% of the time (was originally 10%)
-obs_to_keep <- which(obs_count > 1) # keep observations with at least one present values (was originally 4)
+cols_to_keep <- which(count_present > (nrow(site_spread)*.10))+5 # keep variables present at least 5% of the time (was originally 10%)
+obs_to_keep <- which(obs_count > 3) # keep observations with at least one present values (was originally 4)
 site_keep <- cbind(site_spread[obs_to_keep, 1:5], site_spread[obs_to_keep, cols_to_keep])
-```
 
-
-```{r}
 # get sparse mu (vector of means)
 # alternatively use g sub to replace commas with blanks, the convert using as numeric
 sum_sparse <- colSums(site_keep[, 6:ncol(site_keep)], na.rm = TRUE) # sum of present values by variable; use na.rm so we remove NAs
@@ -75,24 +102,16 @@ for (i in 1:nrow(site_keep)){
 N_sqrt <- sqrt(N)
 diag(N_sqrt) <- 1/(diag(N_sqrt))
 R <- (N_sqrt %*% S %*% N_sqrt)
-```
 
-```{r}
 # Calculate Mahalanobis distance
 site_sparse <- site_keep
 site_sparse$MD_sp <- MDmiss(site_sparse[, 6:ncol(site_sparse)], center = mu, cov = R)
 cv<-qchisq(.95,df=ncol(site_sparse)-1)
 site_sparse$outlier_sp <- ifelse(site_sparse$MD_sp>cv, 1, 0)
-```
 
-```{r}
 # Predict present values - xt is the value to predict, yt are the other present values
 # value will be Rxtyt %*% Ryt_inv %*% yt-uyt + uxt
 preds <- matrix(data = NA, nrow = nrow(site_keep), ncol = k) # set up matrix to hold estimates
-```
-
-
-```{r}
 
 # Loop through each row
 for (i in 1:nrow(site_keep)){
@@ -126,50 +145,40 @@ for (i in 1:nrow(site_keep)){
   
 }
 
-```
-
-
-
-```{r}
 preds_df <- data.frame(preds)
-names(preds_df) <- paste0("E_", names(site_sparse)[6:17])
+names(preds_df) <- paste0("E_", names(site_sparse)[6:16])
 site_all <- cbind(site_sparse, preds_df)
 
 # Take the difference between estimate and actual and normalize by dividing by sample variance
-deviation <- abs(site_all[, 20:31] - site_all[, 6:17])
+deviation <- abs(site_all[, 19:29] - site_all[, 6:16])
 deviation <- mapply('/', deviation, diag(R))
 deviation <- data.frame(deviation)
-names(deviation) <- paste0("D_", names(site_sparse)[6:17])
+names(deviation) <- paste0("D_", names(site_sparse)[6:16])
 site_out_total <- cbind(site_all, deviation)
 
 write.xlsx(site_out_total, file = "png_total_anomaly_recommender.xlsx")
-
 ```
 
 
 # Let's split the data by sex and run on each sub-group ------------------------
-
-
 ```{r}
+
 site_spread <- mer_png_full
 site_split <- split(site_spread, site_spread$sex)
 
-# split apply combine; lapply takes in a list and returns a list
-
-site_facility <- lapply(site_split, function(x){
-  x <- x[, 1:(ncol(x)-1)] # drop facility type variable
-  # x <- site_split$Female[5,] for testing one pass through the loop
-  # drop observations where most variables are missing and variables where most observations
-  obs_count <- apply(x[, 6:ncol(x)], 1, function(y) length(which(!is.na(y))))
-  count_present <- apply(x[, 6:ncol(x)], 2, function(y) length(which(!is.na(y))))
-  cols_to_keep <- which(count_present > (nrow(x)*.1))+5
-  obs_to_keep <- which(obs_count > 4)
+site_sex <- lapply(site_split, function(x){
+  x <- site_split$Male # for testing one pass through the loop
+  # drop observations where most variables are missing and variables where most observations are missing
+  obs_count <- apply(x[, 6:ncol(x)], 1, function(y) length(which(!is.na(y)))) #this is the number of indicators reported for that row
+  count_present <- apply(x[, 6:ncol(x)], 2, function(y) length(which(!is.na(y)))) #this is the number of rows that reported each indicator
+  cols_to_keep <- which(count_present > (nrow(x)*.10))+5
+  obs_to_keep <- which(obs_count > 3)
   site_keep <- cbind(x[obs_to_keep, 1:5], x[obs_to_keep, cols_to_keep])
   
   # get sparse mu
   sum_sparse <- colSums(site_keep[, 6:ncol(site_keep)], na.rm = T)
   count_present_keep <- count_present[cols_to_keep-5]
-  mu <- sum_sparse / count_present_keep
+  mu <- sum_sparse / count_present_keep # make sure this is calculating the right mu
   k <- length(mu)
   
   N <- matrix(0, k, k)
@@ -181,7 +190,7 @@ site_facility <- lapply(site_split, function(x){
   S <- matrix(0, k, k)
   
   for (i in 1:nrow(site_keep)){
-    dat <- x[i, ]
+    dat <- site_keep[i, ]
     inds <- which(!is.na(dat[6:ncol(site_keep)]))
     yt <- dat[6:ncol(site_keep)][inds]
     yt_mu <- as.matrix(yt - mu[inds])
@@ -198,12 +207,12 @@ site_facility <- lapply(site_split, function(x){
   
   
   # Try modi package
-  site_facility_out <- site_keep
-  site_facility_out$MD_sp <- MDmiss(site_facility_out[, 6:ncol(site_facility_out)], center = mu, cov = R)
-  cv<-qchisq(.95,df=ncol(site_facility_out)-1)
-  site_facility_out$outlier_facility <- ifelse(site_facility_out$MD_sp>cv, 1, 0)
+  site_sex_out <- site_keep
+  site_sex_out$MD_sp <- MDmiss(site_sex_out[, 6:ncol(site_sex_out)], center = mu, cov = R)
+  cv<-qchisq(.95,df=ncol(site_sex_out)-1)
+  site_sex_out$outlier_sex <- ifelse(site_sex_out$MD_sp>cv, 1, 0)
   
-  preds_facility <- matrix(data = NA, nrow = nrow(site_keep), ncol = k)
+  preds_sex <- matrix(data = NA, nrow = nrow(site_keep), ncol = k)
   
   for (i in 1:nrow(site_keep)){
     
@@ -229,53 +238,789 @@ site_facility <- lapply(site_split, function(x){
       uxt <- mu[j]
       
       # Get estimated value
-      preds_facility[i,j] <- Rxtyt %*% Ryt_inv %*% t(yt_mu) + uxt
+      preds_sex[i,j] <- Rxtyt %*% Ryt_inv %*% t(yt_mu) + uxt
       
     }
     
     
   }
   
-  preds_df_facility <- data.frame(preds_facility)
-  names(preds_df_facility) <- paste0("E_", names(site_keep)[6:ncol(site_keep)])
-  site_all_facility <- cbind(site_facility_out, preds_df_facility)
+  preds_df_sex <- data.frame(preds_sex)
+  names(preds_df_sex) <- paste0("E_", names(site_keep)[6:ncol(site_keep)])
+  site_all_sex <- cbind(site_sex_out, preds_df_sex)
   
   # Take the difference between estimate and actual and normalize by dividing by sample variance
-  deviation <- abs(site_all_facility[, (ncol(site_keep)+4):ncol(site_all_facility)] - site_all_facility[, 6:ncol(site_keep)])
+  deviation <- abs(site_all_sex[, (ncol(site_keep)+3):ncol(site_all_sex)] - site_all_sex[, 6:ncol(site_keep)])
   deviation <- mapply('/', deviation, diag(R))
   deviation <- data.frame(deviation)
   names(deviation) <- paste0("D_", names(site_keep)[6:ncol(site_keep)])
-  site_out_facility <- cbind(site_all_facility, deviation)
-  site_out_facility
+  site_out_sex <- cbind(site_all_sex, deviation)
+  site_out_sex
   
 })
 
 # stack the outputs
-site_facility_outliers <- do.call(plyr::rbind.fill, site_facility)
-site_facility_outliers <- site_facility_outliers %>%
-  select("Facility", "AnalysisDate", "AgeGroup", "Sex", "TX_CURR", "TX_NEW", "TX_PVLS_D", "TX_PVLS_N", "TX_ML",
-         "TX_RTT", "PMTCT_ART", "HTS_TST", "TB_STAT_D", "TB_ART", "TB_STAT_N", "MD_sp", "outlier_facility",
-         "E_TX_CURR", "E_TX_NEW", "E_TX_PVLS_D", "E_TX_PVLS_N", "E_TX_ML",
-         "E_TX_RTT", "E_PMTCT_ART", "E_HTS_TST", "E_TB_STAT_D", "E_TB_ART", "E_TB_STAT_N",
-         "D_TX_CURR", "D_TX_NEW", "D_TX_PVLS_D", "D_TX_PVLS_N", "D_TX_ML",
-         "D_TX_RTT", "D_PMTCT_ART", "D_HTS_TST", "D_TB_STAT_D", "D_TB_ART", "D_TB_STAT_N")
-write_xlsx(site_facility_outliers, './anomaly_recommender_facility.xlsx')
+site_sex_outliers <- do.call(plyr::rbind.fill, site_sex)
+site_sex_outliers <- site_sex_outliers %>%
+  select("facility", "ageasentered", "sex", "kp", "facility_type", "HTS_TST", "HTS_TST_NEG", "HTS_TST_POS", "TX_CURR",
+         "TX_NEW", "TX_RTT", "HTS_INDEX", "HTS_INDEX_NEWNEG", "HTS_INDEX_NEWPOS", "TX_ML",  
+         "MD_sp", "outlier_sex", "E_HTS_TST", "E_HTS_TST_NEG", "E_HTS_TST_POS", "E_TX_CURR", "E_TX_NEW", "E_TX_RTT", "E_HTS_INDEX",
+         "E_HTS_INDEX_NEWNEG", "E_HTS_INDEX_NEWPOS", "E_TX_ML", "D_HTS_TST", "D_HTS_TST_NEG", "D_HTS_TST_POS", "D_TX_CURR",
+         "D_TX_NEW", "D_TX_RTT", "D_HTS_INDEX", "D_HTS_INDEX_NEWNEG", "D_HTS_INDEX_NEWPOS", "D_TX_ML") 
+
+anomaly_recommender_sex <- site_sex_outliers
+         
+write.xlsx(site_sex_outliers, './png_anomaly_recommender_sex.xlsx')
 
 ```
 
 
-# Let's split the data by age and run on each sub-group ------------------------
+# Let's split the data by age (using 5 year age bands) and run on each sub-group ------------------------
+# this disaggregation is too small to run 
+```{r}
+site_spread <- mer_png_full
+site_split <- split(site_spread, site_spread$ageasentered)
 
-# Let's split the data by sex and age and run on each sub-group ------------------------
+site_sex <- lapply(site_split, function(x){
+  x <- site_split$`15-19` # testing with one of the split tables - MD Miss line is not running, lets try less disag
+  # drop observations where most variables are missing and variables where most observations are missing
+  obs_count <- apply(x[, 6:ncol(x)], 1, function(y) length(which(!is.na(y))))
+  count_present <- apply(x[, 6:ncol(x)], 2, function(y) length(which(!is.na(y))))
+  cols_to_keep <- which(count_present > (nrow(x)*.10))+5
+  obs_to_keep <- which(obs_count > 2)
+  site_keep <- cbind(x[obs_to_keep, 1:5], x[obs_to_keep, cols_to_keep])
+  
+  # get sparse mu
+  sum_sparse <- colSums(site_keep[, 6:ncol(site_keep)], na.rm = T)
+  count_present_keep <- count_present[cols_to_keep-5]
+  mu <- sum_sparse / count_present_keep # make sure this is calculating the right mu
+  k <- length(mu)
+  
+  N <- matrix(0, k, k)
+  diag(N) <- count_present_keep
+  
+  i_mat <- matrix(0, k, k)
+  diag(i_mat) <- 1
+  
+  S <- matrix(0, k, k)
+  
+  for (i in 1:nrow(site_keep)){
+    dat <- site_keep[i, ]
+    inds <- which(!is.na(dat[6:ncol(site_keep)]))
+    yt <- dat[6:ncol(site_keep)][inds]
+    yt_mu <- as.matrix(yt - mu[inds])
+    
+    Hyt <- as.matrix(i_mat[inds, ])
+    if(dim(Hyt)[2] == 1){Hyt <- t(Hyt)}
+    
+    S <- S + (t(Hyt) %*% (t(yt_mu) %*% yt_mu) %*% Hyt)
+  }
+  
+  N_sqrt <- sqrt(N)
+  diag(N_sqrt) <- 1/(diag(N_sqrt))
+  R <- (N_sqrt %*% S %*% N_sqrt) # det(R) is 0 so we can't run it on a disag this small (15 obs and 9 indicators for 15-19 age group)
+  # if det(R) is 0, we have a singular matrix and MDMiss can't invert it 
+  
+  # Try modi package
+  site_sex_out <- site_keep
+  site_sex_out$MD_sp <- MDmiss(site_sex_out[, 6:ncol(site_sex_out)], center = mu, cov = R)
+  cv<-qchisq(.95,df=ncol(site_sex_out)-1)
+  site_sex_out$outlier_sex <- ifelse(site_sex_out$MD_sp>cv, 1, 0)
+  
+  preds_sex <- matrix(data = NA, nrow = nrow(site_keep), ncol = k)
+  
+  for (i in 1:nrow(site_keep)){
+    
+    dat <- site_keep[i, ]
+    inds <- which(!is.na(dat[6:ncol(site_keep)]))
+    # yt <- dat[6:ncol(site_keep)][inds]
+    
+    # loop through inds
+    for (j in inds){
+      
+      # Get Rxtyt
+      Rxtyt <- R[j, inds[!(inds %in% j)]]
+      # Get Ryt_inv
+      Ryt <- R[inds[!(inds %in% j)], inds[!(inds %in% j)]]
+      if (length(Ryt) > 1){
+      Ryt_inv <- matlib::inv(Ryt)  
+      } else {Ryt_inv <- 1/Ryt} # if Ryt is scalar, take the inverse of Ryt
+    
+      #Get yt-uyt
+      yt <- dat[6:ncol(site_keep)][inds[!(inds %in% j)]]
+      yt_mu <- as.matrix(yt - mu[inds[!(inds %in% j)]])
+      # uxt
+      uxt <- mu[j]
+      
+      # Get estimated value
+      preds_sex[i,j] <- Rxtyt %*% Ryt_inv %*% t(yt_mu) + uxt
+      
+    }
+    
+    
+  }
+  
+  preds_df_sex <- data.frame(preds_sex)
+  names(preds_df_sex) <- paste0("E_", names(site_keep)[6:ncol(site_keep)])
+  site_all_sex <- cbind(site_sex_out, preds_df_sex)
+  
+  # Take the difference between estimate and actual and normalize by dividing by sample variance
+  deviation <- abs(site_all_sex[, (ncol(site_keep)+3):ncol(site_all_sex)] - site_all_sex[, 6:ncol(site_keep)])
+  deviation <- mapply('/', deviation, diag(R))
+  deviation <- data.frame(deviation)
+  names(deviation) <- paste0("D_", names(site_keep)[6:ncol(site_keep)])
+  site_out_sex <- cbind(site_all_sex, deviation)
+  site_out_sex
+  
+})
 
-# Let's split the data by facility and run on each sub-group ------------------------
+# stack the outputs
+site_sex_outliers <- do.call(plyr::rbind.fill, site_sex)
+site_sex_outliers <- site_sex_outliers %>%
+  select("facility", "ageasentered", "sex", "kp", "facility_type", "HTS_TST", "HTS_TST_NEG", "HTS_TST_POS", "TX_CURR",
+         "TX_NEW", "TX_RTT", "HTS_INDEX", "HTS_INDEX_NEWNEG", "HTS_INDEX_NEWPOS", "TX_ML",  
+         "MD_sp", "outlier_sex", "E_HTS_TST", "E_HTS_TST_NEG", "E_HTS_TST_POS", "E_TX_CURR", "E_TX_NEW", "E_TX_RTT", "E_HTS_INDEX",
+         "E_HTS_INDEX_NEWNEG", "E_HTS_INDEX_NEWPOS", "E_TX_ML", "D_HTS_TST", "D_HTS_TST_NEG", "D_HTS_TST_POS", "D_TX_CURR",
+         "D_TX_NEW", "D_TX_RTT", "D_HTS_INDEX", "D_HTS_INDEX_NEWNEG", "D_HTS_INDEX_NEWPOS", "D_TX_ML") 
+
+anomaly_recommender_sex <- site_sex_outliers
+         
+write.xlsx(site_sex_outliers, './anomaly_recommender_sex.xlsx')
+```
+
+
+# Let's split the data by age (using panorama age bands - <15 and 15+) and run on each sub-group ------------------------
+# det(R) for the <15 group is 0
+```{r}
+site_spread <- mer_png_full
+site_spread <- site_spread %>% 
+  mutate(age_lifestage = ifelse(ageasentered == "<01", "<15",
+                                ifelse(ageasentered == "<10", "<15",
+                                ifelse(ageasentered == "<15", "<15",
+                                ifelse(ageasentered == "01-04", "<15",
+                                ifelse(ageasentered == "05-09", "<15", 
+                                ifelse(ageasentered == "10-14", "<15", 
+                                ifelse(ageasentered == "15-19", "15+",
+                                ifelse(ageasentered == "20-24", "15+",
+                                ifelse(ageasentered == "25-29", "15+",
+                                ifelse(ageasentered == "30-34", "15+",
+                                ifelse(ageasentered == "35-39", "15+",
+                                ifelse(ageasentered == "40-44", "15+",
+                                ifelse(ageasentered == "45-49", "15+",
+                                ifelse(ageasentered == "50+", "15+", "Other")))))))))))))))
+
+site_spread_dropped <- select(site_spread,-2)
+site_spread_reorder <- site_spread_dropped[,c(1,20,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19)]
+site_spread <- site_spread_reorder
+site_spread <- site_spread %>% filter(age_lifestage != "NA")
+site_spread <- site_spread %>% filter(age_lifestage != "Other")
+site_split <- split(site_spread, site_spread$age_lifestage)
+
+
+site_sex <- lapply(site_split, function(x){
+  x <- site_split$`<15` # for testing one pass through the loop
+  # drop observations where most variables are missing and variables where most observations are missing
+  obs_count <- apply(x[, 6:ncol(x)], 1, function(y) length(which(!is.na(y)))) #this is the number of indicators reported for that row
+  count_present <- apply(x[, 6:ncol(x)], 2, function(y) length(which(!is.na(y)))) #this is the number of rows that reported each indicator
+  cols_to_keep <- which(count_present > (nrow(x)*.05))+5
+  obs_to_keep <- which(obs_count > 1)
+  site_keep <- cbind(x[obs_to_keep, 1:5], x[obs_to_keep, cols_to_keep])
+  
+  # get sparse mu
+  sum_sparse <- colSums(site_keep[, 6:ncol(site_keep)], na.rm = T)
+  count_present_keep <- count_present[cols_to_keep-5]
+  mu <- sum_sparse / count_present_keep # make sure this is calculating the right mu
+  k <- length(mu)
+  
+  N <- matrix(0, k, k)
+  diag(N) <- count_present_keep
+  
+  i_mat <- matrix(0, k, k)
+  diag(i_mat) <- 1
+  
+  S <- matrix(0, k, k)
+  
+  for (i in 1:nrow(site_keep)){
+    dat <- site_keep[i, ]
+    inds <- which(!is.na(dat[6:ncol(site_keep)]))
+    yt <- dat[6:ncol(site_keep)][inds]
+    yt_mu <- as.matrix(yt - mu[inds])
+    
+    Hyt <- as.matrix(i_mat[inds, ])
+    if(dim(Hyt)[2] == 1){Hyt <- t(Hyt)}
+    
+    S <- S + (t(Hyt) %*% (t(yt_mu) %*% yt_mu) %*% Hyt)
+  }
+  
+  N_sqrt <- sqrt(N)
+  diag(N_sqrt) <- 1/(diag(N_sqrt))
+  R <- (N_sqrt %*% S %*% N_sqrt)
+  
+  
+  # Try modi package
+  site_sex_out <- site_keep
+  site_sex_out$MD_sp <- MDmiss(site_sex_out[, 6:ncol(site_sex_out)], center = mu, cov = R)
+  cv<-qchisq(.95,df=ncol(site_sex_out)-1)
+  site_sex_out$outlier_sex <- ifelse(site_sex_out$MD_sp>cv, 1, 0)
+  
+  preds_sex <- matrix(data = NA, nrow = nrow(site_keep), ncol = k)
+  
+  for (i in 1:nrow(site_keep)){
+    
+    dat <- site_keep[i, ]
+    inds <- which(!is.na(dat[6:ncol(site_keep)]))
+    # yt <- dat[6:ncol(site_keep)][inds]
+    
+    # loop through inds
+    for (j in inds){
+      
+      # Get Rxtyt
+      Rxtyt <- R[j, inds[!(inds %in% j)]]
+      # Get Ryt_inv
+      Ryt <- R[inds[!(inds %in% j)], inds[!(inds %in% j)]]
+      if (length(Ryt) > 1){
+      Ryt_inv <- matlib::inv(Ryt)  
+      } else {Ryt_inv <- 1/Ryt} # if Ryt is scalar, take the inverse of Ryt
+    
+      #Get yt-uyt
+      yt <- dat[6:ncol(site_keep)][inds[!(inds %in% j)]]
+      yt_mu <- as.matrix(yt - mu[inds[!(inds %in% j)]])
+      # uxt
+      uxt <- mu[j]
+      
+      # Get estimated value
+      preds_sex[i,j] <- Rxtyt %*% Ryt_inv %*% t(yt_mu) + uxt
+      
+    }
+    
+    
+  }
+  
+  preds_df_sex <- data.frame(preds_sex)
+  names(preds_df_sex) <- paste0("E_", names(site_keep)[6:ncol(site_keep)])
+  site_all_sex <- cbind(site_sex_out, preds_df_sex)
+  
+  # Take the difference between estimate and actual and normalize by dividing by sample variance
+  deviation <- abs(site_all_sex[, (ncol(site_keep)+3):ncol(site_all_sex)] - site_all_sex[, 6:ncol(site_keep)])
+  deviation <- mapply('/', deviation, diag(R))
+  deviation <- data.frame(deviation)
+  names(deviation) <- paste0("D_", names(site_keep)[6:ncol(site_keep)])
+  site_out_sex <- cbind(site_all_sex, deviation)
+  site_out_sex
+  
+})
+
+# stack the outputs
+site_sex_outliers <- do.call(plyr::rbind.fill, site_sex)
+site_sex_outliers <- site_sex_outliers %>%
+  select("facility", "ageasentered", "sex", "kp", "facility_type", "HTS_TST", "HTS_TST_NEG", "HTS_TST_POS", "TX_CURR",
+         "TX_NEW", "TX_RTT", "HTS_INDEX", "HTS_INDEX_NEWNEG", "HTS_INDEX_NEWPOS", "TX_ML",  
+         "MD_sp", "outlier_sex", "E_HTS_TST", "E_HTS_TST_NEG", "E_HTS_TST_POS", "E_TX_CURR", "E_TX_NEW", "E_TX_RTT", "E_HTS_INDEX",
+         "E_HTS_INDEX_NEWNEG", "E_HTS_INDEX_NEWPOS", "E_TX_ML", "D_HTS_TST", "D_HTS_TST_NEG", "D_HTS_TST_POS", "D_TX_CURR",
+         "D_TX_NEW", "D_TX_RTT", "D_HTS_INDEX", "D_HTS_INDEX_NEWNEG", "D_HTS_INDEX_NEWPOS", "D_TX_ML") 
+
+anomaly_recommender_sex <- site_sex_outliers
+         
+write.xlsx(site_sex_outliers, './png_anomaly_recommender_age.xlsx')
+
+```
+
+
+# Let's split the data by age (grouped by life stages - 0-14; 15-24; 25-49; 50+) and run on each sub-group ------------------------
+# det(R) for the 50+ disagg is 0 - we cannot use 50+ as one of our groupings
+```{r}
+site_spread <- mer_png_full
+site_spread <- site_spread %>% 
+  mutate(age_lifestage = ifelse(ageasentered == "<01", "0-14",
+                                ifelse(ageasentered == "<10", "0-14",
+                                ifelse(ageasentered == "<15", "0-14",
+                                ifelse(ageasentered == "01-04", "0-14",
+                                ifelse(ageasentered == "05-09", "0-14", 
+                                ifelse(ageasentered == "10-14", "0-14", 
+                                ifelse(ageasentered == "15-19", "15-24",
+                                ifelse(ageasentered == "20-24", "15-24",
+                                ifelse(ageasentered == "25-29", "25-49",
+                                ifelse(ageasentered == "30-34", "25-49",
+                                ifelse(ageasentered == "35-39", "25-49",
+                                ifelse(ageasentered == "40-44", "25-49",
+                                ifelse(ageasentered == "45-49", "25-49",
+                                ifelse(ageasentered == "50+", "50+", "Other")))))))))))))))
+site_spread_dropped <- select(site_spread,-2)
+site_spread_reorder <- site_spread_dropped[,c(1,20,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19)]
+site_spread <- site_spread_reorder
+site_split <- split(site_spread, site_spread$age_lifestage)
+
+site_sex <- lapply(site_split, function(x){
+  x <- site_split$`50+` # for testing one pass through the loop
+  # drop observations where most variables are missing and variables where most observations are missing
+  obs_count <- apply(x[, 6:ncol(x)], 1, function(y) length(which(!is.na(y)))) #this is the number of indicators reported for that row
+  count_present <- apply(x[, 6:ncol(x)], 2, function(y) length(which(!is.na(y)))) #this is the number of rows that reported each indicator
+  cols_to_keep <- which(count_present > (nrow(x)*.05))+5
+  obs_to_keep <- which(obs_count > 2)
+  site_keep <- cbind(x[obs_to_keep, 1:5], x[obs_to_keep, cols_to_keep])
+  
+  # get sparse mu
+  sum_sparse <- colSums(site_keep[, 6:ncol(site_keep)], na.rm = T)
+  count_present_keep <- count_present[cols_to_keep-5]
+  mu <- sum_sparse / count_present_keep # make sure this is calculating the right mu
+  k <- length(mu)
+  
+  N <- matrix(0, k, k)
+  diag(N) <- count_present_keep
+  
+  i_mat <- matrix(0, k, k)
+  diag(i_mat) <- 1
+  
+  S <- matrix(0, k, k)
+  
+  for (i in 1:nrow(site_keep)){
+    dat <- site_keep[i, ]
+    inds <- which(!is.na(dat[6:ncol(site_keep)]))
+    yt <- dat[6:ncol(site_keep)][inds]
+    yt_mu <- as.matrix(yt - mu[inds])
+    
+    Hyt <- as.matrix(i_mat[inds, ])
+    if(dim(Hyt)[2] == 1){Hyt <- t(Hyt)}
+    
+    S <- S + (t(Hyt) %*% (t(yt_mu) %*% yt_mu) %*% Hyt)
+  }
+  
+  N_sqrt <- sqrt(N)
+  diag(N_sqrt) <- 1/(diag(N_sqrt))
+  R <- (N_sqrt %*% S %*% N_sqrt) # det(R) for the 50+ disagg is 0 - we cannot use 50+ as one of our groupings
+  
+  
+  # Try modi package
+  site_sex_out <- site_keep
+  site_sex_out$MD_sp <- MDmiss(site_sex_out[, 6:ncol(site_sex_out)], center = mu, cov = R)
+  cv<-qchisq(.95,df=ncol(site_sex_out)-1)
+  site_sex_out$outlier_sex <- ifelse(site_sex_out$MD_sp>cv, 1, 0)
+  
+  preds_sex <- matrix(data = NA, nrow = nrow(site_keep), ncol = k)
+  
+  for (i in 1:nrow(site_keep)){
+    
+    dat <- site_keep[i, ]
+    inds <- which(!is.na(dat[6:ncol(site_keep)]))
+    # yt <- dat[6:ncol(site_keep)][inds]
+    
+    # loop through inds
+    for (j in inds){
+      
+      # Get Rxtyt
+      Rxtyt <- R[j, inds[!(inds %in% j)]]
+      # Get Ryt_inv
+      Ryt <- R[inds[!(inds %in% j)], inds[!(inds %in% j)]]
+      if (length(Ryt) > 1){
+      Ryt_inv <- matlib::inv(Ryt)  
+      } else {Ryt_inv <- 1/Ryt} # if Ryt is scalar, take the inverse of Ryt
+    
+      #Get yt-uyt
+      yt <- dat[6:ncol(site_keep)][inds[!(inds %in% j)]]
+      yt_mu <- as.matrix(yt - mu[inds[!(inds %in% j)]])
+      # uxt
+      uxt <- mu[j]
+      
+      # Get estimated value
+      preds_sex[i,j] <- Rxtyt %*% Ryt_inv %*% t(yt_mu) + uxt
+      
+    }
+    
+    
+  }
+  
+  preds_df_sex <- data.frame(preds_sex)
+  names(preds_df_sex) <- paste0("E_", names(site_keep)[6:ncol(site_keep)])
+  site_all_sex <- cbind(site_sex_out, preds_df_sex)
+  
+  # Take the difference between estimate and actual and normalize by dividing by sample variance
+  deviation <- abs(site_all_sex[, (ncol(site_keep)+3):ncol(site_all_sex)] - site_all_sex[, 6:ncol(site_keep)])
+  deviation <- mapply('/', deviation, diag(R))
+  deviation <- data.frame(deviation)
+  names(deviation) <- paste0("D_", names(site_keep)[6:ncol(site_keep)])
+  site_out_sex <- cbind(site_all_sex, deviation)
+  site_out_sex
+  
+})
+
+# stack the outputs
+site_sex_outliers <- do.call(plyr::rbind.fill, site_sex)
+site_sex_outliers <- site_sex_outliers %>%
+  select("facility", "age_lifestage", "sex", "kp", "facility_type", "HTS_TST", "HTS_TST_NEG", "HTS_TST_POS", "TX_CURR",
+         "TX_NEW", "TX_RTT", "HTS_INDEX", "HTS_INDEX_NEWNEG", "HTS_INDEX_NEWPOS", "TX_ML",  
+         "MD_sp", "outlier_sex", "E_HTS_TST", "E_HTS_TST_NEG", "E_HTS_TST_POS", "E_TX_CURR", "E_TX_NEW", "E_TX_RTT", "E_HTS_INDEX",
+         "E_HTS_INDEX_NEWNEG", "E_HTS_INDEX_NEWPOS", "E_TX_ML", "D_HTS_TST", "D_HTS_TST_NEG", "D_HTS_TST_POS", "D_TX_CURR",
+         "D_TX_NEW", "D_TX_RTT", "D_HTS_INDEX", "D_HTS_INDEX_NEWNEG", "D_HTS_INDEX_NEWPOS", "D_TX_ML") 
+
+anomaly_recommender_sex <- site_sex_outliers
+         
+write.xlsx(site_sex_outliers, './anomaly_recommender_age.xlsx')
+```
+
+
+# Let's split the data by age (grouped by life stages - 0-14; 15-49; 50+) and run on each sub-group ------------------------
+# this won't work since det(R) for 50+ is 0
+```{r}
+
+```
+
+
+# Let's split the data by sex and age (grouped by life stages - 0-14; 15-49; 50+) and run on each sub-group ------------------------
+# this won't work because the 50+ disagg doesn't run
+```{r}
+
+```
+
+
+# Let's split the data by facility (clinic vs hospital) and run on each sub-group ------------------------
+# I hard coded the drops for the hospital disagg for this one - we keep 28 obs and 12 variables (7 indicators)
+```{r}
+site_spread <- mer_png_full
+site_split <- split(site_spread, site_spread$facility_type)
+
+site_sex <- lapply(site_split, function(x){
+  x <- site_split$Hospital # testing with one of the split tables - MD Miss line is not running, lets try removing less of the sparsity
+  cols_to_keep <- c(1,2,3,4,5,8,9,10,11,12,13,15)
+  site_keep <- x[, cols_to_keep] # keep only columns for which the indicator is reported for at least 5 rows
+  site_keep <- site_keep[-c(1,5,6,32),] # drop rows that only have 0 or 1 indicator reported
+  # drop observations where most variables are missing and variables where most observations are missing
+  #obs_count <- apply(x[, 6:ncol(x)], 1, function(y) length(which(!is.na(y))))
+  #count_present <- apply(x[, 6:ncol(x)], 2, function(y) length(which(!is.na(y))))
+  #cols_to_keep <- which(count_present > (nrow(x)*.10))+5
+  #obs_to_keep <- which(obs_count > 3)
+  #site_keep <- cbind(x[obs_to_keep, 1:5], x[obs_to_keep, cols_to_keep])
+  
+  # get sparse mu
+  sum_sparse <- colSums(site_keep[, 6:ncol(site_keep)], na.rm = T)
+  count_present <- apply(site_keep[, 6:ncol(site_keep)], 2, function(y) length(which(!is.na(y))))
+  # count_present_keep <- count_present[cols_to_keep-5]
+  mu <- sum_sparse / count_present # make sure this is calculating the right mu
+  k <- length(mu)
+  
+  N <- matrix(0, k, k)
+  diag(N) <- count_present
+  
+  i_mat <- matrix(0, k, k)
+  diag(i_mat) <- 1
+  
+  S <- matrix(0, k, k)
+  
+  for (i in 1:nrow(site_keep)){
+    dat <- site_keep[i, ]
+    inds <- which(!is.na(dat[6:ncol(site_keep)]))
+    yt <- dat[6:ncol(site_keep)][inds]
+    yt_mu <- as.matrix(yt - mu[inds])
+    
+    Hyt <- as.matrix(i_mat[inds, ])
+    if(dim(Hyt)[2] == 1){Hyt <- t(Hyt)}
+    
+    S <- S + (t(Hyt) %*% (t(yt_mu) %*% yt_mu) %*% Hyt)
+  }
+  
+  N_sqrt <- sqrt(N)
+  diag(N_sqrt) <- 1/(diag(N_sqrt))
+  R <- (N_sqrt %*% S %*% N_sqrt)
+  
+  
+  # Try modi package
+  site_sex_out <- site_keep
+  site_sex_out$MD_sp <- MDmiss(site_sex_out[, 6:ncol(site_sex_out)], center = mu, cov = R)
+  cv<-qchisq(.95,df=ncol(site_sex_out)-1)
+  site_sex_out$outlier_sex <- ifelse(site_sex_out$MD_sp>cv, 1, 0)
+  
+  preds_sex <- matrix(data = NA, nrow = nrow(site_keep), ncol = k)
+  
+  for (i in 1:nrow(site_keep)){
+    
+    dat <- site_keep[i, ]
+    inds <- which(!is.na(dat[6:ncol(site_keep)]))
+    # yt <- dat[6:ncol(site_keep)][inds]
+    
+    # loop through inds
+    for (j in inds){
+      
+      # Get Rxtyt
+      Rxtyt <- R[j, inds[!(inds %in% j)]]
+      # Get Ryt_inv
+      Ryt <- R[inds[!(inds %in% j)], inds[!(inds %in% j)]]
+      if (length(Ryt) > 1){
+      Ryt_inv <- matlib::inv(Ryt)  
+      } else {Ryt_inv <- 1/Ryt} # if Ryt is scalar, take the inverse of Ryt
+    
+      #Get yt-uyt
+      yt <- dat[6:ncol(site_keep)][inds[!(inds %in% j)]]
+      yt_mu <- as.matrix(yt - mu[inds[!(inds %in% j)]])
+      # uxt
+      uxt <- mu[j]
+      
+      # Get estimated value
+      preds_sex[i,j] <- Rxtyt %*% Ryt_inv %*% t(yt_mu) + uxt
+      
+    }
+    
+    
+  }
+  
+  preds_df_sex <- data.frame(preds_sex)
+  names(preds_df_sex) <- paste0("E_", names(site_keep)[6:ncol(site_keep)])
+  site_all_sex <- cbind(site_sex_out, preds_df_sex)
+  
+  # Take the difference between estimate and actual and normalize by dividing by sample variance
+  deviation <- abs(site_all_sex[, (ncol(site_keep)+3):ncol(site_all_sex)] - site_all_sex[, 6:ncol(site_keep)])
+  deviation <- mapply('/', deviation, diag(R))
+  deviation <- data.frame(deviation)
+  names(deviation) <- paste0("D_", names(site_keep)[6:ncol(site_keep)])
+  site_out_sex <- cbind(site_all_sex, deviation)
+  site_out_sex
+  
+})
+
+# stack the outputs
+site_sex_outliers <- do.call(plyr::rbind.fill, site_sex)
+site_sex_outliers <- site_sex_outliers %>%
+  select("facility", "ageasentered", "sex", "kp", "facility_type", "HTS_TST", "HTS_TST_NEG", "HTS_TST_POS", "TX_CURR",
+         "TX_NEW", "TX_RTT", "HTS_INDEX", "HTS_INDEX_NEWNEG", "HTS_INDEX_NEWPOS", "TX_ML",  
+         "MD_sp", "outlier_sex", "E_HTS_TST", "E_HTS_TST_NEG", "E_HTS_TST_POS", "E_TX_CURR", "E_TX_NEW", "E_TX_RTT", "E_HTS_INDEX",
+         "E_HTS_INDEX_NEWNEG", "E_HTS_INDEX_NEWPOS", "E_TX_ML", "D_HTS_TST", "D_HTS_TST_NEG", "D_HTS_TST_POS", "D_TX_CURR",
+         "D_TX_NEW", "D_TX_RTT", "D_HTS_INDEX", "D_HTS_INDEX_NEWNEG", "D_HTS_INDEX_NEWPOS", "D_TX_ML") 
+
+anomaly_recommender_sex <- site_sex_outliers
+         
+write.xlsx(site_sex_outliers, './anomaly_recommender_facility.xlsx')
+```
+
+
+# Let's split the data by facility (clinic vs hospital) and run on each sub-group, using our code from the sex split --------
+# we keep 21 obs and 13 variables (8 indicators) (this is using 10% for cols_to_keep) - I manually dropped two columns
+# det(R) is not 0 but I think its still too small
+```{r}
+site_spread <- mer_png_full
+site_split <- split(site_spread, site_spread$facility_type)
+
+site_sex <- lapply(site_split, function(x){
+  x <- site_split$Hospital # for testing one pass through the loop
+  # drop observations where most variables are missing and variables where most observations are missing
+  obs_count <- apply(x[, 6:ncol(x)], 1, function(y) length(which(!is.na(y)))) #this is the number of indicators reported for that row
+  count_present <- apply(x[, 6:ncol(x)], 2, function(y) length(which(!is.na(y)))) #this is the number of rows that reported each indicator
+  cols_to_keep <- which(count_present > (nrow(x)*.10))+5
+  obs_to_keep <- which(obs_count > 2)
+  site_keep <- cbind(x[obs_to_keep, 1:5], x[obs_to_keep, cols_to_keep])
+  site_keep <- select(site_keep,-14,-15)
+  # lets manually drop HTS_INDEX_NEWPOS, HTS_INDEX_NEWNEG and TX_ML because they are colinear and breaking the code (its the pos and ML, but lets drop   neg too for simplicity sake)
+  
+  # get sparse mu
+  sum_sparse <- colSums(site_keep[, 6:ncol(site_keep)], na.rm = T)
+  count_present <- apply(site_keep[, 6:ncol(site_keep)], 2, function(y) length(which(!is.na(y))))
+  # count_present_keep <- count_present[cols_to_keep-5]
+  mu <- sum_sparse / count_present # make sure this is calculating the right mu
+  k <- length(mu)
+  
+  N <- matrix(0, k, k)
+  diag(N) <- count_present
+  
+  i_mat <- matrix(0, k, k)
+  diag(i_mat) <- 1
+  
+  S <- matrix(0, k, k)
+  
+  for (i in 1:nrow(site_keep)){
+    dat <- site_keep[i, ]
+    inds <- which(!is.na(dat[6:ncol(site_keep)]))
+    yt <- dat[6:ncol(site_keep)][inds]
+    yt_mu <- as.matrix(yt - mu[inds])
+    
+    Hyt <- as.matrix(i_mat[inds, ])
+    if(dim(Hyt)[2] == 1){Hyt <- t(Hyt)}
+    
+    S <- S + (t(Hyt) %*% (t(yt_mu) %*% yt_mu) %*% Hyt)
+  }
+  
+  N_sqrt <- sqrt(N)
+  diag(N_sqrt) <- 1/(diag(N_sqrt))
+  R <- (N_sqrt %*% S %*% N_sqrt)
+  
+  
+  # Try modi package
+  site_sex_out <- site_keep
+  site_sex_out$MD_sp <- MDmiss(site_sex_out[, 6:ncol(site_sex_out)], center = mu, cov = R)
+  cv<-qchisq(.95,df=ncol(site_sex_out)-1)
+  site_sex_out$outlier_sex <- ifelse(site_sex_out$MD_sp>cv, 1, 0)
+  
+  preds_sex <- matrix(data = NA, nrow = nrow(site_keep), ncol = k)
+  
+  for (i in 1:nrow(site_keep)){
+    
+    dat <- site_keep[i, ]
+    inds <- which(!is.na(dat[6:ncol(site_keep)]))
+    # yt <- dat[6:ncol(site_keep)][inds]
+    
+    # loop through inds
+    for (j in inds){
+      
+      # Get Rxtyt
+      Rxtyt <- R[j, inds[!(inds %in% j)]]
+      # Get Ryt_inv
+      Ryt <- R[inds[!(inds %in% j)], inds[!(inds %in% j)]]
+      if (length(Ryt) > 1){
+      Ryt_inv <- matlib::inv(Ryt)  
+      } else {Ryt_inv <- 1/Ryt} # if Ryt is scalar, take the inverse of Ryt
+    
+      #Get yt-uyt
+      yt <- dat[6:ncol(site_keep)][inds[!(inds %in% j)]]
+      yt_mu <- as.matrix(yt - mu[inds[!(inds %in% j)]])
+      # uxt
+      uxt <- mu[j]
+      
+      # Get estimated value
+      preds_sex[i,j] <- Rxtyt %*% Ryt_inv %*% t(yt_mu) + uxt
+      
+    }
+    
+    
+  }
+  
+  preds_df_sex <- data.frame(preds_sex)
+  names(preds_df_sex) <- paste0("E_", names(site_keep)[6:ncol(site_keep)])
+  site_all_sex <- cbind(site_sex_out, preds_df_sex)
+  
+  # Take the difference between estimate and actual and normalize by dividing by sample variance
+  deviation <- abs(site_all_sex[, (ncol(site_keep)+3):ncol(site_all_sex)] - site_all_sex[, 6:ncol(site_keep)])
+  deviation <- mapply('/', deviation, diag(R))
+  deviation <- data.frame(deviation)
+  names(deviation) <- paste0("D_", names(site_keep)[6:ncol(site_keep)])
+  site_out_sex <- cbind(site_all_sex, deviation)
+  site_out_sex
+  
+})
+
+# stack the outputs
+site_sex_outliers <- do.call(plyr::rbind.fill, site_sex)
+site_sex_outliers <- site_sex_outliers %>%
+  select("facility", "ageasentered", "sex", "kp", "facility_type", "HTS_TST", "HTS_TST_NEG", "HTS_TST_POS", "TX_CURR",
+         "TX_NEW", "TX_RTT", "HTS_INDEX", "HTS_INDEX_NEWNEG", "HTS_INDEX_NEWPOS", "TX_ML",  
+         "MD_sp", "outlier_sex", "E_HTS_TST", "E_HTS_TST_NEG", "E_HTS_TST_POS", "E_TX_CURR", "E_TX_NEW", "E_TX_RTT", "E_HTS_INDEX",
+         "E_HTS_INDEX_NEWNEG", "E_HTS_INDEX_NEWPOS", "E_TX_ML", "D_HTS_TST", "D_HTS_TST_NEG", "D_HTS_TST_POS", "D_TX_CURR",
+         "D_TX_NEW", "D_TX_RTT", "D_HTS_INDEX", "D_HTS_INDEX_NEWNEG", "D_HTS_INDEX_NEWPOS", "D_TX_ML") 
+
+anomaly_recommender_sex <- site_sex_outliers
+         
+write.xlsx(site_sex_outliers, './anomaly_recommender_facility.xlsx')
+```
+
 
 # Let's split the data by key pop vs non key pop and run on each sub-group ------------------------
+```{r}
+site_spread <- mer_png_full
+site_split <- split(site_spread, site_spread$kp)
 
-# clinic vs hospital ------------------------------------------
+site_sex <- lapply(site_split, function(x){
+  # drop observations where most variables are missing and variables where most observations are missing
+  obs_count <- apply(x[, 6:ncol(x)], 1, function(y) length(which(!is.na(y)))) #this is the number of indicators reported for that row
+  count_present <- apply(x[, 6:ncol(x)], 2, function(y) length(which(!is.na(y)))) #this is the number of rows that reported each indicator
+  cols_to_keep <- which(count_present > (nrow(x)*.10))+5
+  obs_to_keep <- which(obs_count > 3)
+  site_keep <- cbind(x[obs_to_keep, 1:5], x[obs_to_keep, cols_to_keep])
+  
+  # get sparse mu
+  sum_sparse <- colSums(site_keep[, 6:ncol(site_keep)], na.rm = T)
+  count_present_keep <- count_present[cols_to_keep-5]
+  mu <- sum_sparse / count_present_keep # make sure this is calculating the right mu
+  k <- length(mu)
+  
+  N <- matrix(0, k, k)
+  diag(N) <- count_present_keep
+  
+  i_mat <- matrix(0, k, k)
+  diag(i_mat) <- 1
+  
+  S <- matrix(0, k, k)
+  
+  for (i in 1:nrow(site_keep)){
+    dat <- site_keep[i, ]
+    inds <- which(!is.na(dat[6:ncol(site_keep)]))
+    yt <- dat[6:ncol(site_keep)][inds]
+    yt_mu <- as.matrix(yt - mu[inds])
+    
+    Hyt <- as.matrix(i_mat[inds, ])
+    if(dim(Hyt)[2] == 1){Hyt <- t(Hyt)}
+    
+    S <- S + (t(Hyt) %*% (t(yt_mu) %*% yt_mu) %*% Hyt)
+  }
+  
+  N_sqrt <- sqrt(N)
+  diag(N_sqrt) <- 1/(diag(N_sqrt))
+  R <- (N_sqrt %*% S %*% N_sqrt)
+  
+  
+  # Try modi package
+  site_sex_out <- site_keep
+  site_sex_out$MD_sp <- MDmiss(site_sex_out[, 6:ncol(site_sex_out)], center = mu, cov = R)
+  cv<-qchisq(.95,df=ncol(site_sex_out)-1)
+  site_sex_out$outlier_sex <- ifelse(site_sex_out$MD_sp>cv, 1, 0)
+  
+  preds_sex <- matrix(data = NA, nrow = nrow(site_keep), ncol = k)
+  
+  for (i in 1:nrow(site_keep)){
+    
+    dat <- site_keep[i, ]
+    inds <- which(!is.na(dat[6:ncol(site_keep)]))
+    # yt <- dat[6:ncol(site_keep)][inds]
+    
+    # loop through inds
+    for (j in inds){
+      
+      # Get Rxtyt
+      Rxtyt <- R[j, inds[!(inds %in% j)]]
+      # Get Ryt_inv
+      Ryt <- R[inds[!(inds %in% j)], inds[!(inds %in% j)]]
+      if (length(Ryt) > 1){
+      Ryt_inv <- matlib::inv(Ryt)  
+      } else {Ryt_inv <- 1/Ryt} # if Ryt is scalar, take the inverse of Ryt
+    
+      #Get yt-uyt
+      yt <- dat[6:ncol(site_keep)][inds[!(inds %in% j)]]
+      yt_mu <- as.matrix(yt - mu[inds[!(inds %in% j)]])
+      # uxt
+      uxt <- mu[j]
+      
+      # Get estimated value
+      preds_sex[i,j] <- Rxtyt %*% Ryt_inv %*% t(yt_mu) + uxt
+      
+    }
+    
+    
+  }
+  
+  preds_df_sex <- data.frame(preds_sex)
+  names(preds_df_sex) <- paste0("E_", names(site_keep)[6:ncol(site_keep)])
+  site_all_sex <- cbind(site_sex_out, preds_df_sex)
+  
+  # Take the difference between estimate and actual and normalize by dividing by sample variance
+  deviation <- abs(site_all_sex[, (ncol(site_keep)+3):ncol(site_all_sex)] - site_all_sex[, 6:ncol(site_keep)])
+  deviation <- mapply('/', deviation, diag(R))
+  deviation <- data.frame(deviation)
+  names(deviation) <- paste0("D_", names(site_keep)[6:ncol(site_keep)])
+  site_out_sex <- cbind(site_all_sex, deviation)
+  site_out_sex
+  
+})
+
+# stack the outputs
+site_sex_outliers <- do.call(plyr::rbind.fill, site_sex)
+site_sex_outliers <- site_sex_outliers %>%
+  select("facility", "ageasentered", "sex", "kp", "facility_type", "HTS_TST", "HTS_TST_NEG", "HTS_TST_POS", "TX_CURR",
+         "TX_NEW", "TX_RTT", "HTS_INDEX", "HTS_INDEX_NEWNEG", "HTS_INDEX_NEWPOS", "TX_ML",  
+         "MD_sp", "outlier_sex", "E_HTS_TST", "E_HTS_TST_NEG", "E_HTS_TST_POS", "E_TX_CURR", "E_TX_NEW", "E_TX_RTT", "E_HTS_INDEX",
+         "E_HTS_INDEX_NEWNEG", "E_HTS_INDEX_NEWPOS", "E_TX_ML", "D_HTS_TST", "D_HTS_TST_NEG", "D_HTS_TST_POS", "D_TX_CURR",
+         "D_TX_NEW", "D_TX_RTT", "D_HTS_INDEX", "D_HTS_INDEX_NEWNEG", "D_HTS_INDEX_NEWPOS", "D_TX_ML") 
+
+anomaly_recommender_sex <- site_sex_outliers
+         
+write.xlsx(site_sex_outliers, './anomaly_recommender_kp.xlsx')
+```
 
 
-# Old code below
+# Old code below ---------------------------------------------------
 ```{r}
 # Read in data
 setwd("C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection")
@@ -328,6 +1073,7 @@ diag(N_sqrt) <- 1/(diag(N_sqrt))
 R <- (N_sqrt %*% S %*% N_sqrt)
 ```
 
+
 ```{r}
 # Calculate Mahalanobis distance
 site_sparse <- site_keep
@@ -335,6 +1081,7 @@ site_sparse$MD_sp <- MDmiss(site_sparse[, 4:ncol(site_sparse)], center = mu, cov
 cv<-qchisq(.95,df=ncol(site_sparse)-1)
 site_sparse$outlier_sp <- ifelse(site_sparse$MD_sp>cv, 1, 0)
 ```
+
 
 ```{r}
 # Predict present values - xt is the value to predict, yt are the other present values
@@ -397,5 +1144,113 @@ write.csv(site_out_age, file = "png_age_anomaly_recommender.csv")
 ```
 
 
+```{r}
+site_split <- split(site_spread, paste(site_spread$ageasentered, site_spread$sex))
+site_sexage <- lapply(site_split, function(x){
+  output <- tryCatch({
+  # drop observations where most variables are missing and variables where most observations
+  obs_count <- apply(x[, 6:ncol(x)], 1, function(y) length(which(!is.na(y))))
+  count_present <- apply(x[, 6:ncol(x)], 2, function(y) length(which(!is.na(y))))
+  cols_to_keep <- which(count_present > (nrow(x)*.1))+5
+  obs_to_keep <- which(obs_count > 4)
+  site_keep <- cbind(x[obs_to_keep, 1:5], x[obs_to_keep, cols_to_keep])
+  # if(ncol(site_keep) > 5){
+
+    # get sparse mu
+    sum_sparse <- colSums(site_keep[, 6:ncol(site_keep)], na.rm = T)
+    count_present_keep <- count_present[cols_to_keep-5]
+    mu <- sum_sparse / count_present_keep
+    k <- length(mu)
+    
+    N <- matrix(0, k, k)
+    diag(N) <- count_present_keep
+    
+    i_mat <- matrix(0, k, k)
+    diag(i_mat) <- 1
+    
+    S <- matrix(0, k, k)
+    
+    for (i in 1:nrow(site_keep)){
+      dat <- x[i, ]
+      inds <- which(!is.na(dat[6:ncol(site_keep)]))
+      yt <- dat[6:ncol(site_keep)][inds]
+      yt_mu <- as.matrix(yt - mu[inds])
+      
+      Hyt <- as.matrix(i_mat[inds, ])
+      if(dim(Hyt)[2] == 1){Hyt <- t(Hyt)}
+      
+      S <- S + (t(Hyt) %*% (t(yt_mu) %*% yt_mu) %*% Hyt)
+    }
+    
+    N_sqrt <- sqrt(N)
+    diag(N_sqrt) <- 1/(diag(N_sqrt))
+    R <- (N_sqrt %*% S %*% N_sqrt)
+    
+    
+    # Try modi package
+    site_sexage_out <- site_keep
+    site_sexage_out$MD_sp <- MDmiss(site_sexage_out[, 6:ncol(site_sexage_out)], center = mu, cov = R)
+    cv<-qchisq(.95,df=ncol(site_sexage_out)-1)
+    site_sexage_out$outlier_sexage <- ifelse(site_sexage_out$MD_sp>cv, 1, 0)
+    # site_sexage_out
+    
+    preds_sexage <- matrix(data = NA, nrow = nrow(site_keep), ncol = k)
+    
+    for (i in 1:nrow(site_keep)){
+      
+      dat <- site_keep[i, ]
+      inds <- which(!is.na(dat[6:ncol(site_keep)]))
+      # yt <- dat[5:ncol(site_keep)][inds]
+      
+      # loop through inds
+      for (j in inds){
+        
+        # Get Rxtyt
+        Rxtyt <- R[j, inds[!(inds %in% j)]]
+        # Get Ryt_inv
+        Ryt <- R[inds[!(inds %in% j)], inds[!(inds %in% j)]]
+        Ryt_inv <- matlib::inv(Ryt)
+        #Get yt-uyt
+        yt <- dat[6:ncol(site_keep)][inds[!(inds %in% j)]]
+        yt_mu <- as.matrix(yt - mu[inds[!(inds %in% j)]])
+        # uxt
+        uxt <- mu[j]
+        
+        # Get estimated value
+        preds_sexage[i,j] <- Rxtyt %*% Ryt_inv %*% t(yt_mu) + uxt
+        
+      }
+      
+      
+    }
+    preds_df_sexage <- data.frame(preds_sexage)
+    names(preds_df_sexage) <- paste0("E_", names(site_keep)[6:ncol(site_keep)])
+    site_all_sexage <- cbind(site_sexage_out, preds_df_sexage)
+    
+    # Take the difference between estimate and actual and normalize by dividing by sample variance
+    deviation <- abs(site_all_sexage[, (ncol(site_keep)+4):ncol(site_all_sexage)] - site_all_sexage[, 6:ncol(site_keep)])
+    deviation <- mapply('/', deviation, diag(R))
+    deviation <- data.frame(deviation)
+    names(deviation) <- paste0("D_", names(site_keep)[6:ncol(site_keep)])
+    site_out_sexage <- cbind(site_all_sexage, deviation)
+    site_out_sexage
+    }, error = function(cond){
+    message("Insufficient Data or Singular Matrix")
+    message(cond)})
+  output
+  
+})
+
+# stack the outputs
+site_sexage_outliers <- do.call(plyr::rbind.fill, site_sexage)
+site_sexage_outliers <- site_sexage_outliers %>%
+  select("Facility", "AnalysisDate", "AgeGroup", "Sex", "TX_CURR", "TX_NEW", "TX_PVLS_D", "TX_PVLS_N", "TX_ML",
+         "TX_RTT", "PMTCT_ART", "HTS_TST", "TB_STAT_D", "TB_ART", "TB_STAT_N", "MD_sp", "outlier_sexage",
+         "E_TX_CURR", "E_TX_NEW", "E_TX_PVLS_D", "E_TX_PVLS_N", "E_TX_ML",
+         "E_TX_RTT", "E_PMTCT_ART", "E_HTS_TST", "E_TB_STAT_D", "E_TB_ART", "E_TB_STAT_N",
+         "D_TX_CURR", "D_TX_NEW", "D_TX_PVLS_D", "D_TX_PVLS_N", "D_TX_ML",
+         "D_TX_RTT", "D_PMTCT_ART", "D_HTS_TST", "D_TB_STAT_D", "D_TB_ART", "D_TB_STAT_N")
+write_xlsx(site_sexage_outliers, './anomaly_recommender_sexage.xlsx')
+```
 
 
