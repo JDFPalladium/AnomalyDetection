@@ -156,6 +156,9 @@ deviation <- data.frame(deviation)
 names(deviation) <- paste0("D_", names(site_sparse)[6:16])
 site_out_total <- cbind(site_all, deviation)
 
+# left join the output table from the sex run to site_spread (join on all five of the unique columns)
+site_out_total_full <- left_join(site_spread, site_out_total, by=c("facility", "ageasentered", "sex", "kp", "facility_type"))
+
 write.xlsx(site_out_total, file = "png_total_anomaly_recommender.xlsx")
 ```
 
@@ -269,7 +272,10 @@ site_sex_outliers <- site_sex_outliers %>%
          "D_TX_NEW", "D_TX_RTT", "D_HTS_INDEX", "D_HTS_INDEX_NEWNEG", "D_HTS_INDEX_NEWPOS", "D_TX_ML") 
 
 anomaly_recommender_sex <- site_sex_outliers
-         
+
+# left join the output table from the sex run to site_spread (join on all five of the unique columns)
+site_out_sex_full <- left_join(site_spread, anomaly_recommender_sex, by=c("facility", "ageasentered", "sex", "kp", "facility_type"))
+
 write.xlsx(site_sex_outliers, './png_anomaly_recommender_sex.xlsx')
 
 ```
