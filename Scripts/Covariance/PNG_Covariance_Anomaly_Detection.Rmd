@@ -160,6 +160,11 @@ site_out_total <- cbind(site_all, deviation)
 site_out_total_full <- left_join(site_spread, site_out_total, by=c("facility", "ageasentered", "sex", "kp", "facility_type"))
 
 write.xlsx(site_out_total, file = "png_total_anomaly_recommender.xlsx")
+
+# left join the output table from the sex run to site_spread (join on all five of the unique columns)
+site_out_total_full <- left_join(site_spread[,c("facility", "ageasentered", "sex", "kp", "facility_type")], site_out_total, by=c("facility", "ageasentered", "sex", "kp", "facility_type"))
+
+write.xlsx(site_out_total_full, file = "png_total_anomaly_recommender_full.xlsx")
 ```
 
 
@@ -273,9 +278,11 @@ site_sex_outliers <- site_sex_outliers %>%
 
 anomaly_recommender_sex <- site_sex_outliers
 
-# left join the output table from the sex run to site_spread (join on all five of the unique columns)
-site_out_sex_full <- left_join(site_spread, anomaly_recommender_sex, by=c("facility", "ageasentered", "sex", "kp", "facility_type"))
+write.xlsx(anomaly_recommender_sex, './png_anomaly_recommender_sex.xlsx')
 
+# left join the output table from the sex run to site_spread (join on all five of the unique columns)
+site_out_sex_full <- left_join(site_spread[,c("facility", "ageasentered", "sex", "kp", "facility_type")], anomaly_recommender_sex, by=c("facility", "ageasentered", "sex", "kp", "facility_type"))
+         
 write.xlsx(site_out_sex_full, './png_anomaly_recommender_sex_full.xlsx')
 
 ```
