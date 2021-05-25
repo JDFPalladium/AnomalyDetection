@@ -68,14 +68,18 @@ mer_png_full <- read_excel("mer_png_full.xlsx")
 site_spread <- mer_png_full
 obs_count <- apply(site_spread[, 6:ncol(site_spread)], 1, function(x) length(which(!is.na(x)))) # drops the facilities for which all values are missing
 count_present <- apply(site_spread[, 6:ncol(site_spread)], 2, function(x) length(which(!is.na(x)))) # tells us how many rows have each indicator reported
-cols_to_keep <- which(count_present > (nrow(site_spread)*.10))+5 # keep variables present at least 5% of the time (was originally 10%)
-obs_to_keep <- which(obs_count > 3) # keep observations with at least one present values (was originally 4)
+cols_to_keep <- which(count_present > (nrow(site_spread)*.05))+5 # keep variables present at least 5% of the time (was originally 10%)
+obs_to_keep <- which(obs_count > 2) # keep observations with at least one present values (was originally 4)
 site_keep <- cbind(site_spread[obs_to_keep, 1:5], site_spread[obs_to_keep, cols_to_keep])
+
+# calculate variance of each indicator; if 0, drop it
+# calculate colinearity between variable pairs; if a pair is colinear, drop one of them
 
 # get sparse mu (vector of means)
 # alternatively use g sub to replace commas with blanks, the convert using as numeric
 sum_sparse <- colSums(site_keep[, 6:ncol(site_keep)], na.rm = TRUE) # sum of present values by variable; use na.rm so we remove NAs
-count_present_keep <- count_present[cols_to_keep-5] # count of present values by variable
+count_present_keep <- apply(site_keep[, 6:ncol(site_keep)], 2, function(x) length(which(!is.na(x))))
+#count_present_keep <- count_present[cols_to_keep-5] # count of present values by variable
 mu <- sum_sparse / count_present_keep # means
 k <- length(mu) # number of variables (indicators)
 
@@ -156,9 +160,6 @@ deviation <- data.frame(deviation)
 names(deviation) <- paste0("D_", names(site_sparse)[6:16])
 site_out_total <- cbind(site_all, deviation)
 
-# left join the output table from the sex run to site_spread (join on all five of the unique columns)
-site_out_total_full <- left_join(site_spread, site_out_total, by=c("facility", "ageasentered", "sex", "kp", "facility_type"))
-
 write.xlsx(site_out_total, file = "png_total_anomaly_recommender.xlsx")
 
 # left join the output table from the sex run to site_spread (join on all five of the unique columns)
@@ -171,21 +172,25 @@ write.xlsx(site_out_total_full, file = "png_total_anomaly_recommender_full.xlsx"
 # Let's split the data by sex and run on each sub-group ------------------------
 ```{r}
 
-site_spread <- mer_png_full
+site_spread <- mer_png_full %>% select(-HTS_INDEX_NEWPOS, -TX_NET_NEW) # dropping HTS_INDEX_NEWPOS because it has no variance and dropping TX_NET_NEW bc its perfectly colinear with TX_CURR
 site_split <- split(site_spread, site_spread$sex)
 
 site_sex <- lapply(site_split, function(x){
-  x <- site_split$Male # for testing one pass through the loop
+  # x <- site_split$Male # for testing one pass through the loop
   # drop observations where most variables are missing and variables where most observations are missing
   obs_count <- apply(x[, 6:ncol(x)], 1, function(y) length(which(!is.na(y)))) #this is the number of indicators reported for that row
   count_present <- apply(x[, 6:ncol(x)], 2, function(y) length(which(!is.na(y)))) #this is the number of rows that reported each indicator
-  cols_to_keep <- which(count_present > (nrow(x)*.10))+5
-  obs_to_keep <- which(obs_count > 3)
+  cols_to_keep <- which(count_present > (nrow(x)*.05))+5
+  obs_to_keep <- which(obs_count > 2)
   site_keep <- cbind(x[obs_to_keep, 1:5], x[obs_to_keep, cols_to_keep])
+
+# calculate variance of each indicator; if 0, drop it
+# calculate colinearity between variable pairs; if a pair is colinear, drop one of them  
   
   # get sparse mu
   sum_sparse <- colSums(site_keep[, 6:ncol(site_keep)], na.rm = T)
-  count_present_keep <- count_present[cols_to_keep-5]
+  count_present_keep <- apply(site_keep[, 6:ncol(site_keep)], 2, function(x) length(which(!is.na(x))))
+  #count_present_keep <- count_present[cols_to_keep-5]
   mu <- sum_sparse / count_present_keep # make sure this is calculating the right mu
   k <- length(mu)
   
@@ -263,7 +268,6 @@ site_sex <- lapply(site_split, function(x){
   deviation <- data.frame(deviation)
   names(deviation) <- paste0("D_", names(site_keep)[6:ncol(site_keep)])
   site_out_sex <- cbind(site_all_sex, deviation)
-  site_out_sex
   
 })
 
@@ -271,10 +275,10 @@ site_sex <- lapply(site_split, function(x){
 site_sex_outliers <- do.call(plyr::rbind.fill, site_sex)
 site_sex_outliers <- site_sex_outliers %>%
   select("facility", "ageasentered", "sex", "kp", "facility_type", "HTS_TST", "HTS_TST_NEG", "HTS_TST_POS", "TX_CURR",
-         "TX_NEW", "TX_RTT", "HTS_INDEX", "HTS_INDEX_NEWNEG", "HTS_INDEX_NEWPOS", "TX_ML",  
+         "TX_NEW", "TX_RTT", "HTS_INDEX", "HTS_INDEX_NEWNEG",  "TX_ML",  
          "MD_sp", "outlier_sex", "E_HTS_TST", "E_HTS_TST_NEG", "E_HTS_TST_POS", "E_TX_CURR", "E_TX_NEW", "E_TX_RTT", "E_HTS_INDEX",
-         "E_HTS_INDEX_NEWNEG", "E_HTS_INDEX_NEWPOS", "E_TX_ML", "D_HTS_TST", "D_HTS_TST_NEG", "D_HTS_TST_POS", "D_TX_CURR",
-         "D_TX_NEW", "D_TX_RTT", "D_HTS_INDEX", "D_HTS_INDEX_NEWNEG", "D_HTS_INDEX_NEWPOS", "D_TX_ML") 
+         "E_HTS_INDEX_NEWNEG", "E_TX_ML", "D_HTS_TST", "D_HTS_TST_NEG", "D_HTS_TST_POS", "D_TX_CURR",
+         "D_TX_NEW", "D_TX_RTT", "D_HTS_INDEX", "D_HTS_INDEX_NEWNEG", "D_TX_ML") 
 
 anomaly_recommender_sex <- site_sex_outliers
 
