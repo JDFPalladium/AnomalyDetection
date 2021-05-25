@@ -405,11 +405,29 @@ anomaly_recommender_sex <- site_sex_outliers
 write.xlsx(site_sex_outliers, './anomaly_recommender_sex.xlsx')
 ```
 
-
 # Let's split the data by age (using panorama age bands - <15 and 15+) and run on each sub-group ------------------------
 # det(R) for the <15 group is 0
 ```{r}
-site_spread <- mer_png_full
+site_input <- mer_png_full
+site_input <- site_input %>% 
+  mutate(age_lifestage = ifelse(ageasentered == "<01", "<15",
+                                ifelse(ageasentered == "<10", "<15",
+                                ifelse(ageasentered == "<15", "<15",
+                                ifelse(ageasentered == "01-04", "<15",
+                                ifelse(ageasentered == "05-09", "<15", 
+                                ifelse(ageasentered == "10-14", "<15", 
+                                ifelse(ageasentered == "15-19", "15+",
+                                ifelse(ageasentered == "20-24", "15+",
+                                ifelse(ageasentered == "25-29", "15+",
+                                ifelse(ageasentered == "30-34", "15+",
+                                ifelse(ageasentered == "35-39", "15+",
+                                ifelse(ageasentered == "40-44", "15+",
+                                ifelse(ageasentered == "45-49", "15+",
+                                ifelse(ageasentered == "50+", "15+", "Other")))))))))))))))
+
+site_input <- site_input[,c(1,2,19,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18)] # site_input is what i need to use for the join later
+
+site_spread <- mer_png_full %>% select(-HTS_INDEX_NEWPOS, -TX_NET_NEW, -HTS_INDEX_NEWNEG, -HTS_INDEX_KNOWNPOS) # dropping HTS_INDEX_NEWPOS because it has no variance and dropping TX_NET_NEW bc its perfectly colinear with TX_CURR
 site_spread <- site_spread %>% 
   mutate(age_lifestage = ifelse(ageasentered == "<01", "<15",
                                 ifelse(ageasentered == "<10", "<15",
@@ -426,8 +444,7 @@ site_spread <- site_spread %>%
                                 ifelse(ageasentered == "45-49", "15+",
                                 ifelse(ageasentered == "50+", "15+", "Other")))))))))))))))
 
-site_spread_dropped <- select(site_spread,-2)
-site_spread_reorder <- site_spread_dropped[,c(1,20,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19)]
+site_spread_reorder <- site_spread[,c(1,2,15,3,4,5,6,7,8,9,10,11,12,13,14)] # site_spread_reorder is what i need to use for the join later
 site_spread <- site_spread_reorder
 site_spread <- site_spread %>% filter(age_lifestage != "NA")
 site_spread <- site_spread %>% filter(age_lifestage != "Other")
@@ -435,17 +452,18 @@ site_split <- split(site_spread, site_spread$age_lifestage)
 
 
 site_sex <- lapply(site_split, function(x){
-  x <- site_split$`<15` # for testing one pass through the loop
+  # x <- site_split$`15+` # for testing one pass through the loop
   # drop observations where most variables are missing and variables where most observations are missing
-  obs_count <- apply(x[, 6:ncol(x)], 1, function(y) length(which(!is.na(y)))) #this is the number of indicators reported for that row
-  count_present <- apply(x[, 6:ncol(x)], 2, function(y) length(which(!is.na(y)))) #this is the number of rows that reported each indicator
-  cols_to_keep <- which(count_present > (nrow(x)*.05))+5
-  obs_to_keep <- which(obs_count > 1)
-  site_keep <- cbind(x[obs_to_keep, 1:5], x[obs_to_keep, cols_to_keep])
+  obs_count <- apply(x[, 7:ncol(x)], 1, function(y) length(which(!is.na(y)))) #this is the number of indicators reported for that row
+  count_present <- apply(x[, 7:ncol(x)], 2, function(y) length(which(!is.na(y)))) #this is the number of rows that reported each indicator
+  cols_to_keep <- which(count_present > (nrow(x)*.05))+6
+  obs_to_keep <- which(obs_count > 2)
+  site_keep <- cbind(x[obs_to_keep, 1:6], x[obs_to_keep, cols_to_keep])
   
   # get sparse mu
-  sum_sparse <- colSums(site_keep[, 6:ncol(site_keep)], na.rm = T)
-  count_present_keep <- count_present[cols_to_keep-5]
+  sum_sparse <- colSums(site_keep[, 7:ncol(site_keep)], na.rm = T)
+  count_present_keep <- apply(site_keep[, 7:ncol(site_keep)], 2, function(x) length(which(!is.na(x))))
+  #count_present_keep <- count_present[cols_to_keep-5]
   mu <- sum_sparse / count_present_keep # make sure this is calculating the right mu
   k <- length(mu)
   
@@ -459,8 +477,8 @@ site_sex <- lapply(site_split, function(x){
   
   for (i in 1:nrow(site_keep)){
     dat <- site_keep[i, ]
-    inds <- which(!is.na(dat[6:ncol(site_keep)]))
-    yt <- dat[6:ncol(site_keep)][inds]
+    inds <- which(!is.na(dat[7:ncol(site_keep)]))
+    yt <- dat[7:ncol(site_keep)][inds]
     yt_mu <- as.matrix(yt - mu[inds])
     
     Hyt <- as.matrix(i_mat[inds, ])
@@ -476,7 +494,7 @@ site_sex <- lapply(site_split, function(x){
   
   # Try modi package
   site_sex_out <- site_keep
-  site_sex_out$MD_sp <- MDmiss(site_sex_out[, 6:ncol(site_sex_out)], center = mu, cov = R)
+  site_sex_out$MD_sp <- MDmiss(site_sex_out[, 7:ncol(site_sex_out)], center = mu, cov = R)
   cv<-qchisq(.95,df=ncol(site_sex_out)-1)
   site_sex_out$outlier_sex <- ifelse(site_sex_out$MD_sp>cv, 1, 0)
   
@@ -485,7 +503,7 @@ site_sex <- lapply(site_split, function(x){
   for (i in 1:nrow(site_keep)){
     
     dat <- site_keep[i, ]
-    inds <- which(!is.na(dat[6:ncol(site_keep)]))
+    inds <- which(!is.na(dat[7:ncol(site_keep)]))
     # yt <- dat[6:ncol(site_keep)][inds]
     
     # loop through inds
@@ -500,7 +518,7 @@ site_sex <- lapply(site_split, function(x){
       } else {Ryt_inv <- 1/Ryt} # if Ryt is scalar, take the inverse of Ryt
     
       #Get yt-uyt
-      yt <- dat[6:ncol(site_keep)][inds[!(inds %in% j)]]
+      yt <- dat[7:ncol(site_keep)][inds[!(inds %in% j)]]
       yt_mu <- as.matrix(yt - mu[inds[!(inds %in% j)]])
       # uxt
       uxt <- mu[j]
@@ -514,14 +532,14 @@ site_sex <- lapply(site_split, function(x){
   }
   
   preds_df_sex <- data.frame(preds_sex)
-  names(preds_df_sex) <- paste0("E_", names(site_keep)[6:ncol(site_keep)])
+  names(preds_df_sex) <- paste0("E_", names(site_keep)[7:ncol(site_keep)])
   site_all_sex <- cbind(site_sex_out, preds_df_sex)
   
   # Take the difference between estimate and actual and normalize by dividing by sample variance
-  deviation <- abs(site_all_sex[, (ncol(site_keep)+3):ncol(site_all_sex)] - site_all_sex[, 6:ncol(site_keep)])
+  deviation <- abs(site_all_sex[, (ncol(site_keep)+3):ncol(site_all_sex)] - site_all_sex[, 7:ncol(site_keep)])
   deviation <- mapply('/', deviation, diag(R))
   deviation <- data.frame(deviation)
-  names(deviation) <- paste0("D_", names(site_keep)[6:ncol(site_keep)])
+  names(deviation) <- paste0("D_", names(site_keep)[7:ncol(site_keep)])
   site_out_sex <- cbind(site_all_sex, deviation)
   site_out_sex
   
@@ -529,16 +547,21 @@ site_sex <- lapply(site_split, function(x){
 
 # stack the outputs
 site_sex_outliers <- do.call(plyr::rbind.fill, site_sex)
-site_sex_outliers <- site_sex_outliers %>%
-  select("facility", "ageasentered", "sex", "kp", "facility_type", "HTS_TST", "HTS_TST_NEG", "HTS_TST_POS", "TX_CURR",
-         "TX_NEW", "TX_RTT", "HTS_INDEX", "HTS_INDEX_NEWNEG", "HTS_INDEX_NEWPOS", "TX_ML",  
+site_age_outliers <- site_sex_outliers %>%
+  select("facility", "ageasentered", "age_lifestage", "sex", "kp", "facility_type", "HTS_TST", "HTS_TST_NEG", "HTS_TST_POS", "TX_CURR",
+         "TX_NEW", "TX_RTT", "HTS_INDEX", "TX_ML",  
          "MD_sp", "outlier_sex", "E_HTS_TST", "E_HTS_TST_NEG", "E_HTS_TST_POS", "E_TX_CURR", "E_TX_NEW", "E_TX_RTT", "E_HTS_INDEX",
-         "E_HTS_INDEX_NEWNEG", "E_HTS_INDEX_NEWPOS", "E_TX_ML", "D_HTS_TST", "D_HTS_TST_NEG", "D_HTS_TST_POS", "D_TX_CURR",
-         "D_TX_NEW", "D_TX_RTT", "D_HTS_INDEX", "D_HTS_INDEX_NEWNEG", "D_HTS_INDEX_NEWPOS", "D_TX_ML") 
+         "E_TX_ML", "D_HTS_TST", "D_HTS_TST_NEG", "D_HTS_TST_POS", "D_TX_CURR",
+         "D_TX_NEW", "D_TX_RTT", "D_HTS_INDEX",  "D_TX_ML") 
 
-anomaly_recommender_sex <- site_sex_outliers
+anomaly_recommender_age <- site_age_outliers
          
-write.xlsx(site_sex_outliers, './png_anomaly_recommender_age.xlsx')
+write.xlsx(site_age_outliers, './png_anomaly_recommender_age.xlsx')
+
+# left join the output table from the sex run to site_spread (join on all five of the unique columns)
+site_out_age_full <- left_join(site_input[,c("facility", "ageasentered", "age_lifestage", "sex", "kp", "facility_type")], anomaly_recommender_age, by=c("facility", "ageasentered", "sex", "kp", "facility_type"))
+         
+write.xlsx(site_out_age_full, './png_anomaly_recommender_age_full.xlsx')
 
 ```
 
