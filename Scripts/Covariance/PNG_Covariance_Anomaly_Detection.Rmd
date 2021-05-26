@@ -406,7 +406,7 @@ write.xlsx(site_sex_outliers, './anomaly_recommender_sex.xlsx')
 ```
 
 # Let's split the data by age (using panorama age bands - <15 and 15+) and run on each sub-group ------------------------
-# det(R) for the <15 group is 0
+# we've manually dropped variables that are colinear and variables that have 0 variance
 ```{r}
 site_input <- mer_png_full
 site_input <- site_input %>% 
