@@ -5,8 +5,6 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-# create key data frame thats 1:7, and model data frame that is 8:end; split based on the variable of interest
-# c bind at the end of the loop; after the loop, row bind the male and female tables together
 ```
 
 
@@ -20,17 +18,14 @@ library(openxlsx)
 ```
 
 
-### Prepare the data ###
+# Prepare the data -------------------
 ```{r}
 # Importing MER data
 setwd("C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection")
 filepath <- "C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection/"
 mer_png_raw <- read.csv(paste0(filepath, "PNG FY20 Q1 MER Data Release for Data.FI_4.13.2021.csv"), stringsAsFactors = FALSE)
 
-```
 
-
-```{r}
 # only keep rows for which there is more than one unique value
 cols_to_keep <- c(1,2,20,21,23,24,25,27,28,29,30,31,32,33,34,35,36,37,38,39,40,49)
 mer_png <- mer_png_raw[, cols_to_keep]
@@ -64,7 +59,7 @@ mer_png_full <- mer_png_full %>% group_by(facility, ageasentered, sex, indicator
 ```
 
 
-# Full dataset - no disags
+# Full dataset ---------
 ```{r}
 # pivot wider
 mer_png_full_tidy <- mer_png_full %>%
@@ -77,26 +72,9 @@ write.xlsx(mer_png_full_processed, file = "mer_png_full.xlsx")
 
 ```
 
-# Exploration and notes
+
+# Exploration (testing to make sure no data is lost after the pivot) ------------
 ```{r}
-
-# anything that has de dup will be tagged as that 
-
-# full data set, agg disag, sex disag, kp disag, clinic vs hospital disagg
-
-# create a column for every disagg we want (key pop yes/no column, facility type clinic/hospital column) (if we do a different age disagg then the bands they have, we'd do it this way)
-
-# call columns by name that we want instead of by number reference (use is.numeric() to reference which columns in the data set have numbers vs names)
-
-# filter(mer_png_raw, facility == "Lawes Road Clinic" & sex == "Female" & ageasentered == "15+" & indicator == "TX_PVLS"))
-
-# testing to see which columns to drop
-unique(mer_png$disaggregate)
-mer_png_kp <- mer_png %>% filter(disaggregate %in% c("KeyPop/Result", "KeyPop/HIVStatus"))
-unique(mer_png$indicator)
-
-# testing to make sure no data is lost after the pivot
-
 # total data reported is 23,958 before pivot
 mer_png_test <- mer_png_full
 cols_to_keep <- c(9,21)
@@ -107,7 +85,7 @@ mer_png_indicator_counts_pre <- mer_png_test %>%
   summarise_each(funs(sum))
 
 # total data reported is 23,958 after pivot
-cols_to_keep <- c(8:22)
+cols_to_keep <- c(6:20)
 mer_png_test_post <- mer_png_full_processed[, cols_to_keep]
 mer_png_test_post[is.na(mer_png_test_post)] = 0
 mer_png_indicator_counts_post <- colSums(mer_png_test_post)
@@ -116,100 +94,9 @@ sum(mer_png_indicator_counts_post)
 # run this after and it will equal the number of rows
 n_distinct(mer_png_full_processed[,c("facility", "ageasentered", "sex")])
 
-```
-
-# Ignore below - hasn't been updated and is no longer needed
-
-
-
-# Sex
-
-```{r}
-# select columns of interest
-cols_to_keep <- c(2,5,7,10)
-mer_png_sex <- mer_png_full_processed[, cols_to_keep]
-
-# filter out entries where sex is missing
-mer_png_sex <- mer_png_sex %>% filter(sex == "Male" | sex == "Female" | sex == "Unknown Sex")
-
-write.xlsx(mer_png_sex_processed, file = "mer_png_sex.xlsx")
+n_distinct(mer_png_full[,c("facility", "ageasentered", "sex", "indicator", "facility_type", "kp")])
 
 ```
 
 
-# Age
-
-```{r}
-# select columns of interest
-cols_to_keep <- c(2,6,5,10)
-mer_png_age <- mer_png_full_processed[, cols_to_keep]
-
-# filter out entries where age is missing
-mer_png_age <- mer_png_age %>% filter(ageasentered != "")
-
-write.xlsx(mer_png_age_processed, file = "mer_png_age.xlsx")
-
-```
-
-
-# Sex and Age
-
-```{r}
-# select columns of interest
-cols_to_keep <- c(2,7,6,5,10)
-mer_png_age_sex <- mer_png_full_processed[, cols_to_keep]
-
-# filter out entries where sex or age is missing
-mer_png_age_sex <- mer_png_age_sex %>% filter(ageasentered != "")
-mer_png_age_sex <- mer_png_age_sex %>% filter(sex == "Male" | sex == "Female" | sex == "Unknown Sex")
-
-
-write.xlsx(mer_png_age_sex_processed, file = "mer_png_age_sex.xlsx")
-```
-
-
-# Key Pop
-
-```{r}
-# select columns of interest
-cols_to_keep <- c(2,4,5,10)
-mer_png_kp <- mer_png_kp_processed[, cols_to_keep]
-
-write.xlsx(mer_png_kp_processed, file = "mer_png_kp.xlsx")
-```
-
-
-
-# Facility Type
-
-```{r}
-# select columns of interest
-cols_to_keep <- c(2,4,5,10)
-mer_png_kp <- mer_png_kp[, cols_to_keep]
-
-write.xlsx(mer_png_kp_processed, file = "mer_png_facility_type.xlsx")
-```
-
-
-# Code Archive 
-
-```{r}
-# filter based on TotalNumerator disaggregate
-mer_png_tn <- mer_png %>% filter(disaggregate == "Total Numerator")
-
-# select columns of interest
-cols_to_keep <- c(2,5,10)
-mer_png_tn <- mer_png_tn[, cols_to_keep]
-
-mer_png_tn$facility <- as.factor(mer_png_tn$facility)
-mer_png_tn$indicator <- as.factor(mer_png_tn$indicator)
-
-mer_png_tn_tidy <- mer_png_tn %>%
-  pivot_wider(names_from = "indicator", values_from = "qtr1sum", values_fn = sum)
-mer_png_tn_processed <- mer_png_tn_tidy
-
-mer_png_tn_processed[mer_png_tn_processed == 0] <- NA
-
-write.csv(mer_png_tn_processed, file = "mer_png_tn.csv")
-```
 
