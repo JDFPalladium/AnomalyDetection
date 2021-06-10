@@ -1,0 +1,145 @@
+---
+title: "Nigeria_Covariance_Anomaly_Detection"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Load in libraries --------------------------------
+```{r}
+library(readr)
+library(htmltools)
+library(dplyr)
+library(knitr)
+library(tidyr)
+library(modi)
+library(htmltools)
+library(magrittr)
+library(openxlsx)
+library(readxl)
+library(ggplot2)
+```
+
+
+```{r}
+setwd("C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection")
+filepath <- "C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection/"
+memory.limit(size = 12000)
+nigeria_mer_raw_1720 <- read.delim("MER_Structured_Datasets_Site_IM_FY17-20_20191220_v2_1_Nigeria.txt")
+nigeria_mer_raw_1518 <- read.delim("MER_Structured_Datasets_Site_IM_FY15-18_20210514_v1_1_Nigeria.txt")
+```
+
+
+# Import the data -------
+```{r}
+setwd("C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection")
+filepath <- "C:/Users/allison.fox/OneDrive - Palladium International, LLC/Desktop/Technical Work/Anomaly Detection/"
+
+nigeria_mer_raw <- read.delim("MER_Structured_Datasets_Site_IM_FY19-21_20210514_v1_1_Nigeria.txt")
+
+```
+
+
+# Exploratory analysis ------
+```{r}
+# drop operatingunit (column 3) - same value for all rows
+unique(nigeria_mer_raw$operatingunit)
+
+# drop operatingunituid (column 4) - same value for all rows
+unique(nigeria_mer_raw$operatingunituid)
+
+# drop 7, 9, and 10 because information is not needed for analyses
+
+# drop dreams (column 12) - same value for all rows
+unique(nigeria_mer_raw$dreams)
+
+# drop 15-20 because information is not needed for analyses
+# drop 22 and 23 because information is not needed for analyses
+# drop 25 because information is not needed for analyses
+
+# drop statustb (column 39) - same value for all rows
+unique(nigeria_mer_raw$statustb)
+
+# investigate what age bands are reported
+# is <01 the sum of <=02 months and 02-12 months?
+# is <10 the sum of <=02 months, 02-12 months, 01-04, and 05-09? Same with <15, 15+, and 18+?
+# overlap in the 15-17, 15-19, and 18-20 age bands?
+unique(mer_nigeria$ageasentered)
+
+# what to do with the 1659 rows that have no age or sex reported?
+
+```
+
+
+# Prepare the data -------
+```{r}
+# only keep rows for which there is more than one unique value
+cols_to_keep <- c(6,8,11,13,14,21,24,27,28,30,31,32,33,34,35,36,37,38,40,45,46,47,48,49,50)
+mer_nigeria <- nigeria_mer_raw[, cols_to_keep]
+
+# remove the rows that report on Total Numerator or Total Denominator data
+mer_nigeria <- mer_nigeria %>% filter(!disaggregate %in% c("Total Numerator", "Total Denominator"),
+                                      numeratordenom == "N")
+
+# create a column for the key population disaggregate
+mer_nigeria <- mer_nigeria %>% 
+  mutate(kp = ifelse(disaggregate == "KeyPop/Result" | 
+                     disaggregate == "KeyPop/HIVStatus" |
+                     disaggregate == "KeyPop/RTRI/HIVStatus" |
+                     disaggregate == "KeyPop/HIVSelfTest" |
+                     disaggregate == "KeyPop/Status" |
+                     disaggregate == "KeyPop/Indication/HIVStatus" |
+                     disaggregate == "KeyPop/Confirmatory/HIVStatus" |
+                     disaggregate ==  "KeyPop", "Yes", "No"))
+
+# filter for just FY2021 Q2
+mer_nigeria <- mer_nigeria %>% filter(fiscal_year == 2021)
+mer_nigeria <- mer_nigeria %>% filter(!qtr2 == 'NA')
+
+# covert type of the columns to factor
+mer_nigeria$facility <- as.factor(mer_nigeria$facility)
+mer_nigeria$indicator <- as.factor(mer_nigeria$indicator)
+mer_nigeria$ageasentered <- as.factor(mer_nigeria$ageasentered)
+mer_nigeria$sex <- as.factor(mer_nigeria$sex)
+mer_nigeria$kp <- as.factor(mer_nigeria$kp)
+mer_nigeria$disaggregate <- as.factor(mer_nigeria$disaggregate)
+
+pre_pivot_test <- mer_nigeria
+
+# group by facility, age, sex, and indicator, and then summarize qtr 2 (before pivot)
+mer_nigeria_grouped <- mer_nigeria %>% group_by(facility, ageasentered, sex, indicator, kp) %>% 
+  summarise(qtr2sum = sum(qtr2, na.rm = TRUE)) 
+
+# pivot wider
+mer_nigeria_tidy <- mer_nigeria_grouped %>%
+  pivot_wider(names_from = "indicator", values_from = "qtr2sum")
+
+mer_nigeria_processed <- mer_nigeria_tidy
+
+write.xlsx(mer_nigeria_processed, file = "mer_nigeria_processed.xlsx")
+```
+
+
+# Verify that no data was lost during the pivot -------
+```{r}
+# total data reported is 21,334,187 before pivot
+pre_pivot_test <- panorama
+cols_to_keep <- c(5:31)
+pre_pivot_test <- pre_pivot_test[, cols_to_keep]
+pre_pivot_test <- apply(pre_pivot_test, 2, as.numeric)
+pre_pivot_test[is.na(pre_pivot_test)] = 0
+pre_pivot_sums <- colSums(pre_pivot_test)
+sum(pre_pivot_test$qtr2)
+
+
+# total data reported is 21,334,187 after pivot
+cols_to_keep <- c(5:39)
+mer_nigeria_post <- mer_nigeria_processed[, cols_to_keep]
+mer_nigeria_post[is.na(mer_nigeria_post)] = 0
+mer_nigeria_post <- colSums(mer_nigeria_post)
+sum(mer_nigeria_post)
+```
+
