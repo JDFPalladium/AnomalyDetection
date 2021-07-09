@@ -63,7 +63,9 @@ datPrep <- function(dat, year_for_analysis, qtr_for_analysis) {
     pivot_wider(names_from = "indicator", values_from = "qtr_sum")
   
   # return data frames
-  return(list(dat_out,dat_facility_out))
+  return(list(
+    "dat_disag_out" = dat_out,
+    "dat_facility_out" = dat_facility_out))
   
 }
 
@@ -71,16 +73,16 @@ datPrep <- function(dat, year_for_analysis, qtr_for_analysis) {
 runRecAnalysisDisag <- function(dat,keys,scenario) {
   if (scenario == "all") {
     all_outputs <- runRecAnalysis(dat,keys)
-    sortOutputs(all_outputs, keys = keys,scenario=scenario)
+    sortOutputs(all_outputs, keys = keys,scenario_tmp=scenario)
   } else if (scenario == "age") {
-    ageWrapper(dat,keys)
+    ageWrapper(dat,keys,scenario_wrapper=scenario)
   } else if (scenario == "sex") {
-    sexWrapper(dat,keys)
+    sexWrapper(dat,keys,scenario_wrapper=scenario)
   }
 }
 
 
-ageWrapper <- function(dat,keys) {
+ageWrapper <- function(dat,keys, scenario_wrapper) {
   age_categories <- c("01-04",  "15-19", "20-24", "25-29", "30-34", "35-39", "40-44",
                       "45-49", "05-09", "10-14")
   dat <- dat[dat$ageasentered %in% age_categories, ]
@@ -92,12 +94,13 @@ ageWrapper <- function(dat,keys) {
   # stack the outputs
   site_age_outliers <- do.call(plyr::rbind.fill, site_out)
   
-  site_age_outliers <- sortOutputs(site_age_outliers, keys = keys,scenario = scenario)
+  site_age_outliers <- sortOutputs(site_age_outliers, keys = keys,scenario_tmp = scenario_wrapper)
   return(site_age_outliers)
 }
 
 
-sexWrapper <- function(dat,keys) {
+sexWrapper <- function(dat,keys, scenario_wrapper) {
+  dat$sex <- as.character(dat$sex)
   dat <- dat[dat$sex %in% c("Male", "Female"), ]
   site_split <- split(dat, dat$sex)
   site_out <- list()
@@ -107,33 +110,33 @@ sexWrapper <- function(dat,keys) {
   # stack the outputs
   site_sex_outliers <- do.call(plyr::rbind.fill, site_out)
   
-  site_sex_outliers <- sortOutputs(site_sex_outliers, keys = keys,scenario = scenario)
+  site_sex_outliers <- sortOutputs(site_sex_outliers, keys = keys,scenario_tmp = scenario_wrapper)
   return(site_sex_outliers)
   
 }
 
 
-sortOutputs <- function(dat,keys,scenario) {
+sortOutputs <- function(dat,keys,scenario_tmp) {
   # stack the outputs
   site_out_total <- dat
   site_out_total <- site_out_total %>%
-    select(names(site_out_total)[!grepl("E_|D_|MD|outlier_sp", names(site_out_total))],
-           names(site_out_total)[grepl("E_", names(site_out_total))],
-           names(site_out_total)[grepl("D_", names(site_out_total))],
-           names(site_out_total)[grepl("MD", names(site_out_total))],
+    select(names(site_out_total)[!grepl("^E_|^D_|^MD|outlier_sp", names(site_out_total))],
+           names(site_out_total)[grepl("^E_", names(site_out_total))],
+           names(site_out_total)[grepl("^D_", names(site_out_total))],
+           names(site_out_total)[grepl("^MD", names(site_out_total))],
            names(site_out_total)[grepl("outlier_sp", names(site_out_total))])
   site_out_total <- site_out_total %>% 
     filter(outlier_sp == 1) %>% 
     arrange(desc(MD))
-  n_columns = sum(grepl("E_", names(site_out_total)))
+  n_columns = sum(grepl("^E_", names(site_out_total)))
   n_keys = length(keys)
   for(m in 1:nrow(site_out_total)){
     dat_tmp <- site_out_total[m, ]
-    cols_to_keep <- which(dat_tmp[, (n_keys+1):(n_keys+n_columns)] > 10) + n_keys + n_columns*2
+    cols_to_keep <- which(dat_tmp[, (n_keys+1):(n_keys+n_columns)] > MIN_THRESH) + n_keys + n_columns*2
     if(length(cols_to_keep)<2){next}
     site_out_total[m, "Indicator"] <- colnames(dat_tmp[, cols_to_keep])[which.max(dat_tmp[, cols_to_keep])]
   }
-  site_out_total$scenario <- scenario
+  site_out_total$scenario <- paste0("outlier_", scenario_tmp)
   return(site_out_total)
 }
 
@@ -215,7 +218,7 @@ runRecAnalysis <- function(dat,keys) {
   # Calculate Mahalanobis distance
   site_sparse <- site_keep
   site_sparse$MD <- MDmiss(site_sparse[, (ncol(keys)+1):ncol(site_sparse)], center = mu, cov = R)
-  cv<-qchisq(.95,df=ncol(site_sparse)-1)
+  cv<-qchisq(.99,df=ncol(site_sparse)-1)
   site_sparse$outlier_sp <- ifelse(site_sparse$MD>cv, 1, 0)
   
   # Predict present values - xt is the value to predict, yt are the other present values
@@ -274,21 +277,19 @@ runRecAnalysis <- function(dat,keys) {
 runRecAnalysisFacility <- function(dat,keys,scenario) {
   if (scenario == "facility") {
     facility_outputs <- runRecAnalysis(dat,keys)
-    sortOutputs(facility_outputs, keys = keys, scenario = scenario)
-  } else if (scenario == "facility_type") {
-    print("test")
-    facility_typeWrapper(dat,keys,facility_strings)
+    sortOutputs(facility_outputs, keys = keys, scenario_tmp = scenario)
+  } else if (scenario == "type") {
+    facility_typeWrapper(dat,keys,facility_strings,scenario_wrapper = scenario)
   } else if (scenario == "psnu") {
-    psnuWrapper(dat,keys)
+    psnuWrapper(dat,keys, scenario_wrapper = scenario)
   }
 }
 
 
-facility_typeWrapper <- function(dat,keys,facility_strings) {
+facility_typeWrapper <- function(dat,keys,facility_strings, scenario_wrapper) {
   site_split = list()
   site_tmp = dat
   for (k in 1:length(facility_strings)) {
-    print(k)
     facility_sub = facility_strings[k]
     data_tmp = site_tmp[grepl(facility_sub, site_tmp$facility),]
     site_tmp = site_tmp[!grepl(facility_sub, site_tmp$facility),]
@@ -301,24 +302,165 @@ facility_typeWrapper <- function(dat,keys,facility_strings) {
   # stack the outputs
   facility_type_outliers <- do.call(plyr::rbind.fill, site_out)
   
-  facility_type_outliers <- sortOutputs(facility_type_outliers, keys = keys, scenario = scenario)
+  facility_type_outliers <- sortOutputs(facility_type_outliers, keys = keys, scenario_tmp = scenario_wrapper)
   return(facility_type_outliers)
 }
 
 
-psnuWrapper <- function(dat,keys) {
+psnuWrapper <- function(dat,keys,scenario_wrapper) {
   psnu_to_keep <- dat %>% group_by(psnu) %>% summarize(count = n()) %>% filter(count > 20) %>% .$psnu %>% unique() %>% as.character()
   dat <- dat %>% filter(psnu %in% psnu_to_keep)
   dat$psnu <- factor(as.character(dat$psnu))
   site_split <- split(dat, dat$psnu)
   site_out <- list()
   for (j in 1:length(site_split)) {
+    
     site_out[[j]] <- runRecAnalysis(site_split[[j]],keys)
   }
   # stack the outputs
   facility_psnu_outliers <- do.call(plyr::rbind.fill, site_out)
   
-  facility_psnu_outliers <- sortOutputs(facility_psnu_outliers, keys = keys,scenario = scenario)
+  facility_psnu_outliers <- sortOutputs(facility_psnu_outliers, keys = keys,scenario_tmp = scenario_wrapper)
   return(facility_psnu_outliers)
   
 }
+
+createSummaryTab <- function(dat, disag = TRUE){
+  
+  if(disag == TRUE){
+  cols_to_keep <- c("psnu", "facility", "primepartner", "ageasentered",  "sex",
+                    "kp", "scenario", "Indicator") 
+  } else {
+    cols_to_keep <- c("psnu", "facility", "primepartner", "scenario", "Indicator") 
+  }
+ 
+  dat <- lapply(dat, function(x) x[, cols_to_keep])
+  
+  dat <- rbindlist(dat)
+  
+  dat_for_scorecard <- dat[, c("psnu", "facility", "primepartner", "Indicator")]
+  
+  dat$outlier <- 1
+  
+  dat_summary <- dat %>%
+    select(-Indicator) %>%
+    pivot_wider(names_from = "scenario",
+                values_from = "outlier") %>%
+    as.data.frame()
+  
+  dat_summary[is.na(dat_summary)] <- 0
+  dat_summary$Outliers <- apply(dat_summary[, grepl("outlier", names(dat_summary))],
+                                     1,
+                                     function(x){sum(x, na.rm = T)})
+  dat_summary <- dat_summary %>%
+    group_by(Outliers, facility) %>%
+    mutate(count = n()) %>%
+    arrange(desc(Outliers), desc(count)) %>%
+    select(-count) %>%
+    as.data.frame()
+
+  outlist <- list("summary" = dat_summary,
+                  "scorecard" = dat_for_scorecard)
+  
+}
+
+createScoreCard <- function(summary_disag, summary_facility){
+  
+  scorecard <- rbind(summary_disag, summary_facility)
+  
+  scorecard <- scorecard %>%
+    filter(!is.na(Indicator)) %>%
+    group_by(psnu,facility,primepartner, Indicator) %>%
+    summarize(count = n()) %>%
+    mutate(facility = as.character(facility),
+           psnu = as.character(psnu),
+           primepartner = as.character(primepartner)) %>%
+    pivot_wider(., names_from = "Indicator", values_from = "count") %>%
+    as.data.frame()
+  scorecard[is.na(scorecard)] <- 0
+  scorecard$Total <- rowSums(scorecard[, 4:ncol(scorecard)])
+  indicator_sums <- c(rep(0, 3), colSums(scorecard[, 4:ncol(scorecard)]))
+  scorecard <- rbind(scorecard, indicator_sums)
+  scorecard[nrow(scorecard),1:3] <- "Total"
+  return(scorecard)
+  
+}
+
+formatCells <- function(sheet, name, disags, facilities, keys_disag, keys_facility){
+  
+  name_sheet <- sub("_.*", "", name)
+  if(name_sheet %in% c("sex", "all", "age")){
+    dat <- disags
+    n_keys <- length(keys_disag)
+  } else if(name_sheet %in% c("facility", "type", "psnu")){
+    dat <- facilities
+    n_keys <- length(keys_facility)
+  }
+  
+  dat_tmp <- dat[[name_sheet]]
+  n_columns <- sum(grepl("^E_", names(dat_tmp)))
+  
+  rows <- getRows(sheet, rowIndex=2:nrow(dat_tmp))     # 1st row is headers
+  
+  # loop through columns
+  for(j in 1:n_columns){
+  
+    cells <- getCells(rows, colIndex = j+n_keys)         # get original value cell indexes
+    cells_deviation <- getCells(rows, colIndex = (n_keys + j + (2*n_columns))) # get deviation cell indexes
+    
+    # Get the values for each
+    values <- lapply(cells, getCellValue)
+    # values_estimates <- lapply(cells_estimates, getCellValue)
+    values_deviation <- lapply(cells_deviation, getCellValue)
+    
+    # Setting five quantiles (number of buckets should align with number of color fill objects)
+    quants <- quantile(as.numeric(values_deviation), c(.1,.2,.3,.4,.5,.6,.7,.8,.9), na.rm = TRUE)
+    
+    # find cells meeting conditional criteria: deviations in top quintile
+    # add these cells to a list
+    highlightred1 <- NULL
+    for (i in 1:length(values)) {
+      name_val <- names(values)[i]
+      x <- as.numeric(values_deviation[i])
+      if (x > as.numeric(quants[9]) & !is.na(x)) {
+        highlightred1 <- c(highlightred1, name_val)
+      }    
+    }
+    
+    # repeat for four other quintiles
+    highlightred2 <- NULL
+    for (i in 1:length(values)) {
+      name_val <- names(values)[i]
+      x <- as.numeric(values_deviation[i])
+      if (x > as.numeric(quants[8]) & x <= as.numeric(quants[9]) & !is.na(x)) {
+        highlightred2 <- c(highlightred2, name_val)
+      }
+    }
+    
+    
+    # Go through each list and set the cell style to the associated color
+    lapply(names(cells[highlightred1]),
+           function(ii) setCellStyle(cells[[ii]], cs1))
+    
+    lapply(names(cells[highlightred2]),
+           function(ii) setCellStyle(cells[[ii]], cs2))
+    
+    gc()
+    
+    cells_estimates <- getCells(rows, colIndex = (n_keys + j + n_columns)) # get estimate indexes
+    values_estimates <- lapply(cells_estimates, getCellValue)
+    
+    # Append the estimate in parentheses to the original values so they appear in same cell
+    for(i in 1:length(cells)){
+      setCellValue(cells[[i]], paste0(values[[i]], " (", round(values_estimates[[i]], 1), ")"))
+    }
+    
+    # Clean up to restore memory space
+    gc()
+  
+  }
+  
+  setColumnWidth(sheet, (n_keys+n_columns+1):ncol(dat_tmp), 0)
+
+}
+
