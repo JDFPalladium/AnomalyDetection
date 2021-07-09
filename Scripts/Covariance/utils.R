@@ -1,0 +1,324 @@
+
+# function 1: dat_Prep for disagg level
+#' MER Data Preparation
+#'
+#' @param dat - data frame containing raw MER data
+#' @param year_for_analysis - numeric user-defined
+#' @param qtr_for_analysis - string user-defined 
+#'
+#' @return - data frame suitable for recommender analysis function
+#' @export
+#'
+#' @examples
+datPrep <- function(dat, year_for_analysis, qtr_for_analysis) {
+  # remove the columns we don't need
+  cols_to_keep <- c("sitename","psnu","facility","indicator","numeratordenom","disaggregate","ageasentered","sex", "fiscal_year","primepartner", qtr_for_analysis)
+  dat <- dat[, cols_to_keep]
+  
+  # filter to the fiscal year entered by the user
+  dat <- dat %>% filter(fiscal_year == year_for_analysis)
+  
+  # remove the rows that report on Total Numerator or Total Denominator
+  dat <- dat %>% filter(!disaggregate %in% c("Total Numerator", "Total Denominator"))
+  dat <- dat %>% filter(tolower(facility) != "data reported above facility level")
+  
+  # remove rows that are aggregates of other rows (e.g. 15+ and 50+)
+  dat <- dat[-grep("\\+", dat$ageasentered),]
+  
+  # label indicators with N and D
+  dat$indicator <- paste0(dat$indicator, "_", dat$numeratordenom)
+  
+  # create the facility data frame which we will need later in this function for data prep of the facility level file 
+  dat_facility <- dat
+  
+  # disaggregate level file - create a column for the key population disaggregate
+  dat$kp <- ifelse(grepl("KeyPop", dat$disaggregate), "Yes", "No")
+  
+  # disaggregate level file - drop disaggregate and numeratordenom columns
+  cols_to_drop <- c("numeratordenom", "disaggregate")
+  dat <- dat[,!(names(dat) %in% cols_to_drop)]
+  
+  # disaggregate level file - group by facility, age, sex, and indicator, kp, and psnu, and then summarize qtr (before pivot)
+  names(dat) <- gsub("[0-9]","", names(dat))
+  dat <- dat %>% 
+    filter(!is.na(qtr))
+  dat_grouped <- dat %>% group_by(facility, ageasentered, sex, indicator, kp, psnu, primepartner) %>% 
+    summarise(qtr_sum = sum(qtr, na.rm = TRUE)) 
+  
+  # disaggregate level file - pivot wider
+  dat_out <- dat_grouped %>%
+    pivot_wider(names_from = "indicator", values_from = "qtr_sum")
+  
+  # facility level file - filter for just the quarter of interest
+  names(dat_facility) <- gsub("[0-9]","", names(dat_facility))
+  dat_facility <- dat_facility %>% 
+    filter(!is.na(qtr))
+  
+  # facility level file - group by facility, psnu and indicator, and then summarize qtr 2 (before pivot)
+  dat_facility <- dat_facility %>% group_by(facility, indicator, psnu, primepartner) %>% 
+    summarise(qtr_sum = sum(qtr, na.rm = TRUE)) 
+  
+  # facility level file - pivot wider
+  dat_facility_out <- dat_facility %>%
+    pivot_wider(names_from = "indicator", values_from = "qtr_sum")
+  
+  # return data frames
+  return(list(dat_out,dat_facility_out))
+  
+}
+
+
+runRecAnalysisDisag <- function(dat,keys,scenario) {
+  if (scenario == "all") {
+    all_outputs <- runRecAnalysis(dat,keys)
+    sortOutputs(all_outputs, keys = keys,scenario=scenario)
+  } else if (scenario == "age") {
+    ageWrapper(dat,keys)
+  } else if (scenario == "sex") {
+    sexWrapper(dat,keys)
+  }
+}
+
+
+ageWrapper <- function(dat,keys) {
+  age_categories <- c("01-04",  "15-19", "20-24", "25-29", "30-34", "35-39", "40-44",
+                      "45-49", "05-09", "10-14")
+  dat <- dat[dat$ageasentered %in% age_categories, ]
+  site_split <- split(dat, factor(dat$ageasentered))
+  site_out <- list()
+  for (j in 1:length(site_split)) {
+    site_out[[j]] <- runRecAnalysis(site_split[[j]],keys)
+  }
+  # stack the outputs
+  site_age_outliers <- do.call(plyr::rbind.fill, site_out)
+  
+  site_age_outliers <- sortOutputs(site_age_outliers, keys = keys,scenario = scenario)
+  return(site_age_outliers)
+}
+
+
+sexWrapper <- function(dat,keys) {
+  dat <- dat[dat$sex %in% c("Male", "Female"), ]
+  site_split <- split(dat, dat$sex)
+  site_out <- list()
+  for (j in 1:length(site_split)) {
+    site_out[[j]] <- runRecAnalysis(site_split[[j]],keys)
+  }
+  # stack the outputs
+  site_sex_outliers <- do.call(plyr::rbind.fill, site_out)
+  
+  site_sex_outliers <- sortOutputs(site_sex_outliers, keys = keys,scenario = scenario)
+  return(site_sex_outliers)
+  
+}
+
+
+sortOutputs <- function(dat,keys,scenario) {
+  # stack the outputs
+  site_out_total <- dat
+  site_out_total <- site_out_total %>%
+    select(names(site_out_total)[!grepl("E_|D_|MD|outlier_sp", names(site_out_total))],
+           names(site_out_total)[grepl("E_", names(site_out_total))],
+           names(site_out_total)[grepl("D_", names(site_out_total))],
+           names(site_out_total)[grepl("MD", names(site_out_total))],
+           names(site_out_total)[grepl("outlier_sp", names(site_out_total))])
+  site_out_total <- site_out_total %>% 
+    filter(outlier_sp == 1) %>% 
+    arrange(desc(MD))
+  n_columns = sum(grepl("E_", names(site_out_total)))
+  n_keys = length(keys)
+  for(m in 1:nrow(site_out_total)){
+    dat_tmp <- site_out_total[m, ]
+    cols_to_keep <- which(dat_tmp[, (n_keys+1):(n_keys+n_columns)] > 10) + n_keys + n_columns*2
+    if(length(cols_to_keep)<2){next}
+    site_out_total[m, "Indicator"] <- colnames(dat_tmp[, cols_to_keep])[which.max(dat_tmp[, cols_to_keep])]
+  }
+  site_out_total$scenario <- scenario
+  return(site_out_total)
+}
+
+
+runRecAnalysis <- function(dat,keys) {
+  site_spread <- dat
+  keys <- site_spread[, keys] 
+  count_present <- apply(site_spread[, (ncol(keys)+1):ncol(site_spread)], 2, function(x) length(which(!is.na(x)))) # tells us how many rows have each indicator reported
+  cols_to_keep <- which(count_present > (nrow(site_spread)*.10))+ncol(keys) # keep variables present at least 10% of the time
+  site_keep <- cbind.data.frame(site_spread[, names(keys)], site_spread[, cols_to_keep])
+  
+  # drop variables that have no variance
+  var_inds <- apply(site_keep[,(ncol(keys)+1):ncol(site_keep)], 2, FUN = var, na.rm = TRUE)
+  cols_to_drop <- names(site_keep[,(ncol(keys)+1):ncol(site_keep)])[var_inds == 1] 
+  site_keep <- site_keep[,!(names(site_keep) %in% cols_to_drop)]
+  
+  # drop variables that are colinear. Filter for greater than 0.98. Drop the variable that is present the most times across all of the pairs that are greater than 0.98. Regenerate the correlation matrix and repeat. Keep looping until there are no correlations left greater than 0.98.
+  dat_df <- site_keep
+  dat_matrix <- data.matrix(site_keep[,(ncol(keys)+1):ncol(site_keep)], rownames.force = NA)
+  cormat <- cor(dat_matrix, use = "pairwise.complete.obs")
+  cormat[lower.tri(cormat)] <- 0
+  diag(cormat) <- 0
+  # melt cormat
+  cormat_long <- melt(cormat)
+  
+  while(max(cormat_long$value, na.rm = TRUE) > 0.98) {
+    cormat_perf <- cormat_long %>% filter(value > .98) 
+    col_to_drop <- cormat_perf$Var1[1]
+    col_to_drop <- toString(col_to_drop)
+    dat_df <- dat_df[, !names(dat_df) %in% col_to_drop]
+    dat_matrix <- data.matrix(dat_df[,(ncol(keys)+1):ncol(dat_df)], rownames.force = NA)
+    cormat <- cor(dat_matrix, use = "pairwise.complete.obs")
+    cormat[lower.tri(cormat)] <- 0
+    diag(cormat) <- 0
+    # melt cormat
+    cormat_long <- melt(cormat)
+  }
+
+  # assign dat_df to site_keep
+  site_keep <- dat_df
+  
+  # sparsity drops
+  obs_count <- apply(site_keep[, (ncol(keys)+1):ncol(site_keep)], 1, function(x) length(which(!is.na(x)))) # drops the facilities for which all values are missing
+  obs_to_keep <- which(obs_count > 3) # keep observations with at least 4 present values
+  site_keep <- site_keep[obs_to_keep,]
+
+  # get sparse mu (vector of means)
+  # alternatively use g sub to replace commas with blanks, the convert using as numeric
+  sum_sparse <- colSums(site_keep[, (ncol(keys)+1):ncol(site_keep)], na.rm = TRUE) # sum of present values by variable; use na.rm so we remove NAs
+  count_present_keep <- apply(site_keep[, (ncol(keys)+1):ncol(site_keep)], 2, function(x) length(which(!is.na(x))))
+  # count_present_keep <- count_present[cols_to_keep-5] # count of present values by variable
+  mu <- sum_sparse / count_present_keep # means
+  k <- length(mu) # number of variables (indicators)
+  
+  N <- matrix(0, k, k) # set up k by k matrix; the diagonal is the number of observations; look at the paper
+  diag(N) <- count_present_keep # diagonal initiated with count of present values
+  
+  i_mat <- matrix(0, k, k) # set up identity matrix
+  diag(i_mat) <- 1
+  
+  S <- matrix(0, k, k) # N is the counts, s is where we store the covariances, and I is useful for some calculations
+  
+  for (i in 1:nrow(site_keep)){
+    dat <- site_keep[i, ]
+    inds <- which(!is.na(dat[(ncol(keys)+1):ncol(site_keep)])) # inds returns the index of the columns that have non NA values
+    yt <- dat[(ncol(keys)+1):ncol(site_keep)][inds] # yt are the actual values that are associated with the indices in inds
+    yt_mu <- as.matrix(yt - mu[inds]) # yt_mu subtracts the mu for each indicator from yt for each indicator
+    
+    Hyt <- as.matrix(i_mat[inds, ]) # hyt is a matrix that has the number of present values as rows and the numbers of all variables as columns
+    if(dim(Hyt)[2] == 1){Hyt <- t(Hyt)} #this relevant if we set the threshold too high and we only have 1 indicator column coming through
+    
+    S <- S + (t(Hyt) %*% (t(yt_mu) %*% yt_mu) %*% Hyt)
+  }
+  
+  N_sqrt <- sqrt(N)
+  diag(N_sqrt) <- 1/(diag(N_sqrt))
+  R <- (N_sqrt %*% S %*% N_sqrt)
+  
+  # Calculate Mahalanobis distance
+  site_sparse <- site_keep
+  site_sparse$MD <- MDmiss(site_sparse[, (ncol(keys)+1):ncol(site_sparse)], center = mu, cov = R)
+  cv<-qchisq(.95,df=ncol(site_sparse)-1)
+  site_sparse$outlier_sp <- ifelse(site_sparse$MD>cv, 1, 0)
+  
+  # Predict present values - xt is the value to predict, yt are the other present values
+  # value will be Rxtyt %*% Ryt_inv %*% yt-uyt + uxt
+  preds <- matrix(data = NA, nrow = nrow(site_keep), ncol = k) # set up matrix to hold estimates
+  
+  # Loop through each row
+  for (i in 1:nrow(site_keep)){
+    
+    # Get present values and index of present values
+    dat <- site_keep[i, ]
+    inds <- which(!is.na(dat[(ncol(keys)+1):ncol(site_keep)]))
+    
+    # loop through index of present values
+    for (j in inds){
+      
+      # Get Rxtyt - covariance of other present values with selected present values
+      Rxtyt <- R[j, inds[!(inds %in% j)]]
+      # Get Ryt_inv
+      Ryt <- R[inds[!(inds %in% j)], inds[!(inds %in% j)]]
+      if (length(Ryt) > 1){
+        Ryt_inv <- matlib::inv(Ryt)  
+      } else {Ryt_inv <- 1/Ryt} # if Ryt is scalar, take the inverse of Ryt
+      
+      #Get yt-uyt
+      yt <- dat[(ncol(keys)+1):ncol(site_keep)][inds[!(inds %in% j)]]
+      yt_mu <- as.matrix(yt - mu[inds[!(inds %in% j)]])
+      # uxt
+      uxt <- mu[j]
+      
+      # Get estimated value
+      preds[i,j] <- Rxtyt %*% Ryt_inv %*% t(yt_mu) + uxt
+      
+    }
+    
+    
+  }
+  
+  
+  preds_df <- data.frame(preds)
+  names(preds_df) <- paste0("E_", names(site_sparse)[(ncol(keys)+1):(ncol(site_sparse)-2)])
+  site_all <- cbind(site_sparse, preds_df)
+  
+  # Take the difference between estimate and actual and normalize by dividing by sample variance
+  deviation <- abs(site_all[, (ncol(site_sparse)+1):(ncol(site_all))] - site_all[, (ncol(keys)+1):(ncol(site_sparse)-2)])
+  deviation <- mapply('/', deviation, diag(R))
+  deviation <- data.frame(deviation)
+  names(deviation) <- paste0("D_", names(site_sparse)[(ncol(keys)+1):(ncol(site_sparse)-2)])
+  site_out_total <- cbind(site_all, deviation)
+  return(site_out_total)
+  
+  
+}
+
+
+runRecAnalysisFacility <- function(dat,keys,scenario) {
+  if (scenario == "facility") {
+    facility_outputs <- runRecAnalysis(dat,keys)
+    sortOutputs(facility_outputs, keys = keys, scenario = scenario)
+  } else if (scenario == "facility_type") {
+    print("test")
+    facility_typeWrapper(dat,keys,facility_strings)
+  } else if (scenario == "psnu") {
+    psnuWrapper(dat,keys)
+  }
+}
+
+
+facility_typeWrapper <- function(dat,keys,facility_strings) {
+  site_split = list()
+  site_tmp = dat
+  for (k in 1:length(facility_strings)) {
+    print(k)
+    facility_sub = facility_strings[k]
+    data_tmp = site_tmp[grepl(facility_sub, site_tmp$facility),]
+    site_tmp = site_tmp[!grepl(facility_sub, site_tmp$facility),]
+    site_split[[k]] = data_tmp
+  }
+  site_out <- list()
+  for (j in 1:length(site_split)) {
+    site_out[[j]] <- runRecAnalysis(site_split[[j]],keys)
+  }
+  # stack the outputs
+  facility_type_outliers <- do.call(plyr::rbind.fill, site_out)
+  
+  facility_type_outliers <- sortOutputs(facility_type_outliers, keys = keys, scenario = scenario)
+  return(facility_type_outliers)
+}
+
+
+psnuWrapper <- function(dat,keys) {
+  psnu_to_keep <- dat %>% group_by(psnu) %>% summarize(count = n()) %>% filter(count > 20) %>% .$psnu %>% unique() %>% as.character()
+  dat <- dat %>% filter(psnu %in% psnu_to_keep)
+  dat$psnu <- factor(as.character(dat$psnu))
+  site_split <- split(dat, dat$psnu)
+  site_out <- list()
+  for (j in 1:length(site_split)) {
+    site_out[[j]] <- runRecAnalysis(site_split[[j]],keys)
+  }
+  # stack the outputs
+  facility_psnu_outliers <- do.call(plyr::rbind.fill, site_out)
+  
+  facility_psnu_outliers <- sortOutputs(facility_psnu_outliers, keys = keys,scenario = scenario)
+  return(facility_psnu_outliers)
+  
+}
