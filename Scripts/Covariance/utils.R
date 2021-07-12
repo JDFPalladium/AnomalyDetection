@@ -10,10 +10,42 @@
 #' @export
 #'
 #' @examples
-datPrep <- function(dat, year_for_analysis, qtr_for_analysis) {
+datPrep <- function(dat=mer_data,
+                    year_for_analysis=year,
+                    qtr_for_analysis = qtr) {
+  
+  # Add check to confirm year exists in the dataset
+  if(!year_for_analysis %in% unique(dat$fiscal_year)){
+    stop("Please confirm the fiscal year selected is included in the file uploaded.")
+  }
+  
+  # Add check to confirm year exists in the dataset
+  if(!qtr_for_analysis %in% names(dat)){
+    stop("Please confirm the quarter selected is included in the file uploaded.")
+  }
+  
+  if(any(!c("sitename","psnu","facility","indicator","numeratordenom",
+            "disaggregate","ageasentered","sex","primepartner") %in% names(dat))){
+    stop("Please confirm the file selected contains the required columns: 
+         sitename,psnu,facility,indicator,numeratordenom,disaggregate,ageasentered,sex,primepartner")
+  }
+  
   # remove the columns we don't need
-  cols_to_keep <- c("sitename","psnu","facility","indicator","numeratordenom","disaggregate","ageasentered","sex", "fiscal_year","primepartner", qtr_for_analysis)
+  cols_to_keep <- c("sitename","psnu","facility","indicator","numeratordenom",
+                    "disaggregate","ageasentered","sex", "fiscal_year","primepartner", qtr_for_analysis)
   dat <- dat[, cols_to_keep]
+  
+  # Confirm they are strings and not factors
+  dat$sitename <- as.character(dat$sitename)
+  dat$psnu <- as.character(dat$psnu)
+  dat$facility <- as.character(dat$facility)
+  dat$indicator <- as.character(dat$indicator)
+  dat$ageasentered <- as.character(dat$ageasentered)
+  dat$sex <- as.character(dat$sex)
+  dat$primepartner <- as.character(dat$primepartner)
+  dat$disaggregate <- as.character(dat$disaggregate)
+  dat$numeratordenom <- as.character(dat$numeratordenom)
+  
   
   # filter to the fiscal year entered by the user
   dat <- dat %>% filter(fiscal_year == year_for_analysis)
@@ -22,7 +54,7 @@ datPrep <- function(dat, year_for_analysis, qtr_for_analysis) {
   dat <- dat %>% filter(!disaggregate %in% c("Total Numerator", "Total Denominator"))
   dat <- dat %>% filter(tolower(facility) != "data reported above facility level")
   
-  # remove rows that are aggregates of other rows (e.g. 15+ and 50+)
+  # remove rows that are aggregates of age groups (e.g. 15+ and 50+)
   dat <- dat[-grep("\\+", dat$ageasentered),]
   
   # label indicators with N and D
@@ -47,7 +79,8 @@ datPrep <- function(dat, year_for_analysis, qtr_for_analysis) {
   
   # disaggregate level file - pivot wider
   dat_out <- dat_grouped %>%
-    pivot_wider(names_from = "indicator", values_from = "qtr_sum")
+    pivot_wider(names_from = "indicator", values_from = "qtr_sum") %>%
+    as.data.frame()
   
   # facility level file - filter for just the quarter of interest
   names(dat_facility) <- gsub("[0-9]","", names(dat_facility))
@@ -60,7 +93,8 @@ datPrep <- function(dat, year_for_analysis, qtr_for_analysis) {
   
   # facility level file - pivot wider
   dat_facility_out <- dat_facility %>%
-    pivot_wider(names_from = "indicator", values_from = "qtr_sum")
+    pivot_wider(names_from = "indicator", values_from = "qtr_sum") %>%
+    as.data.frame()
   
   # return data frames
   return(list(
@@ -70,34 +104,94 @@ datPrep <- function(dat, year_for_analysis, qtr_for_analysis) {
 }
 
 
-runRecAnalysisDisag <- function(dat,keys,scenario) {
+runRecAnalysisDisag <- function(dat=dat_disag_prepped$dat_disag_out,
+                                keys=keys_disag,
+                                scenario) {
   if (scenario == "all") {
+    
     all_outputs <- runRecAnalysis(dat,keys)
-    sortOutputs(all_outputs, keys = keys,scenario_tmp=scenario)
+    all_outputs <- tryCatch({
+      sortOutputs(all_outputs, keys = keys,scenario_tmp = scenario)
+    }, error = function(cond){
+      message("No Outliers Found with All Disags")
+      message(cond)})
+    return(all_outputs)
+    
   } else if (scenario == "age") {
-    ageWrapper(dat,keys,scenario_wrapper=scenario)
+    
+    ageWrapper(dat,keys,scenario_wrapper=scenario, age_groups)
+    
   } else if (scenario == "sex") {
+    
     sexWrapper(dat,keys,scenario_wrapper=scenario)
+    
   }
 }
 
-
-ageWrapper <- function(dat,keys, scenario_wrapper) {
+ageWrapper <- function(dat,keys, scenario_wrapper, age_groups) {
+  
   age_categories <- c("01-04",  "15-19", "20-24", "25-29", "30-34", "35-39", "40-44",
                       "45-49", "05-09", "10-14")
+  dat$ageasentered <- as.character(dat$ageasentered)
   dat <- dat[dat$ageasentered %in% age_categories, ]
-  site_split <- split(dat, factor(dat$ageasentered))
-  site_out <- list()
-  for (j in 1:length(site_split)) {
-    site_out[[j]] <- runRecAnalysis(site_split[[j]],keys)
-  }
-  # stack the outputs
-  site_age_outliers <- do.call(plyr::rbind.fill, site_out)
   
-  site_age_outliers <- sortOutputs(site_age_outliers, keys = keys,scenario_tmp = scenario_wrapper)
-  return(site_age_outliers)
-}
+  if(age_groups == "Over/Under 15"){
+    
+    dat <- cbind("agegroup" = ifelse(dat$ageasentered %in% c("01-04", "05-09", "10-14"), "Under 15", "Over 15"),
+                            dat, stringsAsFactors = FALSE) 
+    
+    site_split <- split(dat, factor(dat$agegroup))
+    
+    site_out <- list()
+    
+    for (j in 1:length(site_split)) {
+      
+      site_out[[j]] <- tryCatch({
+        runRecAnalysis(site_split[[j]],keys = c(keys, "agegroup"))
+      }, error = function(cond){
+        message(paste("Insufficient Data to Run Disag for Age Group:", names(site_split)[j]))
+        message(cond)})
+    }
+    
+    # stack the outputs
+    site_age_outliers <- do.call(plyr::rbind.fill, site_out) %>% select(-agegroup)
 
+  }
+  
+  if(age_groups == "Five Year"){
+    
+    site_split <- split(dat, factor(dat$ageasentered))
+  
+    site_out <- list()
+    
+    for (j in 1:length(site_split)) {
+      
+      site_out[[j]] <- tryCatch({
+        runRecAnalysis(site_split[[j]],keys)
+      }, error = function(cond){
+        message(paste("Insufficient Data to Run Disag for Age Group:", names(site_split)[j]))
+        message(cond)})
+    }
+    
+    # stack the outputs
+    site_age_outliers <- do.call(plyr::rbind.fill, site_out)
+    
+  }
+  
+  if(is.null(site_age_outliers)){
+    stop("Insufficient data to run age disaggregates. Consider grouping at over/under 15 or not running age disags.")
+  }
+  
+  site_age_outliers <- tryCatch({
+    sortOutputs(site_age_outliers, keys = keys,scenario_tmp = scenario_wrapper)
+  }, error = function(cond){
+    message("No Outliers Found for Disag for Age Group:")
+    message(cond)})
+  
+  
+  return(site_age_outliers)
+  
+}
 
 sexWrapper <- function(dat,keys, scenario_wrapper) {
   dat$sex <- as.character(dat$sex)
@@ -110,11 +204,14 @@ sexWrapper <- function(dat,keys, scenario_wrapper) {
   # stack the outputs
   site_sex_outliers <- do.call(plyr::rbind.fill, site_out)
   
-  site_sex_outliers <- sortOutputs(site_sex_outliers, keys = keys,scenario_tmp = scenario_wrapper)
+  site_sex_outliers <- tryCatch({
+    sortOutputs(site_sex_outliers, keys = keys,scenario_tmp = scenario_wrapper)
+  }, error = function(cond){
+    message("No Outliers Found for Sex Disag")
+    message(cond)})
   return(site_sex_outliers)
   
 }
-
 
 sortOutputs <- function(dat,keys,scenario_tmp) {
   # stack the outputs
@@ -126,53 +223,61 @@ sortOutputs <- function(dat,keys,scenario_tmp) {
            names(site_out_total)[grepl("^MD", names(site_out_total))],
            names(site_out_total)[grepl("outlier_sp", names(site_out_total))])
   site_out_total <- site_out_total %>% 
-    filter(outlier_sp == 1) %>% 
-    arrange(desc(MD))
+    arrange(desc(MD)) %>%
+    mutate(Indicator = NA)
+  
+  if(RETURN_ALL == FALSE){
+    site_out_total <- site_out_total %>% filter(outlier_sp == 1)
+  }
+  
   n_columns = sum(grepl("^E_", names(site_out_total)))
   n_keys = length(keys)
-  for(m in 1:nrow(site_out_total)){
-    dat_tmp <- site_out_total[m, ]
-    cols_to_keep <- which(dat_tmp[, (n_keys+1):(n_keys+n_columns)] > MIN_THRESH) + n_keys + n_columns*2
-    if(length(cols_to_keep)<2){next}
-    site_out_total[m, "Indicator"] <- colnames(dat_tmp[, cols_to_keep])[which.max(dat_tmp[, cols_to_keep])]
+  
+  if(nrow(site_out_total)>0){
+    for(m in 1:nrow(site_out_total)){
+      dat_tmp <- site_out_total[m, ]
+      if(dat_tmp$outlier_sp == 0){next}
+      cols_to_keep <- which(dat_tmp[, (n_keys+1):(n_keys+n_columns)] > MIN_THRESH) + n_keys + n_columns*2
+      if(length(cols_to_keep)<2){next}
+      site_out_total[m, "Indicator"] <- colnames(dat_tmp[, cols_to_keep])[which.max(dat_tmp[, cols_to_keep])]
+    }
+    site_out_total$scenario <- paste0("outlier_", scenario_tmp)
+    return(site_out_total)
   }
-  site_out_total$scenario <- paste0("outlier_", scenario_tmp)
-  return(site_out_total)
 }
-
 
 runRecAnalysis <- function(dat,keys) {
   site_spread <- dat
-  keys <- site_spread[, keys] 
+  keys <- site_spread[, 1:length(keys)] 
   count_present <- apply(site_spread[, (ncol(keys)+1):ncol(site_spread)], 2, function(x) length(which(!is.na(x)))) # tells us how many rows have each indicator reported
   cols_to_keep <- which(count_present > (nrow(site_spread)*.10))+ncol(keys) # keep variables present at least 10% of the time
   site_keep <- cbind.data.frame(site_spread[, names(keys)], site_spread[, cols_to_keep])
   
   # drop variables that have no variance
   var_inds <- apply(site_keep[,(ncol(keys)+1):ncol(site_keep)], 2, FUN = var, na.rm = TRUE)
-  cols_to_drop <- names(site_keep[,(ncol(keys)+1):ncol(site_keep)])[var_inds == 1] 
+  cols_to_drop <- names(site_keep[,(ncol(keys)+1):ncol(site_keep)])[var_inds == 0] 
   site_keep <- site_keep[,!(names(site_keep) %in% cols_to_drop)]
   
   # drop variables that are colinear. Filter for greater than 0.98. Drop the variable that is present the most times across all of the pairs that are greater than 0.98. Regenerate the correlation matrix and repeat. Keep looping until there are no correlations left greater than 0.98.
   dat_df <- site_keep
   dat_matrix <- data.matrix(site_keep[,(ncol(keys)+1):ncol(site_keep)], rownames.force = NA)
-  cormat <- cor(dat_matrix, use = "pairwise.complete.obs")
+  cormat <- suppressWarnings(cor(dat_matrix, use = "pairwise.complete.obs"))
   cormat[lower.tri(cormat)] <- 0
   diag(cormat) <- 0
   # melt cormat
-  cormat_long <- melt(cormat)
+  cormat_long <- reshape2::melt(cormat)
   
-  while(max(cormat_long$value, na.rm = TRUE) > 0.98) {
-    cormat_perf <- cormat_long %>% filter(value > .98) 
+  while(max(cormat_long$value, na.rm = TRUE) > 0.95) {
+    cormat_perf <- cormat_long %>% filter(value > .95) 
     col_to_drop <- cormat_perf$Var1[1]
     col_to_drop <- toString(col_to_drop)
     dat_df <- dat_df[, !names(dat_df) %in% col_to_drop]
     dat_matrix <- data.matrix(dat_df[,(ncol(keys)+1):ncol(dat_df)], rownames.force = NA)
-    cormat <- cor(dat_matrix, use = "pairwise.complete.obs")
+    cormat <- suppressWarnings(cor(dat_matrix, use = "pairwise.complete.obs"))
     cormat[lower.tri(cormat)] <- 0
     diag(cormat) <- 0
     # melt cormat
-    cormat_long <- melt(cormat)
+    cormat_long <- reshape2::melt(cormat)
   }
 
   # assign dat_df to site_keep
@@ -182,7 +287,7 @@ runRecAnalysis <- function(dat,keys) {
   obs_count <- apply(site_keep[, (ncol(keys)+1):ncol(site_keep)], 1, function(x) length(which(!is.na(x)))) # drops the facilities for which all values are missing
   obs_to_keep <- which(obs_count > 3) # keep observations with at least 4 present values
   site_keep <- site_keep[obs_to_keep,]
-
+  
   # get sparse mu (vector of means)
   # alternatively use g sub to replace commas with blanks, the convert using as numeric
   sum_sparse <- colSums(site_keep[, (ncol(keys)+1):ncol(site_keep)], na.rm = TRUE) # sum of present values by variable; use na.rm so we remove NAs
@@ -217,8 +322,8 @@ runRecAnalysis <- function(dat,keys) {
   
   # Calculate Mahalanobis distance
   site_sparse <- site_keep
-  site_sparse$MD <- MDmiss(site_sparse[, (ncol(keys)+1):ncol(site_sparse)], center = mu, cov = R)
-  cv<-qchisq(.99,df=ncol(site_sparse)-1)
+  site_sparse$MD <- suppressWarnings(MDmiss(site_sparse[, (ncol(keys)+1):ncol(site_sparse)], center = mu, cov = R))
+  cv<-qchisq(.95,df=ncol(site_sparse)-1)
   site_sparse$outlier_sp <- ifelse(site_sparse$MD>cv, 1, 0)
   
   # Predict present values - xt is the value to predict, yt are the other present values
@@ -273,11 +378,15 @@ runRecAnalysis <- function(dat,keys) {
   
 }
 
-
-runRecAnalysisFacility <- function(dat,keys,scenario) {
+runRecAnalysisFacility <- function(dat=dat_disag_prepped$dat_facility_out,keys=keys_facility,scenario) {
   if (scenario == "facility") {
     facility_outputs <- runRecAnalysis(dat,keys)
-    sortOutputs(facility_outputs, keys = keys, scenario_tmp = scenario)
+    facility_outputs <- tryCatch({
+      sortOutputs(facility_outputs, keys = keys, scenario_tmp = scenario)
+    }, error = function(cond){
+      message("No Outliers Found at Facility Level")
+      message(cond)})
+    return(facility_outputs)
   } else if (scenario == "type") {
     facility_typeWrapper(dat,keys,facility_strings,scenario_wrapper = scenario)
   } else if (scenario == "psnu") {
@@ -285,14 +394,13 @@ runRecAnalysisFacility <- function(dat,keys,scenario) {
   }
 }
 
-
 facility_typeWrapper <- function(dat,keys,facility_strings, scenario_wrapper) {
   site_split = list()
   site_tmp = dat
   for (k in 1:length(facility_strings)) {
     facility_sub = facility_strings[k]
-    data_tmp = site_tmp[grepl(facility_sub, site_tmp$facility),]
-    site_tmp = site_tmp[!grepl(facility_sub, site_tmp$facility),]
+    data_tmp = site_tmp[grepl(facility_sub, tolower(site_tmp$facility)),]
+    site_tmp = site_tmp[!grepl(facility_sub, tolower(site_tmp$facility)),]
     site_split[[k]] = data_tmp
   }
   site_out <- list()
@@ -302,10 +410,13 @@ facility_typeWrapper <- function(dat,keys,facility_strings, scenario_wrapper) {
   # stack the outputs
   facility_type_outliers <- do.call(plyr::rbind.fill, site_out)
   
-  facility_type_outliers <- sortOutputs(facility_type_outliers, keys = keys, scenario_tmp = scenario_wrapper)
+  facility_type_outliers <- tryCatch({
+    sortOutputs(facility_type_outliers, keys = keys,scenario_tmp = scenario_wrapper)
+  }, error = function(cond){
+    message("No Outliers Found at Level of Facility Type")
+    message(cond)})
   return(facility_type_outliers)
 }
-
 
 psnuWrapper <- function(dat,keys,scenario_wrapper) {
   psnu_to_keep <- dat %>% group_by(psnu) %>% summarize(count = n()) %>% filter(count > 20) %>% .$psnu %>% unique() %>% as.character()
@@ -320,23 +431,29 @@ psnuWrapper <- function(dat,keys,scenario_wrapper) {
   # stack the outputs
   facility_psnu_outliers <- do.call(plyr::rbind.fill, site_out)
   
-  facility_psnu_outliers <- sortOutputs(facility_psnu_outliers, keys = keys,scenario_tmp = scenario_wrapper)
+  facility_psnu_outliers <- tryCatch({
+    sortOutputs(facility_psnu_outliers, keys = keys,scenario_tmp = scenario_wrapper)
+  }, error = function(cond){
+    message("No Outliers Found at Level of Facility by PSNU")
+    message(cond)})
   return(facility_psnu_outliers)
   
 }
 
-createSummaryTab <- function(dat, disag = TRUE){
+createSummaryTab <- function(disag = TRUE){
   
   if(disag == TRUE){
   cols_to_keep <- c("psnu", "facility", "primepartner", "ageasentered",  "sex",
-                    "kp", "scenario", "Indicator") 
+                    "kp", "scenario", "Indicator", "outlier_sp") 
+  dat <- lapply(disags_list, function(x) x[, cols_to_keep])
   } else {
-    cols_to_keep <- c("psnu", "facility", "primepartner", "scenario", "Indicator") 
+    cols_to_keep <- c("psnu", "facility", "primepartner", "scenario", "Indicator", "outlier_sp") 
+    dat <- lapply(facility_list, function(x) x[, cols_to_keep])
   }
  
-  dat <- lapply(dat, function(x) x[, cols_to_keep])
   
   dat <- rbindlist(dat)
+  dat <- dat %>% filter(outlier_sp == 1) %>% select(-outlier_sp)
   
   dat_for_scorecard <- dat[, c("psnu", "facility", "primepartner", "Indicator")]
   
@@ -364,9 +481,17 @@ createSummaryTab <- function(dat, disag = TRUE){
   
 }
 
-createScoreCard <- function(summary_disag, summary_facility){
+createScoreCard <- function(){
   
-  scorecard <- rbind(summary_disag, summary_facility)
+  dat_tmp <- list()
+  if(exists("disags_summary")){
+    dat_tmp[['disag']] <- disags_summary$scorecard
+  }
+  if(exists("facility_summary")){
+    dat_tmp[['facility']] <- facility_summary$scorecard
+  }
+  
+  scorecard <- rbindlist(dat_tmp)
   
   scorecard <- scorecard %>%
     filter(!is.na(Indicator)) %>%
@@ -386,6 +511,30 @@ createScoreCard <- function(summary_disag, summary_facility){
   
 }
 
+createExcel <- function(file=file_out){
+  
+  write.xlsx(scorecard, file, sheetName="Scorecard", row.names = FALSE)
+  if(exists("disags_summary")){
+    write.xlsx(disags_summary$summary, file, sheetName="Summary_Disaggregates", row.names = FALSE, append = TRUE)
+  }
+  if(exists("facility_summary")){
+    write.xlsx(facility_summary$summary, file, sheetName="Facility_Disaggregates", row.names = FALSE, append = TRUE)
+  }
+  
+  if(exists("disags_summary")){
+    for(i in 1:length(disags_list)){
+      write.xlsx(disags_list[[i]], file, sheetName=paste0(names(disags_list)[[i]],"_Disaggregates"), row.names=FALSE, append = TRUE)
+    }
+  }
+  
+  if(exists("facility_summary")){
+    for(i in 1:length(facility_list)){
+      write.xlsx(facility_list[[i]], file, sheetName=paste0(names(facility_list)[[i]],"_Facility"), row.names=FALSE, append = TRUE)
+    }
+  }
+  
+}
+
 formatCells <- function(sheet, name, disags, facilities, keys_disag, keys_facility){
   
   name_sheet <- sub("_.*", "", name)
@@ -400,7 +549,13 @@ formatCells <- function(sheet, name, disags, facilities, keys_disag, keys_facili
   dat_tmp <- dat[[name_sheet]]
   n_columns <- sum(grepl("^E_", names(dat_tmp)))
   
-  rows <- getRows(sheet, rowIndex=2:nrow(dat_tmp))     # 1st row is headers
+  rows <- getRows(sheet, rowIndex=2:(nrow(dat_tmp)+1))     # 1st row is headers
+  
+  # https://www.w3schools.com/colors/colors_picker.asp?colorhex=8B0000
+  fo1 <- Fill(foregroundColor="#FF0000")   # create fill object # 1
+  cs1 <- CellStyle(wb, fill=fo1)        # create cell style # 1
+  fo2 <- Fill(foregroundColor="#FF8080")    # create fill object # 2
+  cs2 <- CellStyle(wb, fill=fo2)        # create cell style # 2 
   
   # loop through columns
   for(j in 1:n_columns){
