@@ -135,7 +135,12 @@ runRecommenderSolution <- function(){
         dat_out <- rbind(dat_anomaly, dat_not_anomaly_random) %>%
           arrange(desc(outlier_sp), desc(MD))
         
+      } else {
+        
+        dat_out <- dat_excel
+        
       }
+      
       write.xlsx(dat_out, file_out, sheetName=paste0(names(disags_list)[[i]],"_Disaggregates"), row.names=FALSE, append = TRUE)
     }
   }
@@ -148,15 +153,20 @@ runRecommenderSolution <- function(){
       # If output is too large, then take anomalies and randomly select observations until 5,000
       if(nrow(dat_excel) > 5000){
         
-        dat_anomaly <- dat_excel[dat_excel$oulier_sp == 1, ]
+        dat_anomaly <- dat_excel[dat_excel$outlier_sp == 1, ]
         dat_not_anomaly <- dat_excel[dat_excel$outlier_sp == 0, ]
         num_to_select <- 5000 - nrow(dat_anomaly)
         dat_not_anomaly_random <- sample(dat_not_anomaly, num_to_select, replace = FALSE)
-        dat_excel <- rbind(dat_anomaly, dat_not_anomaly_random)
+        dat_out <- rbind(dat_anomaly, dat_not_anomaly_random) %>%
+          arrange(desc(outlier_sp), desc(MD))
+      
+      } else {
+        
+        dat_out <- dat_excel
         
       }
-      
-      write.xlsx(dat_excel, file_out, sheetName=paste0(names(facility_list)[[i]],"_Facility"), row.names=FALSE, append = TRUE)
+    
+      write.xlsx(dat_out, file_out, sheetName=paste0(names(facility_list)[[i]],"_Facility"), row.names=FALSE, append = TRUE)
     }
   }
   
