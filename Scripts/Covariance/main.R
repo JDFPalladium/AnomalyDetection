@@ -1,42 +1,58 @@
+# This script runs the Data.FI Anomaly Detection Recommender System solution on PEPFAR MER data. 
+# The accompanying script, utils.R, loads all the functions needed to run the solution. Users 
+# should save utils.R in a folder that is then set as the working directory, which is set in the 
+# script below.
+# 
+# To run the solution, there are a few user-adjustable fields at the start of the script. Once
+# the user is satisfied with the settings, it is recommended to save the script by clicking 
+# on the disk icon above or pressing CTRL+S, and then pressing the Source button at the 
+# top right of this window. 
+# 
+# Please follow the four steps below:
 
-#utils.R - contains all the functions
-#main.R - contains source, user defined variables, and then will run utils.R
+# Step One - set parameters -----------------------------------------------------------------
+# Set the OU, fiscal year, and quarter for which to run the analysis
+OU <- "Nigeria" # in quotes
+year <- 2021 # NOT in quotes
+qtr <- "qtr2" # in quotes
 
-# load in necessary libraries
-options(java.parameters = "-Xmx16000m") 
-library(readr)
-library(htmltools)
-library(dplyr)
-library(knitr)
-library(tidyr)
-library(modi)
-library(htmltools)
-library(magrittr)
-library(reshape2)
-library(xlsx)
-library(data.table)
+# Select the analyses to run with MER data disaggregated by sex and age
+# Set to TRUE if you want to run, FALSE if you do not
+all <- TRUE # each observation compared against all observations
+sex <- TRUE # each observation compared against all observations of the same sex
+age <- TRUE # each observation compared against all observations of the same age group
+age_groups <- "Five Year" # Either "Five Year" or "Over/Under 15"
 
-source('utils.R')
+# Select the analyses to run with MER data aggregated at the facility
+# Set to TRUE if you want to run, FALSE if you do not
+facility <- TRUE # each observation compared against all observations
+psnu <- TRUE # each observation compared against all observations of the same psnu
+type <- TRUE # each observation compared against all observations of the same facility type
+# if running by facility type, please specify the words found in facility names that indicate
+# the type of facility. examples may include maternity, hospital, clinic, and centre.
+facility_strings <- c("maternity", "hospital", "clinic", "centre") #  
 
-# user defined variables
-OU <- "PNG"
-year <- 2020
-qtr <- "qtr1"
-all <- TRUE
-age <- TRUE
-age_groups <- "Over/Under 15" # Either "Five Year" or "Over/Under 15"
-sex <- TRUE
-facility <- FALSE
-type <- FALSE
-psnu <- FALSE
-facility_strings <- c("maternity", "hospital", "clinic", "centre")
+# In determining which indicator drives the determination that an observation is anomalous,
+# you can discount indicators with very low values. This will NOT affect whether an observation
+# is determined to be anomalous, but WILL affect which indicator is responsible for the 
+# determination on the SCORECARD tab of the Excel output.
 MIN_THRESH <- 10
-RETURN_ALL <- TRUE
 
-# read in raw data
+# If you want the Excel to include both anomalous and non-anomalous observations, set to TRUE. 
+# If interested only in anomalous observations, set to FALSE. For OUs with many facilities, 
+# setting to TRUE will materially impact the time needed to run the solution.
+RETURN_ALL <- FALSE
+
+# Step Two - choose folder that contains Utils.R (also where Excel file will be saved) -------
+setwd(choose.dir())
+if(!"utils.R" %in% list.files()){
+  print("utils.R is not in the selected folder. Please select the folder that contains utils.R")}
+source("utils.R")
+
+# Step Three - load MER data in xlsx (MER data should be on firt sheet), csv, or txt format -----
 file_path <- file.choose()
 if(sub('.*\\.', '', file_path) == "xlsx") {
-  mer_data <- read.xlsx(file_path, sheetIndex = 2)
+  mer_data <- read.xlsx(file_path, sheetIndex = 1)
 } else if(sub('.*\\.', '', file_path) == "csv"){
   mer_data <- read.csv(file_path, stringsAsFactors = FALSE)
 } else if(sub('.*\\.', '', file_path) == "txt"){
@@ -45,63 +61,6 @@ if(sub('.*\\.', '', file_path) == "xlsx") {
   print("Please select a file with an xlsx, csv, or txt extension.")
 }
 
-# create lists for the scenarios to run
-scenarios_to_run_disag <- which(list("all" = all,"age" = age, "sex" = sex)==TRUE)
-scenarios_to_run_facility <- which(list("facility" = facility,"type" = type, "psnu" = psnu)==TRUE)
-# create the keys variable for the disag level
-keys_disag <- c('facility','ageasentered', 'sex', 'kp', 'psnu', 'primepartner')
-keys_facility <- c('facility', 'psnu','primepartner')
-
-
-# run datPrep on mer_data - this outputs both the disag level file and the facility level file
-dat_disag_prepped <- datPrep()
-
-# run runRecAnalysisDisag
-disags_list = list()
-for (i in names(scenarios_to_run_disag)) {
-  print(paste("Running analysis for dataset including disaggregates by:", i))
-  disags_list[[i]] <- runRecAnalysisDisag(scenario=i)
-}
-
-# run runRecAnalysisFacility 
-facility_list = list()
-for (i in names(scenarios_to_run_facility)) {
-    print(paste("Running analysis for dataset by:", i))
-    facility_list[[i]] <- runRecAnalysisFacility(scenario=i)
-}
-
-
-if(length(disags_list) == 0 & length(facility_list) == 0){
-  stop("No anomalies found. Ending script.")
-}
-
-if(length(disags_list) > 0){
-  disags_summary <- createSummaryTab()
-}
-if(length(facility_list) > 0){
-  facility_summary <- createSummaryTab(disag = FALSE)
-}
-
-scorecard <- createScoreCard()
-
-# Saving data frame as xlsx workbook -------------------------
-
-file_out <- paste0(OU, "-", Sys.Date(), ".xlsx")
-
-createExcel()
-
-wb <- loadWorkbook(file_out)  
-sheets <- getSheets(wb) 
-sheets_to_run <- which(!grepl("Scorecard|Summary",names(sheets)))
-
-for(i in sheets_to_run){
-  formatCells(sheet = sheets[[i]],
-              name = names(sheets)[[i]],
-              disags = disags_list,
-              facilities = facility_list,
-              keys_disag = keys_disag,
-              keys_facility = keys_facility)
-}
-
-# Save workbook -----------------------------------
-saveWorkbook(wb, file_out)
+# Step Four - Run line of code below. Check console for updates and messages ------
+# Runs the Recommender Solution. Will print progress messages throughout.
+runRecommenderSolution()
