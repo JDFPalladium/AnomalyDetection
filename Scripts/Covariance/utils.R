@@ -122,13 +122,41 @@ runRecommenderSolution <- function(){
   # Loop through individual runs and write outputs to Excel
   if(exists("disags_summary")){
     for(i in 1:length(disags_list)){
-      write.xlsx(disags_list[[i]], file_out, sheetName=paste0(names(disags_list)[[i]],"_Disaggregates"), row.names=FALSE, append = TRUE)
+  
+      dat_excel <- disags_list[[i]]
+      
+      # If output is too large, then take anomalies and randomly select observations until 5,000
+      if(nrow(dat_excel) > 5000){
+
+        dat_anomaly <- dat_excel[dat_excel$outlier_sp == 1, ]
+        dat_not_anomaly <- dat_excel[dat_excel$outlier_sp == 0, ]
+        rows_to_select <- sample(1:nrow(dat_not_anomaly), 5000 - nrow(dat_anomaly), replace = FALSE)
+        dat_not_anomaly_random <- dat_not_anomaly[rows_to_select, ]
+        dat_out <- rbind(dat_anomaly, dat_not_anomaly_random) %>%
+          arrange(desc(outlier_sp), desc(MD))
+        
+      }
+      write.xlsx(dat_out, file_out, sheetName=paste0(names(disags_list)[[i]],"_Disaggregates"), row.names=FALSE, append = TRUE)
     }
   }
   
   if(exists("facility_summary")){
     for(i in 1:length(facility_list)){
-      write.xlsx(facility_list[[i]], file_out, sheetName=paste0(names(facility_list)[[i]],"_Facility"), row.names=FALSE, append = TRUE)
+      
+      dat_excel <- facility_list[[i]]
+      
+      # If output is too large, then take anomalies and randomly select observations until 5,000
+      if(nrow(dat_excel) > 5000){
+        
+        dat_anomaly <- dat_excel[dat_excel$oulier_sp == 1, ]
+        dat_not_anomaly <- dat_excel[dat_excel$outlier_sp == 0, ]
+        num_to_select <- 5000 - nrow(dat_anomaly)
+        dat_not_anomaly_random <- sample(dat_not_anomaly, num_to_select, replace = FALSE)
+        dat_excel <- rbind(dat_anomaly, dat_not_anomaly_random)
+        
+      }
+      
+      write.xlsx(dat_excel, file_out, sheetName=paste0(names(facility_list)[[i]],"_Facility"), row.names=FALSE, append = TRUE)
     }
   }
   
@@ -981,7 +1009,7 @@ formatCells <- function(sheet, name, disags, facilities, keys_disag, keys_facili
     
     # Setting ten quantiles (number of buckets should align with number of color fill objects)
     if(RETURN_ALL == TRUE){
-      quants <- quantile(as.numeric(values_deviation), c(.98, .99), na.rm = TRUE)
+      quants <- quantile(as.numeric(values_deviation), c(.8, .9), na.rm = TRUE)
     } else {
       quants <- quantile(as.numeric(values_deviation), c(.8, .9), na.rm = TRUE)
     }

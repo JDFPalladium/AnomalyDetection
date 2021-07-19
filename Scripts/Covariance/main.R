@@ -41,7 +41,7 @@ MIN_THRESH <- 10
 # If you want the Excel to include both anomalous and non-anomalous observations, set to TRUE. 
 # If interested only in anomalous observations, set to FALSE. For OUs with many facilities, 
 # setting to TRUE will materially impact the time needed to run the solution.
-RETURN_ALL <- FALSE
+RETURN_ALL <- TRUE
 
 # Step Two - choose folder that contains Utils.R (also where Excel file will be saved) -------
 setwd(choose.dir())
