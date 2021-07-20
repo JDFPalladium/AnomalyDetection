@@ -30,7 +30,7 @@ psnu <- TRUE # each observation compared against all observations of the same ps
 type <- TRUE # each observation compared against all observations of the same facility type
 # if running by facility type, please specify the words found in facility names that indicate
 # the type of facility. examples may include maternity, hospital, clinic, and centre.
-facility_strings <- c("maternity", "hospital", "clinic", "centre") #  
+facility_strings <- c("maternity", "hospital", "clinic", "centre") # lower case  
 
 # In determining which indicator drives the determination that an observation is anomalous,
 # you can discount indicators with very low values. This will NOT affect whether an observation
@@ -52,7 +52,7 @@ source("utils.R")
 # Step Three - load MER data in xlsx (MER data should be on firt sheet), csv, or txt format -----
 file_path <- file.choose()
 if(sub('.*\\.', '', file_path) == "xlsx") {
-  mer_data <- read.xlsx(file_path, sheetIndex = 1)
+  mer_data <- read.xlsx(file_path, sheet = 1)
 } else if(sub('.*\\.', '', file_path) == "csv"){
   mer_data <- read.csv(file_path, stringsAsFactors = FALSE)
 } else if(sub('.*\\.', '', file_path) == "txt"){

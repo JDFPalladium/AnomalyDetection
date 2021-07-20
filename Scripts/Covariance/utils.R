@@ -3,13 +3,9 @@
 # should not make changes to this script without care. 
 
 
-
-# Set Java parameters prior to loading xlsx package
-options(java.parameters = "-Xmx16000m") 
-
 # Check if packages are installed; if not, install
 list_packages <- c("readr", "htmltools", "dplyr", "tidyr", "modi", "htmltools",
-                      "magrittr", "reshape2", "xlsx", "data.table")
+                   "magrittr", "reshape2", "openxlsx", "data.table")
 new_packages <- list_packages[!(list_packages %in% installed.packages()[,"Package"])]
 if(length(new_packages)) install.packages(new_packages)
 
@@ -22,7 +18,7 @@ library(modi)
 library(htmltools)
 library(magrittr)
 library(reshape2)
-library(xlsx)
+library(openxlsx)
 library(data.table)
 
 # Specify which variables identify a unique observation
@@ -52,7 +48,7 @@ runRecommenderSolution <- function(){
   dat_prepped <- datPrep()
   dat_disag <- dat_prepped$dat_disag_out
   dat_facility <- dat_prepped$dat_facility_out
-
+  
   # Loop through disag scenarios and run anaysis for each, adding output to disags_list
   disags_list = list()
   for (i in names(scenarios_to_run_disag)) {
@@ -110,78 +106,39 @@ runRecommenderSolution <- function(){
   
   print("Creating Excel Workbook - This may take a while if returning non-anomalies as well.")
   
-  # Write scorecard
-  write.xlsx(scorecard, file_out, sheetName="Scorecard", row.names = FALSE)
+  excel_files <- list('Scorecard' = scorecard)
+
   # Write summary tabs that exist (they exist if anomalies were found at disag or facility level)
   if(exists("disags_summary")){
-    write.xlsx(disags_summary$summary, file_out, sheetName="Summary_Disaggregates", row.names = FALSE, append = TRUE)
+    excel_files[['Summary_Disaggregates']] <- disags_summary$summary
   }
   if(exists("facility_summary")){
-    write.xlsx(facility_summary$summary, file_out, sheetName="Summary_Facility", row.names = FALSE, append = TRUE)
-  }
+    excel_files[['Summary_Facility']] <- facility_summary$summary
+    }
   # Loop through individual runs and write outputs to Excel
   if(exists("disags_summary")){
     for(i in 1:length(disags_list)){
-  
-      dat_excel <- disags_list[[i]]
-      
-      # If output is too large, then take anomalies and randomly select observations until 5,000
-      if(nrow(dat_excel) > 5000){
-
-        dat_anomaly <- dat_excel[dat_excel$outlier_sp == 1, ]
-        dat_not_anomaly <- dat_excel[dat_excel$outlier_sp == 0, ]
-        rows_to_select <- sample(1:nrow(dat_not_anomaly), 5000 - nrow(dat_anomaly), replace = FALSE)
-        dat_not_anomaly_random <- dat_not_anomaly[rows_to_select, ]
-        dat_out <- rbind(dat_anomaly, dat_not_anomaly_random) %>%
-          arrange(desc(outlier_sp), desc(MD))
-        
-      } else {
-        
-        dat_out <- dat_excel
-        
-      }
-      
-      write.xlsx(dat_out, file_out, sheetName=paste0(names(disags_list)[[i]],"_Disaggregates"), row.names=FALSE, append = TRUE)
+      excel_files[[paste0(names(disags_list)[[i]],"_Disaggregates")]] <- disags_list[[i]]
     }
   }
-  
   if(exists("facility_summary")){
     for(i in 1:length(facility_list)){
-      
-      dat_excel <- facility_list[[i]]
-      
-      # If output is too large, then take anomalies and randomly select observations until 5,000
-      if(nrow(dat_excel) > 5000){
-        
-        dat_anomaly <- dat_excel[dat_excel$outlier_sp == 1, ]
-        dat_not_anomaly <- dat_excel[dat_excel$outlier_sp == 0, ]
-        num_to_select <- 5000 - nrow(dat_anomaly)
-        dat_not_anomaly_random <- sample(dat_not_anomaly, num_to_select, replace = FALSE)
-        dat_out <- rbind(dat_anomaly, dat_not_anomaly_random) %>%
-          arrange(desc(outlier_sp), desc(MD))
-      
-      } else {
-        
-        dat_out <- dat_excel
-        
-      }
-    
-      write.xlsx(dat_out, file_out, sheetName=paste0(names(facility_list)[[i]],"_Facility"), row.names=FALSE, append = TRUE)
+      excel_files[[paste0(names(facility_list)[[i]],"_Disaggregates")]] <- facility_list[[i]]
     }
   }
+  
+  write.xlsx(excel_files, file = file_out)
   
   ## Format outputs
   # First, load workbook and get sheets
-  wb <- loadWorkbook(file_out)  
-  sheets <- getSheets(wb) 
+  wb <- openxlsx::loadWorkbook(file_out)  
   # Format individual runs - these are the tabs that do not contain scorecard or summary in the names
-  sheets_to_format <- which(!grepl("Scorecard|Summary",names(sheets)))
+  sheets_to_format <- names(wb)[which(!grepl("Scorecard|Summary",names(wb)))]
   
   # Loop through sheets to format and run formatCells function to color code output
   for(i in sheets_to_format){
-    print(paste("Formatting Excel sheet for:", names(sheets)[[i]]))
-    formatCells(sheet = sheets[[i]],
-                name = names(sheets)[[i]],
+    print(paste("Formatting Excel sheet for:", i))
+    formatCells(name = i,
                 disags = disags_list,
                 facilities = facility_list,
                 keys_disag = keys_disag,
@@ -190,7 +147,7 @@ runRecommenderSolution <- function(){
   }
   
   # Save workbook
-  saveWorkbook(wb, file_out)
+  saveWorkbook(wb, file_out, overwrite = TRUE)
   
   print("Process Complete. File saved.")
   
@@ -256,7 +213,7 @@ runChecks <- function(dat=mer_data,
 datPrep <- function(dat=mer_data,
                     year_for_analysis=year,
                     qtr_for_analysis = qtr) {
-
+  
   
   # keep only the columns we need
   cols_to_keep <- c("sitename","psnu","facility","indicator","numeratordenom",
@@ -355,7 +312,7 @@ runRecAnalysisDisag <- function(dat_disag_wrapper,
   
   # Scenario can take on values set by user including "all", "sex", and "age"
   if (scenario == "all") {
-
+    
     # Apply the runRecAnalysis function on entire dataset disaggregated by sex and age
     all_outputs <- runRecAnalysis(dat=dat_disag_wrapper,keys)
     # Sort outputs by anomalous distance
@@ -406,7 +363,7 @@ ageWrapper <- function(dat,keys, scenario_wrapper, age_groups) {
     
     # Create "agegroup" variable which takes value of Under 15 of Over 15 based on "ageasentered"
     dat <- cbind("agegroup" = ifelse(dat$ageasentered %in% c("01-04", "05-09", "10-14"), "Under 15", "Over 15"),
-                            dat, stringsAsFactors = FALSE) 
+                 dat, stringsAsFactors = FALSE) 
     
     # Split dataset by age group
     site_split <- split(dat, factor(dat$agegroup))
@@ -426,7 +383,7 @@ ageWrapper <- function(dat,keys, scenario_wrapper, age_groups) {
     
     # stack the outputs and drop the age group variable so that outputs from all runs can be appropriately stacked
     site_age_outliers <- do.call(plyr::rbind.fill, site_out) %>% select(-agegroup)
-
+    
   }
   
   # If grouping observations by five-year disaggregates (sensible for larger datasets)
@@ -434,7 +391,7 @@ ageWrapper <- function(dat,keys, scenario_wrapper, age_groups) {
     
     # Split dataset by age group
     site_split <- split(dat, factor(dat$ageasentered))
-  
+    
     # Loop through list and run Recommender analysis on each
     site_out <- list()
     
@@ -567,8 +524,20 @@ sortOutputs <- function(dat,keys,scenario_tmp) {
     # Create a column to contain the scenario name
     site_out_total$scenario <- paste0("outlier_", scenario_tmp)
     
-    return(site_out_total)
+   
   }
+  
+  # Concatenate reported values with estimates
+  for(p in 1:n_columns){
+    site_out_total[, n_keys+p] <- paste0(site_out_total[, n_keys+p],
+                                           " (",
+                                           round(site_out_total[, n_keys+p+n_columns], 1),
+                                           ")")
+  }
+
+  
+  return(site_out_total)
+  
 }
 
 #' runRecAnalysis
@@ -634,7 +603,7 @@ runRecAnalysis <- function(dat,keys) {
     diag(cormat) <- 0
     cormat_long <- reshape2::melt(cormat)
   }
-
+  
   # assign output, with collinear variables dropped, to site_keep
   site_keep <- dat_df
   
@@ -645,7 +614,7 @@ runRecAnalysis <- function(dat,keys) {
   obs_to_keep <- which(obs_count > 3) 
   site_keep <- site_keep[obs_to_keep,]
   
-
+  
   # sum of present values by variable; use na.rm so we remove NAs
   sum_sparse <- colSums(site_keep[, (ncol(keys)+1):ncol(site_keep)], na.rm = TRUE) 
   # get number of present values by indicator
@@ -881,14 +850,14 @@ createSummaryTab <- function(dat_summary_list,
   
   # If summary tab to be created is for disags:
   if(disag == TRUE){
-  cols_to_keep <- c("psnu", "facility", "primepartner", "ageasentered",  "sex",
-                    "kp", "scenario", "Indicator", "outlier_sp") 
-  dat <- lapply(dat_summary_list, function(x) x[, cols_to_keep])
+    cols_to_keep <- c("psnu", "facility", "primepartner", "ageasentered",  "sex",
+                      "kp", "scenario", "Indicator", "outlier_sp") 
+    dat <- lapply(dat_summary_list, function(x) x[, cols_to_keep])
   } else {
     cols_to_keep <- c("psnu", "facility", "primepartner", "scenario", "Indicator", "outlier_sp") 
     dat <- lapply(dat_summary_list, function(x) x[, cols_to_keep])
   }
- 
+  
   # Bind list of dataframes into a single dataframe
   dat <- rbindlist(dat)
   # Underlying tabs may contain all results, but summary tabs should present only outliers
@@ -913,8 +882,8 @@ createSummaryTab <- function(dat_summary_list,
   dat_summary[is.na(dat_summary)] <- 0
   # Create column to summarize the number of times each observations was flagged as anomalous
   dat_summary$Outliers <- apply(dat_summary[, grepl("outlier", names(dat_summary))],
-                                     1,
-                                     function(x){sum(x, na.rm = T)})
+                                1,
+                                function(x){sum(x, na.rm = T)})
   
   # Sort summary tabs by summary of outliers, and then within each, by the facility most commonly flagged
   dat_summary <- dat_summary %>%
@@ -923,7 +892,7 @@ createSummaryTab <- function(dat_summary_list,
     arrange(desc(Outliers), desc(count)) %>%
     select(-count) %>%
     as.data.frame()
-
+  
   outlist <- list("summary" = dat_summary,
                   "scorecard" = dat_for_scorecard)
   
@@ -984,7 +953,7 @@ createScoreCard <- function(scorecard_in){
 #' @export
 #'
 #' @examples
-formatCells <- function(sheet, name, disags, facilities, keys_disag, keys_facility, wb_format){
+formatCells <- function(name, disags, facilities, keys_disag, keys_facility, wb_format){
   
   name_sheet <- sub("_.*", "", name)
   if(name_sheet %in% c("sex", "all", "age")){
@@ -997,78 +966,53 @@ formatCells <- function(sheet, name, disags, facilities, keys_disag, keys_facili
   
   dat_tmp <- dat[[name_sheet]]
   n_columns <- sum(grepl("^E_", names(dat_tmp)))
-  
-  rows <- getRows(sheet, rowIndex=2:(nrow(dat_tmp)+1))     # 1st row is headers
+  nrows <- nrow(dat_tmp)+1
   
   # https://www.w3schools.com/colors/colors_picker.asp?colorhex=8B0000
-  fo1 <- Fill(foregroundColor="#FF0000")   # create fill object # 1
-  cs1 <- CellStyle(wb_format, fill=fo1)        # create cell style # 1
-  fo2 <- Fill(foregroundColor="#FF8080")    # create fill object # 2
-  cs2 <- CellStyle(wb_format, fill=fo2)        # create cell style # 2 
+  cs1 <- createStyle(bgFill = "#FF0000")
+  cs2 <- createStyle(bgFill = "#FF8080")
+  
+  deviations <- dat_tmp[, (n_keys + 1 + (2*n_columns)):(n_keys + n_columns + (2*n_columns))]
+  quants <- suppressWarnings(quantile(as.numeric(reshape2::melt(deviations)$value), c(.8, .9), na.rm = TRUE))
   
   # loop through columns
   for(j in 1:n_columns){
-  
-    cells <- getCells(rows, colIndex = j+n_keys)         # get original value cell indexes
-    cells_deviation <- getCells(rows, colIndex = (n_keys + j + (2*n_columns))) # get deviation cell indexes
     
-    # Get the values for each
-    values <- lapply(cells, getCellValue)
-    # values_estimates <- lapply(cells_estimates, getCellValue)
-    values_deviation <- lapply(cells_deviation, getCellValue)
-    
-    # Setting ten quantiles (number of buckets should align with number of color fill objects)
-    if(RETURN_ALL == TRUE){
-      quants <- quantile(as.numeric(values_deviation), c(.8, .9), na.rm = TRUE)
-    } else {
-      quants <- quantile(as.numeric(values_deviation), c(.8, .9), na.rm = TRUE)
+    # Get Excel column position of deviation
+    deviation_col <- n_keys + j + (2*n_columns)
+    deviation_col <- if(deviation_col <= 26){
+      LETTERS[deviation_col]
+    } else if(deviation_col > 26 & deviation_col < 52){
+      paste0("A", LETTERS[deviation_col %% length(LETTERS)])
+    } else if(deviation_col == 52){
+      "AZ"
+    } else if(deviation_col > 52 & deviation_col < 78){
+      paste0("B", LETTERS[deviation_col %% length(LETTERS)])
+    } else if(deviation_col == 78){
+      "BZ"
+    } else if(deviation_col > 78 & deviation_col < 104){
+      paste0("C", LETTERS[deviation_col %% length(LETTERS)])
+    } else if(deviation_col == 104){
+      "CZ"
+    } else if(deviation_col > 104 & deviation_col <= 130){
+      paste0("D", LETTERS[deviation_col %% length(LETTERS)])
     }
+    
+    conditionalFormatting(wb_format, name,
+                          cols = n_keys + j,
+                          rows = 2:nrows,
+                          rule = paste0(deviation_col, 2, ">", quants[1]), 
+                          style = cs2)
+    
+    conditionalFormatting(wb_format, name,
+                          cols = n_keys + j,
+                          rows = 2:nrows,
+                          rule = paste0(deviation_col, 2, ">", quants[2]), 
+                          style = cs1)
 
-    # find cells meeting conditional criteria: deviations in top quintile
-    # add these cells to a list
-    highlightred1 <- NULL
-    for (i in 1:length(values)) {
-      name_val <- names(values)[i]
-      x <- as.numeric(values_deviation[i])
-      if (x > as.numeric(quants[2]) & !is.na(x)) {
-        highlightred1 <- c(highlightred1, name_val)
-      }    
-    }
-    
-    # repeat for four other quintiles
-    highlightred2 <- NULL
-    for (i in 1:length(values)) {
-      name_val <- names(values)[i]
-      x <- as.numeric(values_deviation[i])
-      if (x > as.numeric(quants[1]) & x <= as.numeric(quants[2]) & !is.na(x)) {
-        highlightred2 <- c(highlightred2, name_val)
-      }
-    }
-    
-    
-    # Go through each list and set the cell style to the associated color
-    lapply(names(cells[highlightred1]),
-           function(ii) setCellStyle(cells[[ii]], cs1))
-    
-    lapply(names(cells[highlightred2]),
-           function(ii) setCellStyle(cells[[ii]], cs2))
-    
-    gc()
-    
-    cells_estimates <- getCells(rows, colIndex = (n_keys + j + n_columns)) # get estimate indexes
-    values_estimates <- lapply(cells_estimates, getCellValue)
-    
-    # Append the estimate in parentheses to the original values so they appear in same cell
-    for(i in 1:length(cells)){
-      setCellValue(cells[[i]], paste0(values[[i]], " (", round(values_estimates[[i]], 1), ")"))
-    }
-    
-    # Clean up to restore memory space
-    gc()
-  
   }
   
-  setColumnWidth(sheet, (n_keys+n_columns+1):ncol(dat_tmp), 0)
-
+  setColWidths(wb_format, name, (n_keys+n_columns+1):(ncol(dat_tmp)+1), 0)
+  
 }
 
