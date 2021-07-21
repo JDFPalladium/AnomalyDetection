@@ -170,7 +170,8 @@ runRecommenderSolution <- function(){
 runChecks <- function(dat=mer_data,
                       year_for_analysis=year,
                       qtr_for_analysis = qtr,
-                      type_check = type){
+                      type_check = type,
+                      facility_strings_tmp = facility_strings){
   
   # Check to confirm if fiscal year selected by user for analysis exists in the dataset
   if(!year_for_analysis %in% unique(dat$fiscal_year)){
@@ -192,8 +193,8 @@ runChecks <- function(dat=mer_data,
   # If user chooses to run analysis by facility type, check to confirm if facility type
   # descriptions exist in the dataset
   if(type_check == TRUE){
-    for(i in facility_strings){
-      if(!i %in% unique(tolower(dat$facility))){
+    for(i in facility_strings_tmp){
+      if(sum(grepl(i, unique(tolower(dat$facility))))==0){
         stop(sprintf("Facility type %s not found. All types should be lowercase.", i))
       }
     }
@@ -788,7 +789,11 @@ facilityTypeWrapper <- function(dat,keys,facility_strings, scenario_wrapper) {
   # Now, iterate through list and run Recommender analysis on each
   site_out <- list()
   for (j in 1:length(site_split)) {
-    site_out[[j]] <- runRecAnalysis(site_split[[j]],keys)
+    site_out[[j]] <- tryCatch({
+      runRecAnalysis(site_split[[j]],keys)
+    }, error = function(cond){
+    message(paste("Insufficient data to run analysis for facility type:", facility_strings[j]))
+      message(cond)})
   }
   # stack the outputs
   facility_type_outliers <- do.call(plyr::rbind.fill, site_out)
