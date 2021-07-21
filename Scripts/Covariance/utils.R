@@ -178,6 +178,11 @@ runChecks <- function(dat=mer_data,
     stop("Please confirm the fiscal year selected is included in the file uploaded.")
   }
   
+  # Check to confirm age_groups is exactly "Over/Under 15" or "Five Year"
+  if(!age_groups %in% c("Over/Under 15", "Five Year")) {
+    stop("Please confirm that your age_groups entry is an exact match with either 'Over/Under 15' or 'Five Year' (case-sensitive)")
+  }
+  
   # Check to confirm if quarter selected by user for analysis exists in the dataset
   if(!qtr_for_analysis %in% names(dat)){
     stop("Please confirm the quarter selected is included in the file uploaded.")
@@ -195,7 +200,7 @@ runChecks <- function(dat=mer_data,
   if(type_check == TRUE){
     for(i in facility_strings_tmp){
       if(sum(grepl(i, unique(tolower(dat$facility))))==0){
-        stop(sprintf("Facility type %s not found. All types should be lowercase.", i))
+        print(sprintf("Facility type %s not found. All types should be lowercase.", i))
       }
     }
   }
@@ -780,6 +785,9 @@ facilityTypeWrapper <- function(dat,keys,facility_strings, scenario_wrapper) {
     facility_sub = facility_strings[k]
     # Create a subset data to facilities defined by user
     data_tmp = site_tmp[grepl(facility_sub, tolower(site_tmp$facility)),]
+    if (nrow(data_tmp) == 0) {
+      next
+    }
     # Drop these rows from overall dataset
     site_tmp = site_tmp[!grepl(facility_sub, tolower(site_tmp$facility)),]
     # Add subset to list for subsequent Recommender analysis
