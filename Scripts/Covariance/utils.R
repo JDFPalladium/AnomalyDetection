@@ -189,11 +189,15 @@ runChecks <- function(dat=mer_data,
          sitename,psnu,facility,indicator,numeratordenom,disaggregate,ageasentered,sex,primepartner")
   }
   
-  # # If user chooses to run analysis by facility type, check to confirm if facility type
-  # # descriptions exist in the dataset
-  # if(type_check == TRUE & any(!facility_strings %in% unique(tolower(dat$facility)))){
-  #   stop("Please confirm that facility types exist among facility names. All types should be lowercase.")
-  # }
+  # If user chooses to run analysis by facility type, check to confirm if facility type
+  # descriptions exist in the dataset
+  if(type_check == TRUE){
+    for(i in facility_strings){
+      if(!i %in% unique(tolower(dat$facility))){
+        stop(sprintf("Facility type %s not found. All types should be lowercase.", i))
+      }
+    }
+  }
   
 }
 
