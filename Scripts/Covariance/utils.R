@@ -880,18 +880,24 @@ createSummaryTab <- function(dat_summary_list,
   
   # Replace NAs with zeros 
   dat_summary[is.na(dat_summary)] <- 0
-  # Create column to summarize the number of times each observations was flagged as anomalous
-  dat_summary$Outliers <- apply(dat_summary[, grepl("outlier", names(dat_summary))],
-                                1,
-                                function(x){sum(x, na.rm = T)})
   
-  # Sort summary tabs by summary of outliers, and then within each, by the facility most commonly flagged
-  dat_summary <- dat_summary %>%
-    group_by(Outliers, facility) %>%
-    mutate(count = n()) %>%
-    arrange(desc(Outliers), desc(count)) %>%
-    select(-count) %>%
-    as.data.frame()
+  # If there are multiple scenarios run that found outliers, then create a summary column
+  if(n_distinct(dat$scenario) > 1){
+    # Create column to summarize the number of times each observations was flagged as anomalous
+    dat_summary$Outliers <- apply(dat_summary[, grepl("outlier", names(dat_summary))],
+                                  1,
+                                  function(x){sum(x, na.rm = T)})
+    
+    # Sort summary tabs by summary of outliers, and then within each, by the facility most commonly flagged
+    dat_summary <- dat_summary %>%
+      group_by(Outliers, facility) %>%
+      mutate(count = n()) %>%
+      arrange(desc(Outliers), desc(count)) %>%
+      select(-count) %>%
+      as.data.frame()
+    
+  }
+
   
   outlist <- list("summary" = dat_summary,
                   "scorecard" = dat_for_scorecard)
