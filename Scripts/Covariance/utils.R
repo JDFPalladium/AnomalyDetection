@@ -4,19 +4,18 @@
 
 
 # Check if packages are installed; if not, install
-list_packages <- c("readr", "htmltools", "dplyr", "tidyr", "modi", "htmltools",
-                   "magrittr", "reshape2", "openxlsx", "data.table")
+list_packages <- c("dplyr", "tidyr", "modi", "reshape2", "openxlsx", "data.table")
 new_packages <- list_packages[!(list_packages %in% installed.packages()[,"Package"])]
 if(length(new_packages)) install.packages(new_packages)
 
 # Load packages
-library(readr)
-library(htmltools)
+#library(readr)
+#library(htmltools)
 library(dplyr)
 library(tidyr)
 library(modi)
-library(htmltools)
-library(magrittr)
+#library(htmltools)
+#library(magrittr)
 library(reshape2)
 library(openxlsx)
 library(data.table)
@@ -88,33 +87,43 @@ runRecommenderSolution <- function(){
   # Prior to creating scorecard, pull the summary tabs that were created in previous step
   dat_tmp <- list()
   if(exists("disags_summary")){
-    dat_tmp[['disag']] <- disags_summary$scorecard
+    if(sum(disags_summary$scorecard$Outliers) > 0) {
+      dat_tmp[['disag']] <- disags_summary$scorecard
+    }
   }
   if(exists("facility_summary")){
-    dat_tmp[['facility']] <- facility_summary$scorecard
+    if(sum(facility_summary$scorecard$Outliers) > 0) {
+      dat_tmp[['facility']] <- facility_summary$scorecard
+    }
   }
   
   # Combine lists into dataframe
   dat_tmp <- rbindlist(dat_tmp)
   
   # Generate scorecard
-  scorecard <- createScoreCard(scorecard_in = dat_tmp)
+  if (length(dat_tmp) > 0) {
+    scorecard <- createScoreCard(scorecard_in = dat_tmp)
+  }
   
   # Save output to Excel
   # Set filename
-  file_out <- paste0(OU, "-", Sys.Date(), ".xlsx")
+  file_out <- paste0("Outputs/", OU, "-", Sys.Date(), ".xlsx")
   
   print("Creating Excel Workbook - This may take a while if returning non-anomalies as well.")
   
-  excel_files <- list('Scorecard' = scorecard)
-
+  excel_files <- list()
+  if(exists("scorecard")) {
+    excel_files[['Scorecard']] <- scorecard
+  }
+  
+  
   # Write summary tabs that exist (they exist if anomalies were found at disag or facility level)
   if(exists("disags_summary")){
     excel_files[['Summary_Disaggregates']] <- disags_summary$summary
   }
   if(exists("facility_summary")){
     excel_files[['Summary_Facility']] <- facility_summary$summary
-    }
+  }
   # Loop through individual runs and write outputs to Excel
   if(exists("disags_summary")){
     for(i in 1:length(disags_list)){
@@ -227,7 +236,7 @@ datPrep <- function(dat=mer_data,
   
   # keep only the columns we need
   cols_to_keep <- c("sitename","psnu","facility","indicator","numeratordenom",
-                    "disaggregate","ageasentered","sex", "fiscal_year","primepartner", qtr_for_analysis)
+                    "disaggregate","ageasentered","sex", "fiscal_year","primepartner", "otherdisaggregate_sub", qtr_for_analysis)
   dat <- dat[, cols_to_keep]
   
   # Confirm they are strings and not factors
@@ -240,6 +249,7 @@ datPrep <- function(dat=mer_data,
   dat$primepartner <- as.character(dat$primepartner)
   dat$disaggregate <- as.character(dat$disaggregate)
   dat$numeratordenom <- as.character(dat$numeratordenom)
+  dat$otherdisaggregate_sub <- as.character(dat$otherdisaggregate_sub)
   
   
   # filter to the fiscal year entered by the user
@@ -254,6 +264,14 @@ datPrep <- function(dat=mer_data,
   
   # label indicators with N and D for those for which both numerators and denominators are reported
   dat$indicator <- paste0(dat$indicator, "_", dat$numeratordenom)
+  
+  # add transgender to the sex column
+  dat$tg <- ifelse(grepl("TG", dat$otherdisaggregate_sub), "Transgender", "")
+  dat$sex2 <- paste(dat$sex, dat$tg, sep="")
+  cols_to_keep <- c("sitename","psnu","facility","indicator","numeratordenom",
+                    "disaggregate","ageasentered","sex2", "fiscal_year","primepartner", qtr_for_analysis)
+  dat <- dat[, cols_to_keep]
+  dat <- dat %>% rename(sex = sex2)
   
   # create the facility data frame which we will need later in this function for data prep of the facility level file 
   dat_facility <- dat
@@ -370,7 +388,6 @@ ageWrapper <- function(dat,keys, scenario_wrapper, age_groups) {
   
   # If grouping observations for Over/Under 15 (sensible for smaller datasets)
   if(age_groups == "Over/Under 15"){
-    
     # Create "agegroup" variable which takes value of Under 15 of Over 15 based on "ageasentered"
     dat <- cbind("agegroup" = ifelse(dat$ageasentered %in% c("01-04", "05-09", "10-14"), "Under 15", "Over 15"),
                  dat, stringsAsFactors = FALSE) 
@@ -454,15 +471,20 @@ sexWrapper <- function(dat,keys, scenario_wrapper) {
   # Confirm sex is a string and not a factor
   dat$sex <- as.character(dat$sex)
   
-  # Limit to observations that are male or female
-  dat <- dat[dat$sex %in% c("Male", "Female"), ]
+  # Limit to observations that are male, female, or transgender
+  dat <- dat[dat$sex %in% c("Male", "Female", "Transgender"), ]
   
   # Split dataset by sex and run Recommender analysis on each subset
   site_split <- split(dat, dat$sex)
   site_out <- list()
   for (j in 1:length(site_split)) {
-    site_out[[j]] <- runRecAnalysis(site_split[[j]],keys)
+    site_out[[j]] <- tryCatch({
+      runRecAnalysis(site_split[[j]],keys)
+    }, error = function(cond){
+      message(paste("Insufficient Data to Run Disag for Sex Group:", names(site_split)[j]))
+      message(cond)})
   }
+  
   # stack the outputs
   site_sex_outliers <- do.call(plyr::rbind.fill, site_out)
   
@@ -534,17 +556,17 @@ sortOutputs <- function(dat,keys,scenario_tmp) {
     # Create a column to contain the scenario name
     site_out_total$scenario <- paste0("outlier_", scenario_tmp)
     
-   
+    
   }
   
   # Concatenate reported values with estimates
   for(p in 1:n_columns){
     site_out_total[, n_keys+p] <- paste0(site_out_total[, n_keys+p],
-                                           " (",
-                                           round(site_out_total[, n_keys+p+n_columns], 1),
-                                           ")")
+                                         " (",
+                                         round(site_out_total[, n_keys+p+n_columns], 1),
+                                         ")")
   }
-
+  
   
   return(site_out_total)
   
@@ -800,7 +822,7 @@ facilityTypeWrapper <- function(dat,keys,facility_strings, scenario_wrapper) {
     site_out[[j]] <- tryCatch({
       runRecAnalysis(site_split[[j]],keys)
     }, error = function(cond){
-    message(paste("Insufficient data to run analysis for facility type:", facility_strings[j]))
+      message(paste("Insufficient data to run analysis for facility type:", facility_strings[j]))
       message(cond)})
   }
   # stack the outputs
@@ -914,7 +936,7 @@ createSummaryTab <- function(dat_summary_list,
       as.data.frame()
     
   }
-
+  
   
   outlist <- list("summary" = dat_summary,
                   "scorecard" = dat_for_scorecard)
@@ -1032,7 +1054,7 @@ formatCells <- function(name, disags, facilities, keys_disag, keys_facility, wb_
                           rows = 2:nrows,
                           rule = paste0(deviation_col, 2, ">", quants[2]), 
                           style = cs1)
-
+    
   }
   
   setColWidths(wb_format, name, (n_keys+n_columns+1):(ncol(dat_tmp)+1), 0)
