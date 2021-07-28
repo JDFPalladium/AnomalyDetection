@@ -137,7 +137,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
   for(i in 1:length(dat_split)){
     
     if(i %% 25 ==0 ){
-      cat(paste0("Running facility: ", i, " of ", length(dat_split)))
+      cat(paste0("Running facility: ", i, " of ", length(dat_split), "\n"))
     }
     
     dat_tmp <- dat_split[[i]]
