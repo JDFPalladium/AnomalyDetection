@@ -28,7 +28,7 @@ runTimeSeriesSolution  <- function() {
   # write output
   print("Writing Output")
   file_out <- paste0(OU, "-TS-", Sys.Date(), ".xlsx")
-  write.xlsx(output, file = file_out)
+  write.xlsx(output, file = file_out, overwrite = TRUE)
   print("Code Completed.")
 }
 
@@ -134,9 +134,9 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
   
   # for each facility
   # for(i in 1:20){
-  # for(i in 1:length(facility_split)){
-    for(i in 1:20){
-    print(i)
+  for(i in 1:length(facility_split)){
+    # for(i in 1:20){
+    if((i %% 50)==0){sprintf("Running facility %s of %s", i, length(facility_split))}
     dat_tmp <- dat_split[[i]]
     ind_split <- split(dat_tmp, dat_tmp$indicator)
     
@@ -167,8 +167,12 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
       actual <- tail(shell_tmp$value,1)
       
       if(!is.na(actual) & (actual < lower99 | actual > upper99) & (abs(actual - pred) > MIN_THRESH)){
-        outlist_stl_arima[[length(outlist_stl_arima)+1]] <- shell_tmp
+        shell_tmp$outlier <- 1
+      } else {
+        shell_tmp$outlier <- 0
       }
+      
+      outlist_stl_arima[[length(outlist_stl_arima)+1]] <- shell_tmp
       
       # Fit STL model and forecast last present period
       stlf_arima_forecast <- stlf(dat_ts,
@@ -185,8 +189,12 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
       actual <- tail(shell_tmp$value,1)
       
       if(!is.na(actual) & (actual < lower99 | actual > upper99) & (abs(actual - pred) > MIN_THRESH)){
-        outlist_ets[[length(outlist_ets)+1]] <- shell_tmp
+        shell_tmp$outlier <- 1
+      } else {
+        shell_tmp$outlier <- 0
       }
+      
+      outlist_ets[[length(outlist_ets)+1]] <- shell_tmp
       
       arima_mod <- suppressWarnings(auto.arima(dat_ts,
                               seasonal=TRUE,
@@ -205,8 +213,12 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
       actual <- tail(shell_tmp$value,1)
       
       if(!is.na(actual) & (actual < lower99 | actual > upper99) & (abs(actual - pred) > MIN_THRESH)){
-        outlist_arima[[length(outlist_arima)+1]] <- shell_tmp
+        shell_tmp$outlier <- 1
+      } else {
+        shell_tmp$outlier <- 0
       }
+      
+      outlist_arima[[length(outlist_arima)+1]] <- shell_tmp
       
     }
     
@@ -220,48 +232,62 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
     arrange(desc(fiscal_year), desc(qtr)) %>%
     filter(!is.na(value))
   out_arima_wide <- pivot_wider(out_arima,
-                                id_cols = c("psnu", "facility", "indicator", "lower99", "upper99"),
+                                id_cols = c("psnu", "facility", "indicator", "lower99", "upper99", "outlier"),
                                 names_from = c("fiscal_year", "qtr"),
                                 values_from = c("value"))
+  if(RETURN_ALL == FALSE){
+    out_arima_wide <- out_arima_wide %>% filter(outlier == 1)
+  }
+  
   # Let's calculate by how much the differ (difference / range of interval)
   arima_out <- out_arima_wide %>%
     mutate(gap = ifelse(`2021_2` > upper99, `2021_2` - upper99, lower99 - `2021_2`),
            deviation = gap / (upper99 - lower99)) %>%
-    arrange(desc(deviation)) %>%
+    arrange(desc(outlier), desc(deviation)) %>%
     mutate(`2021_2` = paste0(`2021_2`, " (", round(lower99, digits=1), " - ", round(upper99,digits=1), ")")) %>%
     select(-gap, -deviation, -upper99, -lower99) %>%
     as.data.frame()
+  
+  out_arima_wide <- out_arima_wide %>% filter(outlier == 1)
+  
   
   out_ets <- out_ets %>%
     arrange(desc(fiscal_year), desc(qtr)) %>%
     filter(!is.na(value))
   out_ets_wide <- pivot_wider(out_ets,
-                              id_cols = c("psnu","facility", "indicator", "lower99", "upper99"),
+                              id_cols = c("psnu","facility", "indicator", "lower99", "upper99", "outlier"),
                               names_from = c("fiscal_year", "qtr"),
                               values_from = c("value"))
+  if(RETURN_ALL == FALSE){
+    out_ets_wide <- out_ets_wide %>% filter(outlier == 1)
+  }
   ets_out <- out_ets_wide %>%
     mutate(gap = ifelse(`2021_2` > upper99, `2021_2` - upper99, lower99 - `2021_2`),
            deviation = gap / (upper99 - lower99)) %>%
-    arrange(desc(deviation)) %>%
+    arrange(desc(outlier), desc(deviation)) %>%
     mutate(`2021_2` = paste0(`2021_2`, " (", round(lower99, digits=1), " - ", round(upper99,digits=1), ")")) %>%
     select(-gap, -deviation, -upper99, -lower99) %>%
     as.data.frame()
-  
+  out_ets_wide <- out_ets_wide %>% filter(outlier == 1)
   
   out_stl_arima <- out_stl_arima %>%
     arrange(desc(fiscal_year), desc(qtr)) %>%
     filter(!is.na(value))
   out_stl_arima_wide <- pivot_wider(out_stl_arima,
-                                    id_cols = c("psnu","facility", "indicator", "lower99", "upper99"),
+                                    id_cols = c("psnu","facility", "indicator", "lower99", "upper99", "outlier"),
                                     names_from = c("fiscal_year", "qtr"),
                                     values_from = c("value"))
+  if(RETURN_ALL == FALSE){
+    out_stl_arima_wide <- out_stl_arima_wide %>% filter(outlier == 1)
+  }
   stl_out <- out_stl_arima_wide %>%
     mutate(gap = ifelse(`2021_2` > upper99, `2021_2` - upper99, lower99 - `2021_2`),
            deviation = gap / (upper99 - lower99)) %>%
-    arrange(desc(deviation)) %>%
+    arrange(desc(outlier), desc(deviation)) %>%
     mutate(`2021_2` = paste0(`2021_2`, " (", round(lower99, digits=1), " - ", round(upper99,digits=1), ")")) %>%
     select(-gap, -deviation, -upper99, -lower99) %>%
     as.data.frame()
+  out_stl_arima_wide <- out_stl_arima_wide %>% filter(outlier == 1)
   
   # Create Summary Tab
   summary <- merge(out_arima_wide[, c("psnu", "facility", "indicator", "upper99")],
