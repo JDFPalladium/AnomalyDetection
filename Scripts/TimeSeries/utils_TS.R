@@ -134,7 +134,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
   
   # for each facility
   # for(i in 1:20){
-  for(i in 1:length(facility_split)){
+  for(i in 1:length(dat_split)){
     # for(i in 1:20){
     if((i %% 50)==0){sprintf("Running facility %s of %s", i, length(facility_split))}
     dat_tmp <- dat_split[[i]]
