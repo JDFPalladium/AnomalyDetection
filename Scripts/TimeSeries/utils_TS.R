@@ -103,10 +103,9 @@ datPrep <- function(mer_list, recent_year, recent_qtr) {
   # empty_qtrs <- qtrs[qtrs > input_qtr]
   # all <- all %>%
   #   filter(!(fiscal_year == year & qtr %in% empty_qtrs))
+
   
-  num_quarters <- n_distinct(mer_data_long[, c("fiscal_year", "qtr")])
-  
-  earliest_year <- min(dat$fiscal_year)
+  earliest_year <- min(mer_data_long$fiscal_year)
   shell <- expand.grid(fiscal_year = earliest_year:recent_year, qtr = 1:4) %>%
     filter(!(fiscal_year >= recent_year & qtr > as.numeric(gsub(".*?([0-9]+).*", "\\1", recent_qtr)))) %>%
     arrange(desc(fiscal_year), desc(qtr)) %>%
