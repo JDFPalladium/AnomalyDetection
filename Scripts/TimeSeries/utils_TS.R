@@ -104,17 +104,28 @@ datPrep <- function(mer_list, recent_year, recent_qtr) {
   # all <- all %>%
   #   filter(!(fiscal_year == year & qtr %in% empty_qtrs))
   
-  mer_data_long <- mer_data_long %>%
+  num_quarters <- n_distinct(mer_data_long[, c("fiscal_year", "qtr")])
+  
+  earliest_year <- min(dat$fiscal_year)
+  shell <- expand.grid(fiscal_year = earliest_year:recent_year, qtr = 1:4) %>%
+    filter(!(fiscal_year >= recent_year & qtr > as.numeric(gsub(".*?([0-9]+).*", "\\1", recent_qtr)))) %>%
+    arrange(desc(fiscal_year), desc(qtr)) %>%
+    mutate(rownum = row_number()) %>% filter(rownum <= 12) %>% select(-rownum) %>%
+    mutate(keep = paste0(fiscal_year, qtr))
+  
+  obs_to_keep <- mer_data_long %>%
+    mutate(yrqtr = paste0(fiscal_year, qtr)) %>%
+    mutate(keep = ifelse(yrqtr %in% shell$keep, 1, 0)) %>%
     group_by(psnu, facility, indicator) %>%
-    mutate(count = n()) %>%
-    filter(count >= 12) %>%
+    mutate(count = sum(keep)) %>%
+    filter(count >= 10) %>%
     ungroup() %>%
-    select(-count)
+    select(-count, -yrqtr, - keep)
   
   # convert facility to character string
-  mer_data_long$facility <- as.character(mer_data_long$facility)
+  obs_to_keep$facility <- as.character(obs_to_keep$facility)
   
-  return(mer_data_long)
+  return(obs_to_keep)
 }
 
 runTimeSeries <- function(dat, recent_year, recent_qtr) {
