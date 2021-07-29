@@ -2,20 +2,14 @@
 # Recommender system solution that is called in the accompanying script, main.R. Users  
 # should not make changes to this script without care. 
 
-
-# Check if packages are installed; if not, install
 list_packages <- c("dplyr", "tidyr", "modi", "reshape2", "openxlsx", "data.table")
 new_packages <- list_packages[!(list_packages %in% installed.packages()[,"Package"])]
 if(length(new_packages)) install.packages(new_packages)
 
 # Load packages
-#library(readr)
-#library(htmltools)
 library(dplyr)
 library(tidyr)
 library(modi)
-#library(htmltools)
-#library(magrittr)
 library(reshape2)
 library(openxlsx)
 library(data.table)
@@ -107,7 +101,7 @@ runRecommenderSolution <- function(){
   
   # Save output to Excel
   # Set filename
-  file_out <- paste0("Outputs/", OU, "-", Sys.Date(), ".xlsx")
+  file_out <- paste0(OU, "-", Sys.Date(), ".xlsx")
   
   print("Creating Excel Workbook - This may take a while if returning non-anomalies as well.")
   
@@ -136,7 +130,7 @@ runRecommenderSolution <- function(){
     }
   }
   
-  write.xlsx(excel_files, file = file_out)
+  write.xlsx(excel_files, file = file_out, overwrite = TRUE)
   
   ## Format outputs
   # First, load workbook and get sheets
@@ -713,7 +707,8 @@ runRecAnalysis <- function(dat,keys) {
       # Get Ryt_inv
       Ryt <- R[inds[!(inds %in% j)], inds[!(inds %in% j)]]
       if (length(Ryt) > 1){
-        Ryt_inv <- matlib::inv(Ryt)  
+        # Ryt_inv <- matlib::inv(Ryt) 
+        Ryt_inv <- solve(Ryt)
       } else {Ryt_inv <- 1/Ryt} # if Ryt is scalar, take the inverse of Ryt
       
       #Get yt-uyt
@@ -1060,4 +1055,3 @@ formatCells <- function(name, disags, facilities, keys_disag, keys_facility, wb_
   setColWidths(wb_format, name, (n_keys+n_columns+1):(ncol(dat_tmp)+1), 0)
   
 }
-
