@@ -2,9 +2,7 @@
 # Time Series solution that is called in the accompanying script, main.R. Users  
 # should not make changes to this script without care. 
 
-
-# Check if packages are installed; if not, install
-list_packages <- c("dplyr", "tidyr", "forecast", "imputeTS", "zoo", "data.table", "writexl")
+list_packages <- c("dplyr", "tidyr", "forecast", "imputTS", "zoo", "openxlsx", "data.table")
 new_packages <- list_packages[!(list_packages %in% installed.packages()[,"Package"])]
 if(length(new_packages)) install.packages(new_packages)
 
@@ -13,9 +11,9 @@ library(dplyr)
 library(tidyr)
 library(forecast)
 library(imputeTS)
-library(zoo)
 library(data.table)
 library(openxlsx)
+library(zoo)
 
 # run TimeSeriesSolution function
 runTimeSeriesSolution  <- function() {
