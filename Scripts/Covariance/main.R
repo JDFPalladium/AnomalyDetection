@@ -12,16 +12,16 @@
 
 # Step One - set parameters -----------------------------------------------------------------
 # Set the OU, fiscal year, and quarter for which to run the analysis
-OU <- "PNG" # in quotes
+OU <- "Nigeria" # in quotes
 year <- 2020 # NOT in quotes
-qtr <- "qtr1" # in quotes
+qtr <- "qtr4" # in quotes
 
 # Select the analyses to run with MER data disaggregated by sex and age
 # Set to TRUE if you want to run, FALSE if you do not
 all <- TRUE # each observation compared against all observations
 sex <- TRUE # each observation compared against all observations of the same sex
 age <- TRUE # each observation compared against all observations of the same age group
-age_groups <- "Over/Under 15" # Either "Five Year" or "Over/Under 15"
+age_groups <- "Five Year" # Either "Five Year" or "Over/Under 15"
 
 # Select the analyses to run with MER data aggregated at the facility
 # Set to TRUE if you want to run, FALSE if you do not
@@ -30,7 +30,7 @@ psnu <- TRUE # each observation compared against all observations of the same ps
 type <- TRUE # each observation compared against all observations of the same facility type
 # if running by facility type, please specify the words found in facility names that indicate
 # the type of facility. examples may include maternity, hospital, clinic, and centre.
-facility_strings <- c("hospital", "clinic") # lower case  
+facility_strings <- c("hospital", "clinic", "maternity", "centre") # lower case  
 
 # In determining which indicator drives the determination that an observation is anomalous,
 # you can discount indicators with very low values. This will NOT affect whether an observation
@@ -41,7 +41,7 @@ MIN_THRESH <- 10
 # If you want the Excel to include both anomalous and non-anomalous observations, set to TRUE. 
 # If interested only in anomalous observations, set to FALSE. For OUs with many facilities, 
 # setting to TRUE will materially impact the time needed to run the solution.
-RETURN_ALL <- FALSE
+RETURN_ALL <- TRUE
 
 # Step Two - choose folder that contains Utils.R (also where Excel file will be saved) -------
 setwd(choose.dir())
