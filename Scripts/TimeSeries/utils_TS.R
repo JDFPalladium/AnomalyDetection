@@ -2,7 +2,7 @@
 # Time Series solution that is called in the accompanying script, main.R. Users  
 # should not make changes to this script without care. 
 
-list_packages <- c("dplyr", "tidyr", "forecast", "imputTS", "zoo", "openxlsx", "data.table")
+list_packages <- c("dplyr", "tidyr", "forecast", "imputeTS", "zoo", "openxlsx", "data.table")
 new_packages <- list_packages[!(list_packages %in% installed.packages()[,"Package"])]
 if(length(new_packages)) install.packages(new_packages)
 
@@ -26,7 +26,53 @@ runTimeSeriesSolution  <- function() {
   # write output
   print("Writing Output")
   file_out <- paste0(OU, "-TS-", Sys.Date(), ".xlsx")
-  write.xlsx(output, file = file_out, overwrite = TRUE)
+  # Get cover sheet
+  wb <- loadWorkbook('./TimeSeriesCoverSheet.xlsx')
+  # wb <- loadWorkbook('./RecommenderCoverSheet.xlsx')
+  # Create styles
+  headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
+  textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
+  
+  if(nrow(output$Scorecard) > 3){
+    dat <- output$Scorecard[1:10, 1:11]
+    facilities_flagged <- dat$Facility[1:10]
+    indicators_flagged <- names(dat)[2:11]
+    takeaway <- data.frame(Facilities = facilities_flagged,
+                           Indicators = indicators_flagged)
+    addWorksheet(wb, 'Takeaway', tabColour = "blue")
+    writeData(wb, sheet = 'Takeaway', takeaway, startRow = 3, rowNames = FALSE)
+    setColWidths(wb, sheet = 'Takeaway', 1, width = "auto")
+    writeData(wb, sheet = 'Takeaway', "This tab shows the facilities and indicators with the most anomalies.")
+    addStyle(wb, sheet = 'Takeaway', textStyle, rows = 1, cols = 1:ncol(takeaway))
+    addStyle(wb, sheet = 'Takeaway', headerStyle, rows = 3, cols = 1:ncol(takeaway))
+  }
+  
+  addWorksheet(wb, 'Scorecard', tabColour = "blue")
+  writeData(wb, sheet = 'Scorecard', output$Scorecard)
+  setColWidths(wb, sheet = 'Scorecard', 1, width = "auto")
+  addStyle(wb, sheet = 'Scorecard', headerStyle, rows = 1, cols = 1:ncol(output$Scorecard))
+  
+  addWorksheet(wb, 'Summary', tabColour = "blue")
+  writeData(wb, sheet = 'Summary', output$Summary)
+  setColWidths(wb, sheet = 'Summary', 1:3, width = "auto")
+  addStyle(wb, sheet = 'Summary', headerStyle, rows = 1, cols = 1:ncol(output$Summary))
+  
+  addWorksheet(wb, 'ARIMA', tabColour = "green")
+  writeData(wb, sheet = 'ARIMA', output$ARIMA)
+  setColWidths(wb, sheet = 'ARIMA', 1:3, width = "auto")
+  addStyle(wb, sheet = 'ARIMA', headerStyle, rows = 1, cols = 1:ncol(output$ARIMA))
+  
+  addWorksheet(wb, 'ETS', tabColour = "green")
+  writeData(wb, sheet = 'ETS', output$ETS)
+  setColWidths(wb, sheet = 'ETS', 1:3, width = "auto")
+  addStyle(wb, sheet = 'ETS', headerStyle, rows = 1, cols = 1:ncol(output$ETS))
+  
+  addWorksheet(wb, 'STL', tabColour = "green")
+  writeData(wb, sheet = 'STL', output$STL)
+  setColWidths(wb, sheet = 'STL', 1:3, width = "auto")
+  addStyle(wb, sheet = 'STL', headerStyle, rows = 1, cols = 1:ncol(output$STL))
+  
+  saveWorkbook(wb, file = file_out, overwrite = TRUE)
   print("Code Completed.")
 }
 
@@ -93,15 +139,7 @@ datPrep <- function(mer_list, recent_year, recent_qtr) {
   # summarize by facility/indicator/fiscal_year/qtr
   mer_data_long <- mer_data_long %>%
     group_by(psnu, facility, indicator, fiscal_year, qtr) %>%
-    summarize(value = sum(value, na.rm = TRUE))
-  
-  # # drop empty quarters
-  # input_qtr <- as.numeric(gsub(".*?([0-9]+).*", "\\1", qtr))
-  # qtrs <- c(1,2,3,4)
-  # empty_qtrs <- qtrs[qtrs > input_qtr]
-  # all <- all %>%
-  #   filter(!(fiscal_year == year & qtr %in% empty_qtrs))
-
+    summarize(value = sum(value, na.rm = TRUE), .groups = "drop")
   
   earliest_year <- min(mer_data_long$fiscal_year)
   shell <- expand.grid(fiscal_year = earliest_year:recent_year, qtr = 1:4) %>%
@@ -141,7 +179,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
   outlist_stl_arima <- list()
   
   # for each facility
-  # for(i in 1:20){
+  # for(i in 1:15){
   for(i in 1:length(dat_split)){
     
     if(i %% 25 ==0 ){
@@ -321,16 +359,20 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
   # Create cover sheet
   cover <- summary %>%
     group_by(facility, indicator) %>%
-    summarize(Outliers = sum(Outliers, na.rm = TRUE)) %>% 
+    summarize(Outliers = sum(Outliers, na.rm = TRUE), .groups = "drop") %>% 
     mutate(facility = as.character(facility)) %>%
     pivot_wider(., id_cols = "facility", names_from = "indicator", values_from = "Outliers") %>%
     as.data.frame()
   cover[is.na(cover)] <- 0
+  # sort columns by number of outliers
+  cover <- cbind.data.frame(Facility = cover$facility,
+    cover[, 2:ncol(cover)][order(colSums(cover[, 2:ncol(cover)]), decreasing = T)],
+    stringsAsFactors = FALSE)
   cover$Total <- rowSums(cover[, 2:ncol(cover)])
+  cover <- cover %>% arrange(desc(Total))
   indicator_sums <- c(0, colSums(cover[, 2:ncol(cover)]))
   cover <- rbind(cover, indicator_sums)
   cover[nrow(cover),1] <- "Total"
-
 
   outlist <- list("Scorecard" = cover,
                   "Summary" = summary,
