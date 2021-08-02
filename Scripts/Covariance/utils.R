@@ -81,12 +81,12 @@ runRecommenderSolution <- function(){
   # Prior to creating scorecard, pull the summary tabs that were created in previous step
   dat_tmp <- list()
   if(exists("disags_summary")){
-    if(sum(disags_summary$scorecard$Outliers) > 0) {
+    if(nrow(disags_summary$scorecard) > 0) {
       dat_tmp[['disag']] <- disags_summary$scorecard
     }
   }
   if(exists("facility_summary")){
-    if(sum(facility_summary$scorecard$Outliers) > 0) {
+    if(nrow(facility_summary$scorecard) > 0) {
       dat_tmp[['facility']] <- facility_summary$scorecard
     }
   }
@@ -95,48 +95,83 @@ runRecommenderSolution <- function(){
   dat_tmp <- rbindlist(dat_tmp)
   
   # Generate scorecard
-  if (length(dat_tmp) > 0) {
+  if (nrow(dat_tmp) > 0) {
     scorecard <- createScoreCard(scorecard_in = dat_tmp)
   }
-  
+
   # Save output to Excel
   # Set filename
   file_out <- paste0(OU, "-", Sys.Date(), ".xlsx")
   
   print("Creating Excel Workbook - This may take a while if returning non-anomalies as well.")
   
-  excel_files <- list()
+  # excel_files <- list()
+  
+  # Get cover sheet
+  wb <- loadWorkbook('./RecommenderCoverSheet.xlsx')
+  
+  # Create header style
+  headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
+  textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
+  
+  if(exists("scorecard")){
+    if(nrow(scorecard) > 50){
+      dat_score <- scorecard[1:10, 1:13]
+      facilities_flagged <- dat_score$facility[1:10]#10
+      indicators_flagged <- names(dat_score)[4:13]#8
+      takeaway <- data.frame(Facilities = facilities_flagged,
+                             Indicators = indicators_flagged)
+      addWorksheet(wb, 'Takeaway', tabColour = "blue")
+      writeData(wb, sheet = 'Takeaway', takeaway, startRow = 3)
+      setColWidths(wb, sheet = 'Takeaway', 1, width = "auto")
+      writeData(wb, sheet = 'Takeaway', "This tab shows the facilities and indicators with the most anomalies.")
+      addStyle(wb, sheet = 'Takeaway', textStyle, rows = 1, cols = 1:ncol(takeaway))
+      addStyle(wb, sheet = 'Takeaway', headerStyle, rows = 3, cols = 1:ncol(takeaway))
+    }
+  }
+  
   if(exists("scorecard")) {
-    excel_files[['Scorecard']] <- scorecard
+    addWorksheet(wb, 'Scorecard', tabColour = "blue")
+    writeData(wb, sheet = 'Scorecard', scorecard)
+    setColWidths(wb, sheet = 'Scorecard', 1:length(keys_facility), width = "auto")
+    addStyle(wb, sheet = 'Scorecard', headerStyle, rows = 1, cols = 1:ncol(scorecard))
   }
   
+  if(exists("disags_summary")) {
+    addWorksheet(wb, 'Summary_Disaggregrates', tabColour = "blue")
+    writeData(wb, sheet = 'Summary_Disaggregrates', disags_summary$summary)
+    setColWidths(wb, sheet = 'Summary_Disaggregrates', 1:length(keys_disag), width = "auto")
+    addStyle(wb, sheet = 'Summary_Disaggregrates', headerStyle, rows = 1, cols = 1:ncol(disags_summary$summary))
+  }
   
-  # Write summary tabs that exist (they exist if anomalies were found at disag or facility level)
-  if(exists("disags_summary")){
-    excel_files[['Summary_Disaggregates']] <- disags_summary$summary
+  if(exists("facility_summary")) {
+    addWorksheet(wb, 'Summary_Facility', tabColour = "blue")
+    writeData(wb, sheet = 'Summary_Facility', facility_summary$summary)
+    setColWidths(wb, sheet = 'Summary_Facility', 1:length(keys_facility), width = "auto")
+    addStyle(wb, sheet = 'Summary_Facility', headerStyle, rows = 1, cols = 1:ncol(facility_summary$summary))
   }
-  if(exists("facility_summary")){
-    excel_files[['Summary_Facility']] <- facility_summary$summary
-  }
+  
   # Loop through individual runs and write outputs to Excel
   if(exists("disags_summary")){
     for(i in 1:length(disags_list)){
-      excel_files[[paste0(names(disags_list)[[i]],"_Disaggregates")]] <- disags_list[[i]]
+      addWorksheet(wb, paste0(names(disags_list)[[i]],"_Disaggregates"), tabColour = "green")
+      writeData(wb, sheet = paste0(names(disags_list)[[i]],"_Disaggregates"), disags_list[[i]])
     }
   }
   if(exists("facility_summary")){
     for(i in 1:length(facility_list)){
-      excel_files[[paste0(names(facility_list)[[i]],"_Disaggregates")]] <- facility_list[[i]]
+      addWorksheet(wb, paste0(names(facility_list)[[i]],"_Disaggregates"), tabColour = "green")
+      writeData(wb, sheet = paste0(names(facility_list)[[i]],"_Disaggregates"), facility_list[[i]])
     }
   }
   
-  write.xlsx(excel_files, file = file_out, overwrite = TRUE)
+  saveWorkbook(wb, file_out, overwrite = TRUE)
   
   ## Format outputs
   # First, load workbook and get sheets
   wb <- openxlsx::loadWorkbook(file_out)  
   # Format individual runs - these are the tabs that do not contain scorecard or summary in the names
-  sheets_to_format <- names(wb)[which(!grepl("Scorecard|Summary",names(wb)))]
+  sheets_to_format <- names(wb)[which(!grepl("Scorecard|Summary|Overview|Takeaway",names(wb)))]
   
   # Loop through sheets to format and run formatCells function to color code output
   for(i in sheets_to_format){
@@ -285,7 +320,7 @@ datPrep <- function(dat=mer_data,
   
   # group by facility, age, sex, and indicator, kp, and psnu, and then summarize qtr (before pivot)
   dat_grouped <- dat %>% group_by(facility, ageasentered, sex, indicator, kp, psnu, primepartner) %>% 
-    summarise(qtr_sum = sum(qtr, na.rm = TRUE)) 
+    summarise(qtr_sum = sum(qtr, na.rm = TRUE), .groups = "drop") 
   
   # for disaggregate output - pivot wider to get MER indicators in wide format
   dat_out <- dat_grouped %>%
@@ -299,7 +334,7 @@ datPrep <- function(dat=mer_data,
   
   # facility level file - group by facility, psnu and indicator, and then summarize qtr 2 (before pivot)
   dat_facility <- dat_facility %>% group_by(facility, indicator, psnu, primepartner) %>% 
-    summarise(qtr_sum = sum(qtr, na.rm = TRUE)) 
+    summarise(qtr_sum = sum(qtr, na.rm = TRUE), .groups = "drop") 
   
   # facility level file - pivot wider to get indicators in wide format
   dat_facility_out <- dat_facility %>%
@@ -398,7 +433,7 @@ ageWrapper <- function(dat,keys, scenario_wrapper, age_groups) {
         # append "agegroup" to vector of keys
         runRecAnalysis(site_split[[j]],keys = c(keys, "agegroup"))
       }, error = function(cond){
-        message(paste("Insufficient Data to Run Disag for Age Group:", names(site_split)[j]))
+        message(paste("Insufficient Data to Run Disag for Age Group:", names(site_split)[j], "\n"))
         message(cond)})
     }
     
@@ -421,7 +456,7 @@ ageWrapper <- function(dat,keys, scenario_wrapper, age_groups) {
       site_out[[j]] <- tryCatch({
         runRecAnalysis(site_split[[j]],keys)
       }, error = function(cond){
-        message(paste("Insufficient Data to Run Disag for Age Group:", names(site_split)[j]))
+        message(paste("Insufficient Data to Run Disag for Age Group:", names(site_split)[j], "\n"))
         message(cond)})
     }
     
@@ -475,7 +510,7 @@ sexWrapper <- function(dat,keys, scenario_wrapper) {
     site_out[[j]] <- tryCatch({
       runRecAnalysis(site_split[[j]],keys)
     }, error = function(cond){
-      message(paste("Insufficient Data to Run Disag for Sex Group:", names(site_split)[j]))
+      message(paste("Insufficient Data to Run Disag for Sex Group:", names(site_split)[j], "\n"))
       message(cond)})
   }
   
@@ -817,7 +852,7 @@ facilityTypeWrapper <- function(dat,keys,facility_strings, scenario_wrapper) {
     site_out[[j]] <- tryCatch({
       runRecAnalysis(site_split[[j]],keys)
     }, error = function(cond){
-      message(paste("Insufficient data to run analysis for facility type:", facility_strings[j]))
+      message(paste("Insufficient data to run analysis for facility type:", facility_strings[j], "\n"))
       message(cond)})
   }
   # stack the outputs
@@ -854,7 +889,7 @@ psnuWrapper <- function(dat,keys,scenario_wrapper) {
     site_out[[j]] <- tryCatch({
       runRecAnalysis(site_split[[j]],keys)
     }, error = function(cond){
-      message(paste("Insufficient Data to Run Disag for PSNU:", names(site_split)[j]))
+      message(paste("Insufficient Data to Run Disag for PSNU:", names(site_split)[j], "\n"))
       message(cond)})
   }
   # stack the outputs
@@ -955,7 +990,7 @@ createScoreCard <- function(scorecard_in){
   scorecard <- scorecard_in %>%
     filter(!is.na(Indicator)) %>%
     group_by(psnu,facility,primepartner, Indicator) %>%
-    summarize(count = n()) %>%
+    summarize(count = n(). groups = "drop") %>%
     mutate(facility = as.character(facility),
            psnu = as.character(psnu),
            primepartner = as.character(primepartner)) %>%
@@ -965,8 +1000,14 @@ createScoreCard <- function(scorecard_in){
   # Replace NAs with zeros (for facility-indicator combinations with no anomalies)
   scorecard[is.na(scorecard)] <- 0
   
+  # sort columns by number of outliers
+  scorecard <- cbind.data.frame(scorecard[, 1:3],
+                                scorecard[, 4:ncol(scorecard)][order(colSums(scorecard[, 4:ncol(scorecard)]), decreasing = T)],
+                            stringsAsFactors = FALSE)
+
   # Create total row to sum number of anomalies by indicator
   scorecard$Total <- rowSums(scorecard[, 4:ncol(scorecard)])
+  scorecard <- scorecard %>% arrange(desc(Total))
   indicator_sums <- c(rep(0, 3), colSums(scorecard[, 4:ncol(scorecard)]))
   scorecard <- rbind(scorecard, indicator_sums)
   
@@ -1053,5 +1094,11 @@ formatCells <- function(name, disags, facilities, keys_disag, keys_facility, wb_
   }
   
   setColWidths(wb_format, name, (n_keys+n_columns+1):(ncol(dat_tmp)+1), 0)
+  setColWidths(wb_format, name, 1:n_keys, width = "auto")
+  # Create header style
+  headerStyle <- createStyle(
+    fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3"
+  )
+  addStyle(wb_format, sheet = name, headerStyle, rows = 1, cols = 1:ncol(dat_tmp))
   
 }

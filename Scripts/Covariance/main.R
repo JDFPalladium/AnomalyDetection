@@ -13,8 +13,8 @@
 # Step One - set parameters -----------------------------------------------------------------
 # Set the OU, fiscal year, and quarter for which to run the analysis
 OU <- "Nigeria" # in quotes
-year <- 2020 # NOT in quotes
-qtr <- "qtr4" # in quotes
+year <- 2021 # NOT in quotes
+qtr <- "qtr2" # in quotes
 
 # Select the analyses to run with MER data disaggregated by sex and age
 # Set to TRUE if you want to run, FALSE if you do not
