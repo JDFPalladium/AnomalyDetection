@@ -30,7 +30,6 @@ runTimeSeriesSolution  <- function() {
   file_out <- paste0(OU, "-TS-", Sys.Date(), ".xlsx")
   # Get cover sheet
   wb <- loadWorkbook('./TimeSeriesCoverSheet.xlsx')
-  # wb <- loadWorkbook('./RecommenderCoverSheet.xlsx')
   # Create styles
   headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
   textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
@@ -127,6 +126,11 @@ datPrep <- function(mer_list, recent_year, recent_qtr) {
     .$indicator %>%
     unique()
   
+  if(length(indicators_to_keep)==0){
+    stop("No data found in target year and quarter. Please confirm
+         that the dataset includes the year and quarter selected.")
+  }
+  
   facilities_to_keep <- mer_data_long %>%
     filter(fiscal_year == recent_year) %>%
     filter(qtr == recent_qtr) %>%
@@ -175,7 +179,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
   dat_split <- split(dat, dat$facility)
   
   # Create shell
-  earliest_year <- min(dat$fiscal_year)
+  earliest_year <- as.numeric(min(dat$fiscal_year))
   shell <- expand.grid(fiscal_year = earliest_year:recent_year, qtr = 1:4) %>%
     filter(!(fiscal_year >= recent_year & qtr > as.numeric(gsub(".*?([0-9]+).*", "\\1", recent_qtr)))) %>%
     arrange(fiscal_year, qtr)
