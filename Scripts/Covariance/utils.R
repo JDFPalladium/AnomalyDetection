@@ -990,7 +990,7 @@ createScoreCard <- function(scorecard_in){
   scorecard <- scorecard_in %>%
     filter(!is.na(Indicator)) %>%
     group_by(psnu,facility,primepartner, Indicator) %>%
-    summarize(count = n(). groups = "drop") %>%
+    summarize(count = n(), .groups = "drop") %>%
     mutate(facility = as.character(facility),
            psnu = as.character(psnu),
            primepartner = as.character(primepartner)) %>%
