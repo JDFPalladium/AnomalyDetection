@@ -15,6 +15,8 @@ library(data.table)
 library(openxlsx)
 library(zoo)
 
+keys <- c("psnu", "facility", "indicator", "lower99", "upper99", "outlier")
+
 # run TimeSeriesSolution function
 runTimeSeriesSolution  <- function() {
   # dat prep
@@ -33,10 +35,14 @@ runTimeSeriesSolution  <- function() {
   headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
   textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
   
-  if(nrow(output$Scorecard) > 3){
-    dat <- output$Scorecard[1:10, 1:11]
+  if(nrow(output$Scorecard) > 50){
+    dat <- output$Scorecard[1:10, 1:min(11, ncol(output$Scorecard))]
     facilities_flagged <- dat$Facility[1:10]
-    indicators_flagged <- names(dat)[2:11]
+    indicators_flagged <- names(dat)[2:min(11, ncol(output$Scorecard))]
+    indicators_flagged <- indicators_flagged[indicators_flagged != "Total"]
+    if(length(indicators_flagged)<10){
+      indicators_flagged <- c(indicators_flagged, rep(NA, 10-length(indicators_flagged)))
+    }
     takeaway <- data.frame(Facilities = facilities_flagged,
                            Indicators = indicators_flagged)
     addWorksheet(wb, 'Takeaway', tabColour = "blue")
@@ -290,12 +296,12 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
   
   # Let's calculate by how much the differ (difference / range of interval)
   arima_out <- out_arima_wide %>%
-    mutate(gap = ifelse(`2021_2` > upper99, `2021_2` - upper99, lower99 - `2021_2`),
+    mutate(gap = ifelse(.[[length(keys)+1]] > upper99, .[[length(keys)+1]] - upper99, lower99 - .[[length(keys)+1]]),
            deviation = gap / (upper99 - lower99)) %>%
     arrange(desc(outlier), desc(deviation)) %>%
-    mutate(`2021_2` = paste0(`2021_2`, " (", round(lower99, digits=1), " - ", round(upper99,digits=1), ")")) %>%
-    select(-gap, -deviation, -upper99, -lower99) %>%
-    as.data.frame()
+    mutate(most_recent = paste0(.[[length(keys)+1]], " (", round(lower99, digits=1), " - ", round(upper99,digits=1), ")"))
+  arima_out[, length(keys)+1] <- arima_out$most_recent 
+  arima_out <- arima_out %>% select(-most_recent, -gap, -deviation, -upper99, -lower99) %>% as.data.frame()
   
   out_arima_wide <- out_arima_wide %>% filter(outlier == 1)
   
@@ -311,12 +317,12 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
     out_ets_wide <- out_ets_wide %>% filter(outlier == 1)
   }
   ets_out <- out_ets_wide %>%
-    mutate(gap = ifelse(`2021_2` > upper99, `2021_2` - upper99, lower99 - `2021_2`),
+    mutate(gap = ifelse(.[[length(keys)+1]] > upper99, .[[length(keys)+1]] - upper99, lower99 - .[[length(keys)+1]]),
            deviation = gap / (upper99 - lower99)) %>%
     arrange(desc(outlier), desc(deviation)) %>%
-    mutate(`2021_2` = paste0(`2021_2`, " (", round(lower99, digits=1), " - ", round(upper99,digits=1), ")")) %>%
-    select(-gap, -deviation, -upper99, -lower99) %>%
-    as.data.frame()
+    mutate(most_recent = paste0(.[[length(keys)+1]], " (", round(lower99, digits=1), " - ", round(upper99,digits=1), ")"))
+  ets_out[, length(keys)+1] <- ets_out$most_recent 
+  ets_out <- ets_out %>% select(-most_recent, -gap, -deviation, -upper99, -lower99) %>% as.data.frame()
   out_ets_wide <- out_ets_wide %>% filter(outlier == 1)
   
   out_stl_arima <- out_stl_arima %>%
@@ -330,12 +336,12 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
     out_stl_arima_wide <- out_stl_arima_wide %>% filter(outlier == 1)
   }
   stl_out <- out_stl_arima_wide %>%
-    mutate(gap = ifelse(`2021_2` > upper99, `2021_2` - upper99, lower99 - `2021_2`),
+    mutate(gap = ifelse(.[[length(keys)+1]] > upper99, .[[length(keys)+1]] - upper99, lower99 - .[[length(keys)+1]]),
            deviation = gap / (upper99 - lower99)) %>%
     arrange(desc(outlier), desc(deviation)) %>%
-    mutate(`2021_2` = paste0(`2021_2`, " (", round(lower99, digits=1), " - ", round(upper99,digits=1), ")")) %>%
-    select(-gap, -deviation, -upper99, -lower99) %>%
-    as.data.frame()
+    mutate(most_recent = paste0(.[[length(keys)+1]], " (", round(lower99, digits=1), " - ", round(upper99,digits=1), ")"))
+  stl_out[, length(keys)+1] <- stl_out$most_recent 
+  stl_out <- stl_out %>% select(-most_recent, -gap, -deviation, -upper99, -lower99) %>% as.data.frame()
   out_stl_arima_wide <- out_stl_arima_wide %>% filter(outlier == 1)
   
   # Create Summary Tab
