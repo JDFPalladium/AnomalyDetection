@@ -15,7 +15,7 @@ library(data.table)
 library(openxlsx)
 library(zoo)
 
-keys <- c("psnu", "facility", "indicator", "lower99", "upper99", "outlier")
+keys <- c("psnu", "facility", "primepartner", "indicator", "lower99", "upper99", "outlier")
 
 # run TimeSeriesSolution function
 runTimeSeriesSolution  <- function() {
@@ -29,35 +29,48 @@ runTimeSeriesSolution  <- function() {
   print("Writing Output")
   file_out <- paste0(OU, "-TS-", Sys.Date(), ".xlsx")
   # Get cover sheet
-  wb <- loadWorkbook('./TimeSeriesCoverSheet.xlsx')
+  wb <- loadWorkbook("TimeSeriesCoverSheet.xlsx")
   # Create styles
   headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
   textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
   
-  if(nrow(output$Scorecard) > 50){
-    dat <- output$Scorecard[1:10, 1:min(11, ncol(output$Scorecard))]
-    facilities_flagged <- dat$Facility[1:10]
-    indicators_flagged <- names(dat)[2:min(11, ncol(output$Scorecard))]
+  if(nrow(output$facility_scorecard) > 50){
+    dat <- output$facility_scorecard[1:10, 1:min(12, ncol(output$facility_scorecard))]
+    facilities_flagged <- data.frame(Facilities = dat$Facility[1:10],
+                                     PrimePartner = dat$PrimePartner[1:10])
+    indicators_flagged <- names(dat)[3:min(11, ncol(output$facility_scorecard))]
     indicators_flagged <- indicators_flagged[indicators_flagged != "Total"]
     if(length(indicators_flagged)<10){
       indicators_flagged <- c(indicators_flagged, rep(NA, 10-length(indicators_flagged)))
     }
-    takeaway <- data.frame(Facilities = facilities_flagged,
-                           Indicators = indicators_flagged)
+    indicators_flagged <- data.frame(Indicators = indicators_flagged)
+    # takeaway <- data.frame(Facilities = facilities_flagged,
+    #                        Indicators = indicators_flagged)
     addWorksheet(wb, 'Takeaway', tabColour = "blue")
-    writeData(wb, sheet = 'Takeaway', takeaway, startRow = 3, rowNames = FALSE)
-    setColWidths(wb, sheet = 'Takeaway', 1, width = "auto")
+    writeData(wb, sheet = 'Takeaway', facilities_flagged, startRow = 3, rowNames = FALSE)
+    writeData(wb, sheet = 'Takeaway', indicators_flagged, startRow = 15, rowNames = FALSE)
+    setColWidths(wb, sheet = 'Takeaway', 1:2, width = "auto")
     writeData(wb, sheet = 'Takeaway', "This tab shows the facilities and indicators with the most anomalies.")
-    addStyle(wb, sheet = 'Takeaway', textStyle, rows = 1, cols = 1:ncol(takeaway))
-    addStyle(wb, sheet = 'Takeaway', headerStyle, rows = 3, cols = 1:ncol(takeaway))
+    addStyle(wb, sheet = 'Takeaway', textStyle, rows = 1, cols = 1)
+    addStyle(wb, sheet = 'Takeaway', headerStyle, rows = 3, cols = 1:2)
+    addStyle(wb, sheet = 'Takeaway', headerStyle, rows = 15, cols = 1)
   }
   
-  addWorksheet(wb, 'Scorecard', tabColour = "blue")
-  writeData(wb, sheet = 'Scorecard', output$Scorecard)
-  setColWidths(wb, sheet = 'Scorecard', 1, width = "auto")
-  addStyle(wb, sheet = 'Scorecard', headerStyle, rows = 1, cols = 1:ncol(output$Scorecard))
+  addWorksheet(wb, 'IP Scorecard', tabColour = "blue")
+  writeData(wb, sheet = 'IP Scorecard', "This tab contains a summary of anomalies by IP by indicator.")
+  writeData(wb, sheet = 'IP Scorecard', output$ip_scorecard, startRow = 3)
+  setColWidths(wb, sheet = 'IP Scorecard', 1:20, width = "auto")
+  addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 1, cols = 1)
+  addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 3, cols = 1:ncol(output$ip_scorecard))
   
-  addWorksheet(wb, 'Summary', tabColour = "blue")
+  addWorksheet(wb, 'Facility Scorecard', tabColour = "blue")
+  writeData(wb, sheet = 'Facility Scorecard', "This tab contains a summary of anomalies by facility.")
+  writeData(wb, sheet = 'Facility Scorecard', output$facility_scorecard, startRow = 3)
+  setColWidths(wb, sheet = 'Facility Scorecard', 1:20, width = "auto")
+  addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 1, cols = 1)
+  addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 3, cols = 1:ncol(output$facility_scorecard))
+  
+  addWorksheet(wb, 'Summary', tabColour = "orange")
   writeData(wb, sheet = 'Summary', output$Summary)
   setColWidths(wb, sheet = 'Summary', 1:3, width = "auto")
   addStyle(wb, sheet = 'Summary', headerStyle, rows = 1, cols = 1:ncol(output$Summary))
@@ -83,8 +96,8 @@ runTimeSeriesSolution  <- function() {
 
 datPrep <- function(mer_list, recent_year, recent_qtr) {
   
-  cols_to_keep <- c("facility", "indicator", "psnu", "numeratordenom", "disaggregate",
-                    "ageasentered", "fiscal_year", "qtr1", "qtr2", "qtr3", "qtr4")
+  cols_to_keep <- c("facility", "indicator", "psnu", "numeratordenom", "disaggregate", "statushiv",
+                    "ageasentered","primepartner", "fiscal_year", "qtr1", "qtr2", "qtr3", "qtr4")
   
   for(i in 1:length(mer_list)){
     if(sum(!cols_to_keep %in% names(mer_list[[i]])) > 0){
@@ -108,10 +121,18 @@ datPrep <- function(mer_list, recent_year, recent_qtr) {
   
   mer_data <- mer_data %>% filter(tolower(facility) != "data reported above facility level")
   
-  # remove rows that are aggregates of age groups (e.g. 15+ and 50+)
-  mer_data <- mer_data[-grep("\\+", mer_data$ageasentered),]
+  # remove rows that are aggregates of age groups (e.g. 15+) but keep 50+
+  mer_data <- rbind(mer_data[-grep("\\+", mer_data$ageasentered),],
+                    mer_data[grep("50+", mer_data$ageasentered),])
   
-  mer_data <- mer_data[, !names(mer_data) %in% c("numeratordenom", "disaggregate", "ageasentered")]
+  # For HTS_INDEX, keep only those rows where statushiv is positive or negative
+  mer_data <- rbind(mer_data[mer_data$indicator!='HTS_INDEX',],
+                    mer_data[mer_data$indicator=='HTS_INDEX'&(mer_data$statushiv %in% c('Negative', 'Positive')),])
+  
+  # Drop deduplication rows from prime partner
+  mer_data <- mer_data[!mer_data$primepartner %in% c("Dedup", "TBD"), ]
+  
+  mer_data <- mer_data[, !names(mer_data) %in% c("numeratordenom", "disaggregate", "ageasentered", "statushiv")]
   
   # Pivot longer to get all the values in one column
   mer_data_long <- pivot_longer(mer_data, 
@@ -146,9 +167,15 @@ datPrep <- function(mer_list, recent_year, recent_qtr) {
   # Turn quarter into a number for sorting
   mer_data_long$qtr <- as.numeric(gsub(".*?([0-9]+).*", "\\1", mer_data_long$qtr))
   
+  # Take primepartner from most recent quarter in case it changed
+  mer_data_long <- mer_data_long %>% arrange(desc(fiscal_year))
+  mer_data_long <- mer_data_long %>% 
+    group_by(facility, indicator) %>%
+    mutate(primepartner = primepartner[1])
+  
   # summarize by facility/indicator/fiscal_year/qtr
   mer_data_long <- mer_data_long %>%
-    group_by(psnu, facility, indicator, fiscal_year, qtr) %>%
+    group_by(psnu, primepartner, facility, indicator, fiscal_year, qtr) %>%
     summarize(value = sum(value, na.rm = TRUE), .groups = "drop")
   
   earliest_year <- min(mer_data_long$fiscal_year)
@@ -189,7 +216,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
   outlist_stl_arima <- list()
   
   # for each facility
-  # for(i in 1:15){
+  # for(i in 1:100){
   for(i in 1:length(dat_split)){
     
     if(i %% 25 ==0 ){
@@ -291,7 +318,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
     arrange(desc(fiscal_year), desc(qtr)) %>%
     filter(!is.na(value))
   out_arima_wide <- pivot_wider(out_arima,
-                                id_cols = c("psnu", "facility", "indicator", "lower99", "upper99", "outlier"),
+                                id_cols = c("psnu", "facility", "primepartner", "indicator", "lower99", "upper99", "outlier"),
                                 names_from = c("fiscal_year", "qtr"),
                                 values_from = c("value"))
   if(RETURN_ALL == FALSE){
@@ -314,7 +341,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
     arrange(desc(fiscal_year), desc(qtr)) %>%
     filter(!is.na(value))
   out_ets_wide <- pivot_wider(out_ets,
-                              id_cols = c("psnu","facility", "indicator", "lower99", "upper99", "outlier"),
+                              id_cols = c("psnu","facility", "primepartner", "indicator", "lower99", "upper99", "outlier"),
                               names_from = c("fiscal_year", "qtr"),
                               values_from = c("value"))
   if(RETURN_ALL == FALSE){
@@ -333,7 +360,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
     arrange(desc(fiscal_year), desc(qtr)) %>%
     filter(!is.na(value))
   out_stl_arima_wide <- pivot_wider(out_stl_arima,
-                                    id_cols = c("psnu","facility", "indicator", "lower99", "upper99", "outlier"),
+                                    id_cols = c("psnu","facility", "primepartner","indicator", "lower99", "upper99", "outlier"),
                                     names_from = c("fiscal_year", "qtr"),
                                     values_from = c("value"))
   if(RETURN_ALL == FALSE){
@@ -349,13 +376,13 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
   out_stl_arima_wide <- out_stl_arima_wide %>% filter(outlier == 1)
   
   # Create Summary Tab
-  summary <- merge(out_arima_wide[, c("psnu", "facility", "indicator", "upper99")],
-                   out_stl_arima_wide[, c("psnu","facility", "indicator", "upper99")],
-                   by = c("psnu","facility", "indicator"), all = TRUE) %>%
+  summary <- merge(out_arima_wide[, c("psnu", "facility", "primepartner",  "indicator", "upper99")],
+                   out_stl_arima_wide[, c("psnu","facility", "primepartner", "indicator", "upper99")],
+                   by = c("psnu","facility", "primepartner",  "indicator"), all = TRUE) %>%
     rename("Outlier_Arima" = upper99.x,
            "Outlier_STL" = upper99.y) %>%
-    merge(., out_ets_wide[, c("psnu","facility", "indicator", "upper99")],
-          by = c("psnu","facility", "indicator"), all = TRUE) %>%
+    merge(., out_ets_wide[, c("psnu","facility", "primepartner", "indicator", "upper99")],
+          by = c("psnu","facility", "primepartner",  "indicator"), all = TRUE) %>%
     rename("Outlier_ETS" = upper99) %>%
     mutate(Outlier_Arima = ifelse(is.na(Outlier_Arima), 0, 1),
            Outlier_STL = ifelse(is.na(Outlier_STL), 0, 1),
@@ -366,25 +393,44 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
   summary <- summary %>%
     arrange(desc(Outliers))
   
-  # Create cover sheet
+  # Create IP scorecard sheet
+  cover_ip <- summary %>%
+    group_by(primepartner, indicator) %>%
+    summarize(Outliers = sum(Outliers, na.rm = TRUE), .groups = "drop") %>% 
+    mutate(primepartner = as.character(primepartner))
+  
+  ips <- unique(cover_ip$primepartner)
+  ip_cover <- data.frame()
+  for(i in 1:length(ips)){
+    dat_tmp <- cover_ip %>% filter(primepartner == ips[i]) %>%
+      arrange(desc(Outliers)) %>%
+      mutate(rownum = row_number()) %>%
+      filter(rownum <= 5)
+    
+    ip_cover[1:(min(length(dat_tmp$indicator), 5)), i] <- dat_tmp$indicator
+    names(ip_cover)[i] <- ips[i]
+  }
+  
+  # Create facility scorecard sheet
   cover <- summary %>%
-    group_by(facility, indicator) %>%
+    group_by(facility, primepartner, indicator) %>%
     summarize(Outliers = sum(Outliers, na.rm = TRUE), .groups = "drop") %>% 
     mutate(facility = as.character(facility)) %>%
-    pivot_wider(., id_cols = "facility", names_from = "indicator", values_from = "Outliers") %>%
+    pivot_wider(., id_cols = c("facility", "primepartner"), names_from = "indicator", values_from = "Outliers") %>%
     as.data.frame()
   cover[is.na(cover)] <- 0
   # sort columns by number of outliers
-  cover <- cbind.data.frame(Facility = cover$facility,
-    cover[, 2:ncol(cover)][order(colSums(cover[, 2:ncol(cover)]), decreasing = T)],
+  cover <- cbind.data.frame(Facility = cover$facility, PrimePartner = cover$primepartner,
+    cover[, 3:ncol(cover)][order(colSums(cover[, 3:ncol(cover)]), decreasing = T)],
     stringsAsFactors = FALSE)
-  cover$Total <- rowSums(cover[, 2:ncol(cover)])
+  cover$Total <- rowSums(cover[, 3:ncol(cover)])
   cover <- cover %>% arrange(desc(Total))
-  indicator_sums <- c(0, colSums(cover[, 2:ncol(cover)]))
+  indicator_sums <- c(0,0, colSums(cover[, 3:ncol(cover)]))
   cover <- rbind(cover, indicator_sums)
-  cover[nrow(cover),1] <- "Total"
+  cover[nrow(cover),1:2] <- "Total"
 
-  outlist <- list("Scorecard" = cover,
+  outlist <- list("facility_scorecard" = cover,
+                  "ip_scorecard" = ip_cover,
                   "Summary" = summary,
                   "ARIMA" = arima_out,
                   "ETS" = ets_out,
