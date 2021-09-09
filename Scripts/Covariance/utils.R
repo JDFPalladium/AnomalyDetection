@@ -2,7 +2,7 @@
 # Recommender system solution that is called in the accompanying script, main.R. Users  
 # should not make changes to this script without care. 
 
-list_packages <- c("dplyr", "tidyr", "modi", "reshape2", "openxlsx", "data.table")
+list_packages <- c("dplyr", "tidyr", "modi", "openxlsx", "data.table")
 new_packages <- list_packages[!(list_packages %in% installed.packages()[,"Package"])]
 if(length(new_packages)) install.packages(new_packages)
 
@@ -10,7 +10,6 @@ if(length(new_packages)) install.packages(new_packages)
 library(dplyr)
 library(tidyr)
 library(modi)
-library(reshape2)
 library(openxlsx)
 library(data.table)
 
@@ -94,9 +93,14 @@ runRecommenderSolution <- function(){
   # Combine lists into dataframe
   dat_tmp <- rbindlist(dat_tmp)
   
-  # Generate scorecard
+  # Generate facility scorecard
   if (nrow(dat_tmp) > 0) {
     scorecard <- createScoreCard(scorecard_in = dat_tmp)
+  }
+  
+  # Generate IP scorecard
+  if (nrow(dat_tmp) > 0) {
+    scorecard_ip <- createScoreCard(scorecard_in = dat_tmp, facility = FALSE)
   }
 
   # Save output to Excel
@@ -108,7 +112,7 @@ runRecommenderSolution <- function(){
   # excel_files <- list()
   
   # Get cover sheet
-  wb <- loadWorkbook('./RecommenderCoverSheet.xlsx')
+  wb <- loadWorkbook("RecommenderCoverSheet.xlsx")
   
   # Create header style
   headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
@@ -117,38 +121,55 @@ runRecommenderSolution <- function(){
   if(exists("scorecard")){
     if(nrow(scorecard) > 50){
       dat_score <- scorecard[1:10, 1:13]
-      facilities_flagged <- dat_score$facility[1:10]#10
+      facilities_flagged <- data.frame(Facilities = dat_score$facility[1:10],
+                                       PrimePartner = dat_score$primepartner[1:10])#10
       indicators_flagged <- names(dat_score)[4:13]#8
-      takeaway <- data.frame(Facilities = facilities_flagged,
-                             Indicators = indicators_flagged)
+      indicators_flagged <- indicators_flagged[indicators_flagged != "Total"]
+      if(length(indicators_flagged)<10){
+        indicators_flagged <- c(indicators_flagged, rep(NA, 10-length(indicators_flagged)))
+      }
+      indicators_flagged <- data.frame(Indicators = indicators_flagged)
       addWorksheet(wb, 'Takeaway', tabColour = "blue")
-      writeData(wb, sheet = 'Takeaway', takeaway, startRow = 3)
-      setColWidths(wb, sheet = 'Takeaway', 1, width = "auto")
+      writeData(wb, sheet = 'Takeaway', facilities_flagged, startRow = 3)
+      writeData(wb, sheet = 'Takeaway', indicators_flagged, startRow = 15)
+      setColWidths(wb, sheet = 'Takeaway', 1:2, width = "auto")
       writeData(wb, sheet = 'Takeaway', "This tab shows the facilities and indicators with the most anomalies.")
-      addStyle(wb, sheet = 'Takeaway', textStyle, rows = 1, cols = 1:ncol(takeaway))
-      addStyle(wb, sheet = 'Takeaway', headerStyle, rows = 3, cols = 1:ncol(takeaway))
+      addStyle(wb, sheet = 'Takeaway', textStyle, rows = 1, cols = 1)
+      addStyle(wb, sheet = 'Takeaway', headerStyle, rows = 3, cols = 1:2)
+      addStyle(wb, sheet = 'Takeaway', headerStyle, rows = 15, cols = 1)
     }
   }
   
+  if(exists("scorecard_ip")) {
+    addWorksheet(wb, 'IP Scorecard', tabColour = "blue")
+    writeData(wb, sheet = 'IP Scorecard', scorecard_ip, startRow = 3)
+    writeData(wb, sheet = 'IP Scorecard', "This tab shows the indicators most commonly flagged by IP.")
+    addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 1, cols = 1:ncol(scorecard_ip))
+    addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 3, cols = 1:ncol(scorecard_ip))
+    setColWidths(wb, sheet = 'IP Scorecard', 1:20, width = "auto")
+  }
+  
   if(exists("scorecard")) {
-    addWorksheet(wb, 'Scorecard', tabColour = "blue")
-    writeData(wb, sheet = 'Scorecard', scorecard)
-    setColWidths(wb, sheet = 'Scorecard', 1:length(keys_facility), width = "auto")
-    addStyle(wb, sheet = 'Scorecard', headerStyle, rows = 1, cols = 1:ncol(scorecard))
+    addWorksheet(wb, 'Facility Scorecard', tabColour = "blue")
+    writeData(wb, sheet = 'Facility Scorecard', scorecard, startRow = 3)
+    writeData(wb, sheet = 'Facility Scorecard', "This tab shows the indicators most commonly flagged by facility.")
+    addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 1, cols = 1:ncol(scorecard))
+    addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 3, cols = 1:ncol(scorecard))
+    setColWidths(wb, sheet = 'Facility Scorecard', 1:20, width = "auto")
   }
   
   if(exists("disags_summary")) {
-    addWorksheet(wb, 'Summary_Disaggregrates', tabColour = "blue")
+    addWorksheet(wb, 'Summary_Disaggregrates', tabColour = "orange")
     writeData(wb, sheet = 'Summary_Disaggregrates', disags_summary$summary)
-    setColWidths(wb, sheet = 'Summary_Disaggregrates', 1:length(keys_disag), width = "auto")
     addStyle(wb, sheet = 'Summary_Disaggregrates', headerStyle, rows = 1, cols = 1:ncol(disags_summary$summary))
+    setColWidths(wb, sheet = 'Summary_Disaggregrates', 1:length(keys_disag), width = "auto")
   }
   
   if(exists("facility_summary")) {
-    addWorksheet(wb, 'Summary_Facility', tabColour = "blue")
+    addWorksheet(wb, 'Summary_Facility', tabColour = "orange")
     writeData(wb, sheet = 'Summary_Facility', facility_summary$summary)
-    setColWidths(wb, sheet = 'Summary_Facility', 1:length(keys_facility), width = "auto")
     addStyle(wb, sheet = 'Summary_Facility', headerStyle, rows = 1, cols = 1:ncol(facility_summary$summary))
+    setColWidths(wb, sheet = 'Summary_Facility', 1:length(keys_facility), width = "auto")
   }
   
   # Loop through individual runs and write outputs to Excel
@@ -264,7 +285,7 @@ datPrep <- function(dat=mer_data,
   
   
   # keep only the columns we need
-  cols_to_keep <- c("sitename","psnu","facility","indicator","numeratordenom",
+  cols_to_keep <- c("sitename","psnu","facility","indicator","numeratordenom", "statushiv",
                     "disaggregate","ageasentered","sex", "fiscal_year","primepartner", "otherdisaggregate_sub", qtr_for_analysis)
   dat <- dat[, cols_to_keep]
   
@@ -279,7 +300,7 @@ datPrep <- function(dat=mer_data,
   dat$disaggregate <- as.character(dat$disaggregate)
   dat$numeratordenom <- as.character(dat$numeratordenom)
   dat$otherdisaggregate_sub <- as.character(dat$otherdisaggregate_sub)
-  
+  dat$statushiv <- as.character(dat$statushiv)
   
   # filter to the fiscal year entered by the user
   dat <- dat %>% filter(fiscal_year == year_for_analysis)
@@ -288,8 +309,16 @@ datPrep <- function(dat=mer_data,
   dat <- dat %>% filter(!disaggregate %in% c("Total Numerator", "Total Denominator"))
   dat <- dat %>% filter(tolower(facility) != "data reported above facility level")
   
-  # remove rows that are aggregates of age groups (e.g. 15+ and 50+)
-  dat <- dat[-grep("\\+", dat$ageasentered),]
+  # remove rows that are aggregates of age groups (e.g. 15+) but keep 50+
+  dat <- rbind(dat[-grep("\\+", dat$ageasentered),],
+               dat[grep("50+", dat$ageasentered),])
+  
+  # For HTS_INDEX, keep only those rows where statushiv is positive or negative
+  dat <- rbind(dat[dat$indicator!='HTS_INDEX',],
+               dat[dat$indicator=='HTS_INDEX'&(dat$statushiv %in% c('Negative', 'Positive')),])
+  
+  # Drop deduplication rows from prime partner
+  dat <- dat[!dat$primepartner %in% c("Dedup", "TBD"), ]
   
   # label indicators with N and D for those for which both numerators and denominators are reported
   dat$indicator <- paste0(dat$indicator, "_", dat$numeratordenom)
@@ -309,7 +338,7 @@ datPrep <- function(dat=mer_data,
   dat$kp <- ifelse(grepl("KeyPop", dat$disaggregate), "Yes", "No")
   
   # for disaggregate output - drop disaggregate and numeratordenom columns
-  cols_to_drop <- c("numeratordenom", "disaggregate")
+  cols_to_drop <- c("numeratordenom", "disaggregate", "statushiv")
   dat <- dat[,!(names(dat) %in% cols_to_drop)]
   
   # for disaggregate output - we'll need the qtr variable - drop the 1/2/3/4 from quarter name 
@@ -585,6 +614,8 @@ sortOutputs <- function(dat,keys,scenario_tmp) {
     # Create a column to contain the scenario name
     site_out_total$scenario <- paste0("outlier_", scenario_tmp)
     
+    # Move MD to last position
+    site_out_total <- site_out_total %>% select(-MD, MD)
     
   }
   
@@ -624,7 +655,7 @@ runRecAnalysis <- function(dat,keys) {
   # calculate how often MER indicators are present
   count_present <- apply(site_spread[, (ncol(keys)+1):ncol(site_spread)], 2, function(x) length(which(!is.na(x)))) 
   # keep variables present at least 10% of the time
-  cols_to_keep <- which(count_present > (nrow(site_spread)*.10))+ncol(keys) 
+  cols_to_keep <- which(count_present > (nrow(site_spread)*.1))+ncol(keys) 
   # Horizontally stack keys and MER indicators
   site_keep <- cbind.data.frame(site_spread[, names(keys)], site_spread[, cols_to_keep])
   
@@ -646,12 +677,12 @@ runRecAnalysis <- function(dat,keys) {
   cormat[lower.tri(cormat)] <- 0
   diag(cormat) <- 0
   # Get correlation matrix in long format
-  cormat_long <- reshape2::melt(cormat)
+  cormat_long <- as.data.frame.table(cormat, responseName = "value")
   
   # While there is a correlation between two MER indicators of greater than 0.95:
-  while(max(cormat_long$value, na.rm = TRUE) > 0.95) {
+  while(max(cormat_long$value, na.rm = TRUE) > 0.98) {
     # Get relevant indicators that are collinear
-    cormat_perf <- cormat_long %>% filter(value > .95)
+    cormat_perf <- cormat_long %>% filter(value > .98)
     # Select the first variable to drop
     col_to_drop <- cormat_perf$Var1[1]
     col_to_drop <- toString(col_to_drop)
@@ -662,7 +693,7 @@ runRecAnalysis <- function(dat,keys) {
     cormat <- suppressWarnings(cor(dat_matrix, use = "pairwise.complete.obs"))
     cormat[lower.tri(cormat)] <- 0
     diag(cormat) <- 0
-    cormat_long <- reshape2::melt(cormat)
+    cormat_long <- cormat_long <- as.data.frame.table(cormat, responseName = "value")
   }
   
   # assign output, with collinear variables dropped, to site_keep
@@ -795,7 +826,10 @@ runRecAnalysis <- function(dat,keys) {
 runRecAnalysisFacility <- function(dat_facility_wrapper,keys=keys_facility,scenario) {
   
   if (scenario == "facility") {
-    facility_outputs <- runRecAnalysis(dat=dat_facility_wrapper,keys)
+    facility_outputs <- tryCatch({runRecAnalysis(dat=dat_facility_wrapper,keys)
+    }, error = function(cond){
+      message("Insufficient data to run analysis at Facility Level")
+      message(cond)})
     facility_outputs <- tryCatch({
       sortOutputs(facility_outputs, keys = keys, scenario_tmp = scenario)
     }, error = function(cond){
@@ -957,12 +991,13 @@ createSummaryTab <- function(dat_summary_list,
                                   1,
                                   function(x){sum(x, na.rm = T)})
     
-    # Sort summary tabs by summary of outliers, and then within each, by the facility most commonly flagged
+    # Sort summary tabs by facility with most outliers, then by observation by number of outliers
     dat_summary <- dat_summary %>%
-      group_by(Outliers, facility) %>%
-      mutate(count = n()) %>%
-      arrange(desc(Outliers), desc(count)) %>%
+      group_by(facility) %>%
+      mutate(count = sum(Outliers)) %>%
+      arrange(desc(count), desc(Outliers)) %>% 
       select(-count) %>%
+      ungroup() %>%
       as.data.frame()
     
   }
@@ -984,7 +1019,10 @@ createSummaryTab <- function(dat_summary_list,
 #' @export
 #'
 #' @examples
-createScoreCard <- function(scorecard_in){
+createScoreCard <- function(scorecard_in,
+                            facility = TRUE){
+  
+  if(facility == TRUE){
   
   # Summarize the number of anomalies by facility and indicator primarily responsible 
   scorecard <- scorecard_in %>%
@@ -1013,6 +1051,35 @@ createScoreCard <- function(scorecard_in){
   
   # Create total column to sum number of anomalies by facility
   scorecard[nrow(scorecard),1:3] <- "Total"
+  
+  # Drop D_ and _N and _D from indicator names
+  names(scorecard) <- gsub("D_", "", names(scorecard))
+  
+  } else {
+    
+    # Summarize the number of anomalies by IP and indicator primarily responsible 
+    scorecard <- scorecard_in %>%
+      mutate(Indicator = gsub("D_", "", Indicator)) %>%
+      filter(!is.na(Indicator)) %>%
+      group_by(primepartner, Indicator) %>%
+      summarize(count = n(), .groups = "drop")
+    
+    ips <- unique(scorecard$primepartner)
+    df <- data.frame()
+    for(i in 1:length(ips)){
+      dat_tmp <- scorecard %>% filter(primepartner == ips[i]) %>%
+        arrange(desc(count)) %>%
+        mutate(rownum = row_number()) %>%
+        filter(rownum <= 5)
+
+      df[1:(min(length(dat_tmp$Indicator), 5)), i] <- dat_tmp$Indicator
+      names(df)[i] <- ips[i]
+    }
+    
+    scorecard <- df
+
+  }
+  
   return(scorecard)
   
 }
@@ -1052,12 +1119,13 @@ formatCells <- function(name, disags, facilities, keys_disag, keys_facility, wb_
   # https://www.w3schools.com/colors/colors_picker.asp?colorhex=8B0000
   cs1 <- createStyle(bgFill = "#FF0000")
   cs2 <- createStyle(bgFill = "#FF8080")
-  
-  deviations <- dat_tmp[, (n_keys + 1 + (2*n_columns)):(n_keys + n_columns + (2*n_columns))]
-  quants <- suppressWarnings(quantile(as.numeric(reshape2::melt(deviations)$value), c(.8, .9), na.rm = TRUE))
+  cs3 <- createStyle(bgFill = "#FFFFFF")
   
   # loop through columns
   for(j in 1:n_columns){
+    
+    deviations <- dat_tmp[, n_keys + j + (2*n_columns)]
+    quants <- suppressWarnings(quantile(as.numeric(deviations), c(.9, .95), na.rm = TRUE))
     
     # Get Excel column position of deviation
     deviation_col <- n_keys + j + (2*n_columns)
@@ -1093,12 +1161,12 @@ formatCells <- function(name, disags, facilities, keys_disag, keys_facility, wb_
     
   }
   
-  setColWidths(wb_format, name, (n_keys+n_columns+1):(ncol(dat_tmp)+1), 0)
-  setColWidths(wb_format, name, 1:n_keys, width = "auto")
   # Create header style
   headerStyle <- createStyle(
     fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3"
   )
   addStyle(wb_format, sheet = name, headerStyle, rows = 1, cols = 1:ncol(dat_tmp))
+  setColWidths(wb_format, name, (n_keys+n_columns+1):(ncol(dat_tmp)-1), 0)
+  setColWidths(wb_format, name, 1:n_keys, width = "auto")
   
 }
