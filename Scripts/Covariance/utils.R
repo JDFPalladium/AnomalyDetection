@@ -105,14 +105,14 @@ runRecommenderSolution <- function(){
 
   # Save output to Excel
   # Set filename
-  file_out <- paste0(OU, "-", Sys.Date(), ".xlsx")
+  file_out <- paste0("Recommender/Outputs/", OU, "-", Sys.Date(), ".xlsx")
   
   print("Creating Excel Workbook - This may take a while if returning non-anomalies as well.")
   
   # excel_files <- list()
   
   # Get cover sheet
-  wb <- loadWorkbook("RecommenderCoverSheet.xlsx")
+  wb <- loadWorkbook("Recommender/RecommenderCoverSheet.xlsx")
   
   # Create header style
   headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
@@ -400,7 +400,11 @@ runRecAnalysisDisag <- function(dat_disag_wrapper,
   if (scenario == "all") {
     
     # Apply the runRecAnalysis function on entire dataset disaggregated by sex and age
-    all_outputs <- runRecAnalysis(dat=dat_disag_wrapper,keys)
+    all_outputs <- tryCatch({
+      runRecAnalysis(dat=dat_disag_wrapper,keys)
+    }, error = function(cond){
+      message("Insufficient Data to Run with All Disags")
+      message(cond)})
     # Sort outputs by anomalous distance
     all_outputs <- tryCatch({
       sortOutputs(all_outputs, keys = keys,scenario_tmp = scenario)
@@ -467,7 +471,7 @@ ageWrapper <- function(dat,keys, scenario_wrapper, age_groups) {
     }
     
     # stack the outputs and drop the age group variable so that outputs from all runs can be appropriately stacked
-    site_age_outliers <- do.call(plyr::rbind.fill, site_out) %>% select(-agegroup)
+    site_age_outliers <- do.call(bind_rows, site_out) %>% select(-agegroup)
     
   }
   
@@ -490,7 +494,7 @@ ageWrapper <- function(dat,keys, scenario_wrapper, age_groups) {
     }
     
     # stack the outputs
-    site_age_outliers <- do.call(plyr::rbind.fill, site_out)
+    site_age_outliers <- do.call(bind_rows, site_out)
     
   }
   
@@ -544,7 +548,7 @@ sexWrapper <- function(dat,keys, scenario_wrapper) {
   }
   
   # stack the outputs
-  site_sex_outliers <- do.call(plyr::rbind.fill, site_out)
+  site_sex_outliers <- do.call(bind_rows, site_out)
   
   site_sex_outliers <- tryCatch({
     sortOutputs(site_sex_outliers, keys = keys,scenario_tmp = scenario_wrapper)
@@ -890,7 +894,7 @@ facilityTypeWrapper <- function(dat,keys,facility_strings, scenario_wrapper) {
       message(cond)})
   }
   # stack the outputs
-  facility_type_outliers <- do.call(plyr::rbind.fill, site_out)
+  facility_type_outliers <- do.call(bind_rows, site_out)
   
   # Sort and order outputs
   facility_type_outliers <- tryCatch({
@@ -927,7 +931,7 @@ psnuWrapper <- function(dat,keys,scenario_wrapper) {
       message(cond)})
   }
   # stack the outputs
-  facility_psnu_outliers <- do.call(plyr::rbind.fill, site_out)
+  facility_psnu_outliers <- do.call(bind_rows, site_out)
   
   facility_psnu_outliers <- tryCatch({
     sortOutputs(facility_psnu_outliers, keys = keys,scenario_tmp = scenario_wrapper)
