@@ -27,9 +27,9 @@ runTimeSeriesSolution  <- function() {
   output <- runTimeSeries(dat = dat_prepped, recent_year = year, recent_qtr = qtr)
   # write output
   print("Writing Output")
-  file_out <- paste0(OU, "-TS-", Sys.Date(), ".xlsx")
+  file_out <- paste0("TimeSeries/Outputs/", OU, "-TS-", Sys.Date(), ".xlsx")
   # Get cover sheet
-  wb <- loadWorkbook("TimeSeriesCoverSheet.xlsx")
+  wb <- loadWorkbook("TimeSeries/TimeSeriesCoverSheet.xlsx")
   # Create styles
   headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
   textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
@@ -124,6 +124,8 @@ datPrep <- function(mer_list, recent_year, recent_qtr) {
   # remove rows that are aggregates of age groups (e.g. 15+) but keep 50+
   mer_data <- rbind(mer_data[-grep("\\+", mer_data$ageasentered),],
                     mer_data[grep("50+", mer_data$ageasentered),])
+  
+  dat <- dat[-grep("<+[0-9]", dat$ageasentered),]
   
   # For HTS_INDEX, keep only those rows where statushiv is positive or negative
   mer_data <- rbind(mer_data[mer_data$indicator!='HTS_INDEX',],
