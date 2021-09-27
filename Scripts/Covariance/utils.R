@@ -313,6 +313,13 @@ datPrep <- function(dat=mer_data,
   dat <- rbind(dat[-grep("\\+", dat$ageasentered),],
                dat[grep("50+", dat$ageasentered),])
   
+  dat <- dat[-grep("<+[0-9]", dat$ageasentered),]
+  # dat <- dat[-grep(">+[0-9]", dat$ageasentered),]
+  
+  if(n_distinct(dat$ageasentered) <= 1){
+    stop("Data does not contain 5-year defined age groups.")
+  }
+  
   # For HTS_INDEX, keep only those rows where statushiv is positive or negative
   dat <- rbind(dat[dat$indicator!='HTS_INDEX',],
                dat[dat$indicator=='HTS_INDEX'&(dat$statushiv %in% c('Negative', 'Positive')),])
