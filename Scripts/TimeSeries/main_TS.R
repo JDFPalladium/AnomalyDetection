@@ -12,12 +12,12 @@
 
 # Step One - set parameters -----------------------------------------------------------------
 # Set the OU, and the most recent fiscal year and quarter for which there is data present
-OU <- "Nigeria" # in quotes
-year <- 2021 # NOT in quotes
-qtr <- "qtr2" # in quotes
+OU <- "Papua New GUinea" # in quotes
+year <- 2020 # NOT in quotes
+qtr <- "qtr1" # in quotes
 
 # Specify how many files you are uploading (can be any number)
-num_files <- 2 # must be a number
+num_files <- 1 # must be a number
 
 # In determining which indicator drives the determination that an observation is anomalous,
 # you can discount indicators with very low values. This will NOT affect whether an observation
@@ -33,7 +33,7 @@ RETURN_ALL <- TRUE
 # Step Two - choose folder that contains utils_TS.R (also where Excel file will be saved) -------
 setwd(choose.dir())
 if(!"utils_TS.R" %in% list.files()){
-  print("utils_TS.R is not in the selected folder. Please select the folder that contains utils_TS.R")}
+  writeLines("\nutils_TS.R is not in the selected folder. Please select the folder that contains utils_TS.R")}
 source("utils_TS.R")
 
 # Step Three - load MER data in xlsx (MER data should be on first sheet), csv, or txt format -----
@@ -47,7 +47,7 @@ for (i in 1:num_files) {
   } else if(sub('.*\\.', '', file_path) == "txt"){
     mer_data[[i]] <- read.delim(file_path)
   } else {
-    print("Please select a file with an xlsx, csv, or txt extension.")
+    writeLines("\nPlease select a file with an xlsx, csv, or txt extension.")
   }
 }
 

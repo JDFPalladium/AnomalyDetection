@@ -20,16 +20,18 @@ keys <- c("psnu", "facility", "primepartner", "indicator", "lower99", "upper99",
 # run TimeSeriesSolution function
 runTimeSeriesSolution  <- function() {
   # dat prep
-  print("Preparing Data")
+  writeLines("\nPreparing Data")
   dat_prepped <- datPrep(mer_list = mer_data, recent_year = year, recent_qtr = qtr)
   # model
-  print("Running Time Series Models")
+  writeLines("\nRunning Time Series Models")
   output <- runTimeSeries(dat = dat_prepped, recent_year = year, recent_qtr = qtr)
   # write output
-  print("Writing Output")
-  file_out <- paste0("TimeSeries/Outputs/", OU, "-TS-", Sys.Date(), ".xlsx")
+  writeLines("\nWriting Output - this workbook will be named with the OU, year, quarter, TS, and the date.")
+  writeLines("\nThe workbook will be saved in the folder: TimeSeries/Outputs/.")
+  writeLines("\nThis may take a while if returning non-anomalies as well.")
+  file_out <- paste0("TimeSeries/Outputs/", OU, "_", year, "_", qtr, "_", "TS_", gsub(':', '-', Sys.time()), ".xlsx")
   # Get cover sheet
-  wb <- loadWorkbook("TimeSeries/TimeSeriesCoverSheet.xlsx")
+  wb <- loadWorkook("TimeSeries/TimeSeriesCoverSheet.xlsx")
   # Create styles
   headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
   textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
@@ -90,8 +92,15 @@ runTimeSeriesSolution  <- function() {
   setColWidths(wb, sheet = 'STL', 1:3, width = "auto")
   addStyle(wb, sheet = 'STL', headerStyle, rows = 1, cols = 1:ncol(output$STL))
   
+  Parameters <- data.frame(Parameter = c('OU', 'Year', 'Quarter', 'Number of Files', 'Filepath'), 
+                             Value = c(OU, year, qtr, num_files, file_out))
+  addWorksheet(wb, 'Parameters', tabColour = 'red')
+  writeData(wb, sheet = 'Parameters', x=Parameters)
+  addStyle(wb, sheet = 'Parameters', headerStyle, rows = 1, cols = 1:ncol(Parameters))
+  setColWidths(wb, sheet = 'Parameters', 1:2, width = "auto")
+  
   saveWorkbook(wb, file = file_out, overwrite = TRUE)
-  print("Code Completed.")
+  writeLines("\nCode Completed.")
 }
 
 datPrep <- function(mer_list, recent_year, recent_qtr) {
