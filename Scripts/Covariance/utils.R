@@ -44,14 +44,14 @@ runRecommenderSolution <- function(){
   # Loop through disag scenarios and run anaysis for each, adding output to disags_list
   disags_list = list()
   for (i in names(scenarios_to_run_disag)) {
-    print(paste("Running analysis for dataset including disaggregates by:", i))
+    writeLines(paste("\nRunning analysis for dataset including disaggregates by:", i))
     disags_list[[i]] <- runRecAnalysisDisag(dat_disag_wrapper=dat_disag, scenario=i)
   }
   
   # Loop through facility scenarios and run anaysis for each, adding output to facility_list
   facility_list = list()
   for (i in names(scenarios_to_run_facility)) {
-    print(paste("Running analysis for dataset by:", i))
+    writeLines(paste("\nRunning analysis for dataset by:", i))
     facility_list[[i]] <- runRecAnalysisFacility(dat_facility_wrapper=dat_facility,scenario=i)
   }
   
@@ -64,18 +64,18 @@ runRecommenderSolution <- function(){
   # If no anomalies found, then the length of disags_list will be zero
   # TODO: if RETURN_ALL = TRUE and no anomalies found, length of disags_list will not be zero
   if(length(disags_list) > 0){
-    print("Creating Disag Summary Tab")
+    writeLines("\nCreating Disag Summary Tab")
     disags_summary <- createSummaryTab(dat_summary_list = disags_list)
   }
   
   # Create summary tab for anomalies found using data aggregated at facility level
   if(length(facility_list) > 0){
-    print("Creating Facility Summary Tab")
+    writeLines("\nCreating Facility Summary Tab")
     facility_summary <- createSummaryTab(dat_summary_list = facility_list,disag = FALSE)
   }
   
   # Combine summary tabs into scorecard of anomalies tabulated by facilities and indicator
-  print("Creating Scorecard")
+  writeLines("\nCreating Scorecard")
   
   # Prior to creating scorecard, pull the summary tabs that were created in previous step
   dat_tmp <- list()
@@ -105,9 +105,11 @@ runRecommenderSolution <- function(){
 
   # Save output to Excel
   # Set filename
-  file_out <- paste0("Recommender/Outputs/", OU, "-", Sys.Date(), ".xlsx")
+  file_out <- paste0("Recommender/Outputs/", OU, "_", year, "_", qtr, "_", gsub(':', '-', Sys.time()), ".xlsx")
   
-  print("Creating Excel Workbook - This may take a while if returning non-anomalies as well.")
+  writeLines("\nCreating Excel Workbook - this workbook will be named with the OU, year, quarter, and the date.")
+  writeLines("\nThe workbook will be saved in the folder: Recommender/Outputs/.")
+  writeLines("\nThis may take a while if returning non-anomalies as well.")
   
   # excel_files <- list()
   
@@ -185,6 +187,15 @@ runRecommenderSolution <- function(){
       writeData(wb, sheet = paste0(names(facility_list)[[i]],"_Disaggregates"), facility_list[[i]])
     }
   }
+  if(exists("wb")){
+    Parameters <- data.frame(Parameter = c('OU', 'Year', 'Quarter', 'All', 'Sex', 'Age', 'Age Groups', 'Facility', 
+                                           'PSNU', 'Type', 'Facility Strings', 'Filepath'), 
+                             Value = c(OU, year, qtr, all, sex, age, age_groups, facility, psnu, type, toString(facility_strings), file_out))
+    addWorksheet(wb, 'Parameters', tabColour = 'red')
+    writeData(wb, sheet = 'Parameters', x=Parameters)
+    addStyle(wb, sheet = 'Parameters', headerStyle, rows = 1, cols = 1:ncol(Parameters))
+    setColWidths(wb, sheet = 'Parameters', 1:2, width = "auto")
+  }
   
   saveWorkbook(wb, file_out, overwrite = TRUE)
   
@@ -192,11 +203,11 @@ runRecommenderSolution <- function(){
   # First, load workbook and get sheets
   wb <- openxlsx::loadWorkbook(file_out)  
   # Format individual runs - these are the tabs that do not contain scorecard or summary in the names
-  sheets_to_format <- names(wb)[which(!grepl("Scorecard|Summary|Overview|Takeaway",names(wb)))]
+  sheets_to_format <- names(wb)[which(!grepl("Scorecard|Summary|Overview|Takeaway|Parameters",names(wb)))]
   
   # Loop through sheets to format and run formatCells function to color code output
   for(i in sheets_to_format){
-    print(paste("Formatting Excel sheet for:", i))
+    writeLines(paste("\nFormatting Excel sheet for:", i))
     formatCells(name = i,
                 disags = disags_list,
                 facilities = facility_list,
@@ -208,7 +219,7 @@ runRecommenderSolution <- function(){
   # Save workbook
   saveWorkbook(wb, file_out, overwrite = TRUE)
   
-  print("Process Complete. File saved.")
+  writeLines("\nProcess Complete. File saved.")
   
 }
 
@@ -259,7 +270,7 @@ runChecks <- function(dat=mer_data,
   if(type_check == TRUE){
     for(i in facility_strings_tmp){
       if(sum(grepl(i, unique(tolower(dat$facility))))==0){
-        print(sprintf("Facility type %s not found. All types should be lowercase.", i))
+        writeLines(sprintf("\nFacility type %s not found. All types should be lowercase.", i))
       }
     }
   }
@@ -570,7 +581,7 @@ sexWrapper <- function(dat,keys, scenario_wrapper) {
 #' 
 #' Sort outputs by outlier flag and then by Mahalanobis distance.
 #' Order columns by keys, DATIM data, estimated values, normalized deviations, and then outlier flags
-#' Function will return all observatios or only anomalous observations based on user-set parameter of RETURN_ALL
+#' Function will return all observations or only anomalous observations based on user-set parameter of RETURN_ALL
 #'
 #' @param dat dataframe returned by runRecAnalysis function
 #' @param keys character vector defined above

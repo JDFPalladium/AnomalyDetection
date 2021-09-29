@@ -12,9 +12,9 @@
 
 # Step One - set parameters -----------------------------------------------------------------
 # Set the OU, fiscal year, and quarter for which to run the analysis
-OU <- "Nigeria" # in quotes
-year <- 2021 # NOT in quotes
-qtr <- "qtr2" # in quotes
+OU <- "Papua New Guinea" # in quotes
+year <- 2020 # NOT in quotes
+qtr <- "qtr1" # in quotes
 
 # Select the analyses to run with MER data disaggregated by sex and age
 # Set to TRUE if you want to run, FALSE if you do not
@@ -46,10 +46,10 @@ RETURN_ALL <- TRUE
 # Step Two - choose folder that contains Utils.R (also where Excel file will be saved) -------
 setwd(choose.dir())
 if(!"utils.R" %in% list.files()){
-  print("utils.R is not in the selected folder. Please select the folder that contains utils.R")}
+  writeLines("\nutils.R is not in the selected folder. Please select the folder that contains utils.R")}
 source("utils.R")
 
-# Step Three - load MER data in xlsx (MER data should be on firt sheet), csv, or txt format -----
+# Step Three - load MER data in xlsx (MER data should be on first sheet), csv, or txt format -----
 file_path <- file.choose()
 if(sub('.*\\.', '', file_path) == "xlsx") {
   mer_data <- read.xlsx(file_path, sheet = 1)
@@ -58,7 +58,7 @@ if(sub('.*\\.', '', file_path) == "xlsx") {
 } else if(sub('.*\\.', '', file_path) == "txt"){
   mer_data <- read.delim(file_path)
 } else {
-  print("Please select a file with an xlsx, csv, or txt extension.")
+  writeLines("\nPlease select a file with an xlsx, csv, or txt extension.")
 }
 
 # Step Four - Run line of code below. Check console for updates and messages ------
