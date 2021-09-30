@@ -12,9 +12,9 @@
 
 # Step One - set parameters -----------------------------------------------------------------
 # Set the OU, and the most recent fiscal year and quarter for which there is data present
-OU <- "Papua New GUinea" # in quotes
+OU <- "Papua New Guinea" # in quotes
 year <- 2020 # NOT in quotes
-qtr <- "qtr1" # in quotes
+qtr <- "qtr4" # in quotes
 
 # Specify how many files you are uploading (can be any number)
 num_files <- 1 # must be a number

@@ -31,7 +31,7 @@ runTimeSeriesSolution  <- function() {
   writeLines("\nThis may take a while if returning non-anomalies as well.")
   file_out <- paste0("TimeSeries/Outputs/", OU, "_", year, "_", qtr, "_", "TS_", gsub(':', '-', Sys.time()), ".xlsx")
   # Get cover sheet
-  wb <- loadWorkook("TimeSeries/TimeSeriesCoverSheet.xlsx")
+  wb <- loadWorkbook("TimeSeries/TimeSeriesCoverSheet.xlsx")
   # Create styles
   headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
   textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
@@ -134,7 +134,7 @@ datPrep <- function(mer_list, recent_year, recent_qtr) {
   mer_data <- rbind(mer_data[-grep("\\+", mer_data$ageasentered),],
                     mer_data[grep("50+", mer_data$ageasentered),])
   
-  dat <- dat[-grep("<+[0-9]", dat$ageasentered),]
+  mer_data <- mer_data[-grep("<+[0-9]", mer_data$ageasentered),]
   
   # For HTS_INDEX, keep only those rows where statushiv is positive or negative
   mer_data <- rbind(mer_data[mer_data$indicator!='HTS_INDEX',],
@@ -344,6 +344,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
     mutate(most_recent = paste0(.[[length(keys)+1]], " (", round(lower99, digits=1), " - ", round(upper99,digits=1), ")"))
   arima_out[, length(keys)+1] <- arima_out$most_recent 
   arima_out <- arima_out %>% select(-most_recent, -gap, -deviation, -upper99, -lower99) %>% as.data.frame()
+  names(arima_out)[6:ncol(arima_out)] <- paste("FY", substr(names(arima_out)[6:ncol(arima_out)], 1, 4), "Q", substr(names(arima_out)[6:ncol(arima_out)], 6, 6), sep = '')
   
   out_arima_wide <- out_arima_wide %>% filter(outlier == 1)
   
@@ -365,6 +366,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
     mutate(most_recent = paste0(.[[length(keys)+1]], " (", round(lower99, digits=1), " - ", round(upper99,digits=1), ")"))
   ets_out[, length(keys)+1] <- ets_out$most_recent 
   ets_out <- ets_out %>% select(-most_recent, -gap, -deviation, -upper99, -lower99) %>% as.data.frame()
+  names(ets_out)[6:ncol(ets_out)] <- paste("FY", substr(names(ets_out)[6:ncol(ets_out)], 1, 4), "Q", substr(names(ets_out)[6:ncol(ets_out)], 6, 6), sep = '')
   out_ets_wide <- out_ets_wide %>% filter(outlier == 1)
   
   out_stl_arima <- out_stl_arima %>%
@@ -384,6 +386,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
     mutate(most_recent = paste0(.[[length(keys)+1]], " (", round(lower99, digits=1), " - ", round(upper99,digits=1), ")"))
   stl_out[, length(keys)+1] <- stl_out$most_recent 
   stl_out <- stl_out %>% select(-most_recent, -gap, -deviation, -upper99, -lower99) %>% as.data.frame()
+  names(stl_out)[6:ncol(stl_out)] <- paste("FY", substr(names(stl_out)[6:ncol(stl_out)], 1, 4), "Q", substr(names(stl_out)[6:ncol(stl_out)], 6, 6), sep = '')
   out_stl_arima_wide <- out_stl_arima_wide %>% filter(outlier == 1)
   
   # Create Summary Tab
@@ -431,14 +434,16 @@ runTimeSeries <- function(dat, recent_year, recent_qtr) {
     as.data.frame()
   cover[is.na(cover)] <- 0
   # sort columns by number of outliers
-  cover <- cbind.data.frame(Facility = cover$facility, PrimePartner = cover$primepartner,
-    cover[, 3:ncol(cover)][order(colSums(cover[, 3:ncol(cover)]), decreasing = T)],
-    stringsAsFactors = FALSE)
-  cover$Total <- rowSums(cover[, 3:ncol(cover)])
-  cover <- cover %>% arrange(desc(Total))
-  indicator_sums <- c(0,0, colSums(cover[, 3:ncol(cover)]))
-  cover <- rbind(cover, indicator_sums)
-  cover[nrow(cover),1:2] <- "Total"
+  if (ncol(cover) > 3) {
+    cover <- cbind.data.frame(Facility = cover$facility, PrimePartner = cover$primepartner,
+                              cover[, 3:ncol(cover)][order(colSums(cover[, 3:ncol(cover)]), decreasing = T)],
+                              stringsAsFactors = FALSE)
+    cover$Total <- rowSums(cover[, 3:ncol(cover)])
+    cover <- cover %>% arrange(desc(Total))
+    indicator_sums <- c(0,0, colSums(cover[, 3:ncol(cover)]))
+    cover <- rbind(cover, indicator_sums)
+    cover[nrow(cover),1:2] <- "Total"
+    } 
 
   outlist <- list("facility_scorecard" = cover,
                   "ip_scorecard" = ip_cover,
