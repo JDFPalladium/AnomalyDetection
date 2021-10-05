@@ -102,7 +102,7 @@ runRecommenderSolution <- function(){
   if (nrow(dat_tmp) > 0) {
     scorecard_ip <- createScoreCard(scorecard_in = dat_tmp, facility = FALSE)
   }
-
+  
   # Save output to Excel
   # Set filename
   file_out <- paste0("Recommender/Outputs/", OU, "_", year, "_", qtr, "_", gsub(':', '-', Sys.time()), ".xlsx")
@@ -326,7 +326,7 @@ datPrep <- function(dat=mer_data,
   
   dat <- dat[-grep("<+[0-9]", dat$ageasentered),]
   # dat <- dat[-grep(">+[0-9]", dat$ageasentered),]
-  
+
   if(n_distinct(dat$ageasentered) <= 1){
     stop("Data does not contain 5-year defined age groups.")
   }
@@ -373,6 +373,15 @@ datPrep <- function(dat=mer_data,
   dat_out <- dat_grouped %>%
     pivot_wider(names_from = "indicator", values_from = "qtr_sum") %>%
     as.data.frame()
+  
+  # Stop code if age bands don't exist in dataset. 
+  if(any(!c(age_under15, age_over15) %in% dat_out$ageasentered)){
+    stop("The age bands defined are not reported for this fiscal year and quarter.")
+  }
+  # Get frequency table of observations by age
+  writeLines("The dataset for the given FY and QTR contain the following observations by age band. 
+    Consider if this matches with the age bands defined in main.R")
+  print(table(dat_out$ageasentered))
   
   # facility level file - filter for just the quarter of interest
   names(dat_facility) <- gsub("[0-9]","", names(dat_facility))
@@ -434,7 +443,8 @@ runRecAnalysisDisag <- function(dat_disag_wrapper,
   } else if (scenario == "age") {
     
     # Apply age wrapper function to run Recommender analysis on each age disaggregate
-    ageWrapper(dat=dat_disag_wrapper,keys,scenario_wrapper=scenario, age_groups)
+    ageWrapper(dat=dat_disag_wrapper,keys,scenario_wrapper=scenario,
+               age_groups, age_under15, age_over15)
     
   } else if (scenario == "sex") {
     
@@ -458,18 +468,20 @@ runRecAnalysisDisag <- function(dat_disag_wrapper,
 #' @export
 #'
 #' @examples
-ageWrapper <- function(dat,keys, scenario_wrapper, age_groups) {
+ageWrapper <- function(dat,keys, scenario_wrapper, age_groups, age_under15, age_over15) {
   
+
   # Define five-year age categories and filter to rows containing only these categories
-  age_categories <- c("01-04",  "15-19", "20-24", "25-29", "30-34", "35-39", "40-44",
-                      "45-49", "05-09", "10-14")
+  # age_categories <- c("01-04",  "15-19", "20-24", "25-29", "30-34", "35-39", "40-44",
+  #                     "45-49", "05-09", "10-14")
   dat$ageasentered <- as.character(dat$ageasentered)
-  dat <- dat[dat$ageasentered %in% age_categories, ]
+  dat <- dat[dat$ageasentered %in% c(age_under15, age_over15), ]
+  dat <- dat[!is.na(dat$ageasentered), ]
   
   # If grouping observations for Over/Under 15 (sensible for smaller datasets)
   if(age_groups == "Over/Under 15"){
     # Create "agegroup" variable which takes value of Under 15 of Over 15 based on "ageasentered"
-    dat <- cbind("agegroup" = ifelse(dat$ageasentered %in% c("01-04", "05-09", "10-14"), "Under 15", "Over 15"),
+    dat <- cbind("agegroup" = ifelse(dat$ageasentered %in% age_under15, "Under 15", "Over 15"),
                  dat, stringsAsFactors = FALSE) 
     
     # Split dataset by age group
@@ -1045,38 +1057,38 @@ createScoreCard <- function(scorecard_in,
                             facility = TRUE){
   
   if(facility == TRUE){
-  
-  # Summarize the number of anomalies by facility and indicator primarily responsible 
-  scorecard <- scorecard_in %>%
-    filter(!is.na(Indicator)) %>%
-    group_by(psnu,facility,primepartner, Indicator) %>%
-    summarize(count = n(), .groups = "drop") %>%
-    mutate(facility = as.character(facility),
-           psnu = as.character(psnu),
-           primepartner = as.character(primepartner)) %>%
-    pivot_wider(., names_from = "Indicator", values_from = "count") %>%
-    as.data.frame()
-  
-  # Replace NAs with zeros (for facility-indicator combinations with no anomalies)
-  scorecard[is.na(scorecard)] <- 0
-  
-  # sort columns by number of outliers
-  scorecard <- cbind.data.frame(scorecard[, 1:3],
-                                scorecard[, 4:ncol(scorecard)][order(colSums(scorecard[, 4:ncol(scorecard)]), decreasing = T)],
-                            stringsAsFactors = FALSE)
-
-  # Create total row to sum number of anomalies by indicator
-  scorecard$Total <- rowSums(scorecard[, 4:ncol(scorecard)])
-  scorecard <- scorecard %>% arrange(desc(Total))
-  indicator_sums <- c(rep(0, 3), colSums(scorecard[, 4:ncol(scorecard)]))
-  scorecard <- rbind(scorecard, indicator_sums)
-  
-  # Create total column to sum number of anomalies by facility
-  scorecard[nrow(scorecard),1:3] <- "Total"
-  
-  # Drop D_ and _N and _D from indicator names
-  names(scorecard) <- gsub("D_", "", names(scorecard))
-  
+    
+    # Summarize the number of anomalies by facility and indicator primarily responsible 
+    scorecard <- scorecard_in %>%
+      filter(!is.na(Indicator)) %>%
+      group_by(psnu,facility,primepartner, Indicator) %>%
+      summarize(count = n(), .groups = "drop") %>%
+      mutate(facility = as.character(facility),
+             psnu = as.character(psnu),
+             primepartner = as.character(primepartner)) %>%
+      pivot_wider(., names_from = "Indicator", values_from = "count") %>%
+      as.data.frame()
+    
+    # Replace NAs with zeros (for facility-indicator combinations with no anomalies)
+    scorecard[is.na(scorecard)] <- 0
+    
+    # sort columns by number of outliers
+    scorecard <- cbind.data.frame(scorecard[, 1:3],
+                                  scorecard[, 4:ncol(scorecard)][order(colSums(scorecard[, 4:ncol(scorecard)]), decreasing = T)],
+                                  stringsAsFactors = FALSE)
+    
+    # Create total row to sum number of anomalies by indicator
+    scorecard$Total <- rowSums(scorecard[, 4:ncol(scorecard)])
+    scorecard <- scorecard %>% arrange(desc(Total))
+    indicator_sums <- c(rep(0, 3), colSums(scorecard[, 4:ncol(scorecard)]))
+    scorecard <- rbind(scorecard, indicator_sums)
+    
+    # Create total column to sum number of anomalies by facility
+    scorecard[nrow(scorecard),1:3] <- "Total"
+    
+    # Drop D_ and _N and _D from indicator names
+    names(scorecard) <- gsub("D_", "", names(scorecard))
+    
   } else {
     
     # Summarize the number of anomalies by IP and indicator primarily responsible 
@@ -1093,13 +1105,13 @@ createScoreCard <- function(scorecard_in,
         arrange(desc(count)) %>%
         mutate(rownum = row_number()) %>%
         filter(rownum <= 5)
-
+      
       df[1:(min(length(dat_tmp$Indicator), 5)), i] <- dat_tmp$Indicator
       names(df)[i] <- ips[i]
     }
     
     scorecard <- df
-
+    
   }
   
   return(scorecard)
