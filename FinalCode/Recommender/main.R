@@ -49,7 +49,7 @@ RETURN_ALL <- TRUE
 # setwd(choose.dir())
 # if(!"utils.R" %in% list.files()){
 #   print("utils.R is not in the selected folder. Please select the folder that contains utils.R")}
-source("Recommender/utils.R")
+source("utils.R")
 
 # Step Three - load MER data in xlsx (MER data should be on firt sheet), csv, or txt format -----
 file_path <- file.choose()
