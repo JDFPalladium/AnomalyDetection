@@ -34,7 +34,7 @@ RETURN_ALL <- FALSE
 # setwd(choose.dir())
 # if(!"utils_TS.R" %in% list.files()){
 #   print("utils_TS.R is not in the selected folder. Please select the folder that contains utils_TS.R")}
-source("TimeSeries/utils_TS.R")
+source("utils_TS.R")
 
 # Step Three - load MER data in xlsx (MER data should be on first sheet), csv, or txt format -----
 mer_data <- list()
