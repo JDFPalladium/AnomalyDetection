@@ -27,9 +27,9 @@ runTimeSeriesSolution  <- function() {
   output <- runTimeSeries(dat = dat_prepped, recent_year = year, recent_qtr = qtr)
   # write output
   print("Writing Output")
-  file_out <- paste0("TimeSeries/Outputs/", OU, "-TS-", Sys.Date(), ".xlsx")
+  file_out <- paste0("Outputs/", OU, "-TS-", Sys.Date(), ".xlsx")
   # Get cover sheet
-  wb <- loadWorkbook("TimeSeries/TimeSeriesCoverSheet.xlsx")
+  wb <- loadWorkbook("TimeSeriesCoverSheet.xlsx")
   # Create styles
   headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
   textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
