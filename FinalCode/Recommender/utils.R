@@ -105,7 +105,7 @@ runRecommenderSolution <- function(){
   
   # Save output to Excel
   # Set filename
-  file_out <- paste0("Recommender/Outputs/", OU, "_", year, "_", qtr, "_", gsub(':', '-', Sys.time()), ".xlsx")
+  file_out <- paste0("Outputs/", OU, "_", year, "_", qtr, "_", gsub(':', '-', Sys.time()), ".xlsx")
   
   writeLines("\nCreating Excel Workbook - this workbook will be named with the OU, year, quarter, and the date.")
   writeLines("\nThe workbook will be saved in the folder: Recommender/Outputs/.")
@@ -114,7 +114,7 @@ runRecommenderSolution <- function(){
   # excel_files <- list()
   
   # Get cover sheet
-  wb <- loadWorkbook("Recommender/RecommenderCoverSheet.xlsx")
+  wb <- loadWorkbook("RecommenderCoverSheet.xlsx")
   
   # Create header style
   headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
