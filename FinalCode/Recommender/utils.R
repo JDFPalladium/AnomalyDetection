@@ -122,10 +122,18 @@ runRecommenderSolution <- function(){
   
   if(exists("scorecard")){
     if(nrow(scorecard) > 50){
-      dat_score <- scorecard[1:10, 1:13]
+      if(ncol(scorecard) > 12) {
+        dat_score <- scorecard[1:10, 1:13]
+      } else {
+        dat_score <- scorecard[1:10, 1:ncol(scorecard)]
+      }
       facilities_flagged <- data.frame(Facilities = dat_score$facility[1:10],
                                        PrimePartner = dat_score$primepartner[1:10])#10
-      indicators_flagged <- names(dat_score)[4:13]#8
+      if(ncol(dat_score) > 12) {
+        indicators_flagged <- names(dat_score)[4:13]
+      } else {
+        indicators_flagged <- names(dat_score)[4:ncol(dat_score)]
+      }
       indicators_flagged <- indicators_flagged[indicators_flagged != "Total"]
       if(length(indicators_flagged)<10){
         indicators_flagged <- c(indicators_flagged, rep(NA, 10-length(indicators_flagged)))
