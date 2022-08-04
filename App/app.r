@@ -31,7 +31,9 @@ ui <- dashboardPage(
                            multiple = FALSE,
                            accept = c("text/csv",
                                       "text/comma-separated-values,text/plain",
-                                      ".csv")),
+                                      ".csv",
+                                      ".xlsx")),
+                 actionButton("recdata", "Run Data Check"),
                  tags$b("Switch ON if you want to run,"), tags$br(),
                  tags$b("OFF if you do not"),tags$br(),tags$br(),
                  
@@ -117,6 +119,11 @@ ui <- dashboardPage(
   dashboardBody(
     h2(textOutput('title')),
     conditionalPanel(
+      condition = "output.rec_data",
+      box(title = "Data Checks", width = 12,
+          "Summary Table or Score Card")
+    ),
+    conditionalPanel(
       condition = "output.rec_sum",
       box(title = "Summary Table:..", width = 12,
           "Summary Table or Score Card")
@@ -174,6 +181,75 @@ server <- function(input, output) {
   # observeEvent(switchInput$obs, {
   #   toggle("plot")
   # })
+  # RecData <- reactive({
+  #   inFile <- input$file1
+  #   if (is.null(inFile)) return(NULL)
+  #   data <- read.csv(inFile$datapath, header = TRUE)
+  #   data
+  # })
+  RecData <- reactive({
+    inFile <- input$file1
+    if (is.null(inFile))
+      return(NULL)
+    df <- read.xlsx(inFile$datapath, header = TRUE)
+    return(df)
+  })
+  
+  observeEvent(input$recdata, {
+    
+    runChecks <- function(dat=mer_data,
+                          year_for_analysis=year,
+                          qtr_for_analysis = qtr,
+                          type_check = type,
+                          facility_strings_tmp = facility_strings){
+      
+      # Check to confirm if fiscal year selected by user for analysis exists in the dataset
+      if(!year_for_analysis %in% unique(dat$fiscal_year)){
+        stop("Please confirm the fiscal year selected is included in the file uploaded.")
+      }
+      
+      # Check to confirm age_groups is exactly "Over/Under 15" or "Five Year"
+      if(!age_groups %in% c("Over/Under 15", "Five Year")) {
+        stop("Please confirm that your age_groups entry is an exact match with either 'Over/Under 15' or 'Five Year' (case-sensitive)")
+      }
+      
+      # Check to confirm if quarter selected by user for analysis exists in the dataset
+      if(!qtr_for_analysis %in% names(dat)){
+        stop("Please confirm the quarter selected is included in the file uploaded.")
+      }
+      
+      # Check to confirm if other required variables exist in the dataset
+      if(any(!c("sitename","psnu","facility","indicator","numeratordenom",
+                "disaggregate","ageasentered","sex","primepartner") %in% names(dat))){
+        stop("Please confirm the file selected contains the required columns: 
+         sitename,psnu,facility,indicator,numeratordenom,disaggregate,ageasentered,sex,primepartner")
+      }
+      
+      # If user chooses to run analysis by facility type, check to confirm if facility type
+      # descriptions exist in the dataset
+      if(type_check == TRUE){
+        for(i in facility_strings_tmp){
+          if(sum(grepl(i, unique(tolower(dat$facility))))==0){
+            print(sprintf("Facility type %s not found. All types should be lowercase.", i))
+          }
+        }
+      }
+      
+    }
+    runChecks(dat=RecData(),
+              year_for_analysis=input$Year,
+              qtr_for_analysis =input$Quarter,
+              type_check = type,
+              facility_strings_tmp = facility_strings)
+  }
+  )
+  
+  #RECOMMENDER DATA CHECK
+  output$rec_data <- reactive({
+    input$type == 'Recommender' # Add whatever condition you want here. Must return TRUE or FALSE
+  })
+  
+  outputOptions(output, 'rec_data', suspendWhenHidden = FALSE)
   
   #RECOMMENDER OBSERVATION Each observation compared against all observations
   output$rec_sum <- reactive({
