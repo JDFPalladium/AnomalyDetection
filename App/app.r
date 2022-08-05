@@ -1,10 +1,10 @@
-# #Utils Packages#
-# library(dplyr)
-# library(tidyr)
-# library(modi)
-# library(reshape2)
-# library(openxlsx)
-# library(data.table)
+#Utils Packages#
+library(dplyr)
+library(tidyr)
+library(modi)
+library(reshape2)
+library(openxlsx)
+library(data.table)
 
 #App Packages#
 library(shiny)
@@ -23,9 +23,9 @@ ui <- dashboardPage(
         menuItem(tabName = "recommender", startExpanded = TRUE,
                  tags$br(),
                  tags$b("Data Upload"),
-                 textInput("OU", label = " ", value = "Enter OU..."),
-                 textInput("Year", label = " ", value = "Enter data year..."),
-                 textInput("Quarter", label = " ", value = "Enter data quarter..."),
+                 numericInput("year", label = "Data Fiscal Year", value = 2022),
+                 selectInput("quarter", "Quarter",
+                             c('Q1','Q2','Q3','Q4')),
                  tags$br(),
                  fileInput("file1", "Choose MER file",
                            multiple = FALSE,
@@ -74,7 +74,7 @@ ui <- dashboardPage(
                  "Switch ON to discount indicators", tags$br(),
                  "with very low values.",tags$br(), 
                  menuItem("Minimum Threshold", tabName = "min_thresh",startExpanded = TRUE,
-                          switchInput(inputId = "min_thresh", value = FALSE)),
+                          numericInput(inputId = "min_thresh", label = "", value = 10)),
                  
                  "Switch ON if you want outputs to ", tags$br(),
                  "include both anomalous and non-anomalous", tags$br(),
@@ -90,9 +90,9 @@ ui <- dashboardPage(
         menuItem(tabName = "time", startExpanded = TRUE,
                  tags$br(),
                  tags$b("Data Upload"),
-                 textInput("OU", label = " ", value = "Enter OU..."),
-                 textInput("Year", label = " ", value = "Enter data year..."),
-                 textInput("Quarter", label = " ", value = "Enter data quarter..."),
+                 numericInput("year", label = "Data Fiscal Year", value = 2022),
+                 selectInput("quarter", "Quarter",
+                             c('Q1','Q2','Q3','Q4')),
                  tags$br(),
                  fileInput("file2", "Choose files",
                            multiple = TRUE,
@@ -103,7 +103,7 @@ ui <- dashboardPage(
                  "Switch ON to discount indicators", tags$br(),
                  "with very low values.",tags$br(), 
                  menuItem("Minimum Threshold", tabName = "min_thresh",startExpanded = TRUE,
-                          switchInput(inputId = "min_thresh", value = TRUE)),
+                          numericInput(inputId = "min_thresh", label = "", value = 10)),
                  
                  "Switch ON if you want outputs to ", tags$br(),
                  "include both anomalous and non-anomalous", tags$br(),
@@ -191,7 +191,7 @@ server <- function(input, output) {
     inFile <- input$file1
     if (is.null(inFile))
       return(NULL)
-    df <- read.xlsx(inFile$datapath, header = TRUE)
+    df <- read.xlsx(inFile$datapath)
     return(df)
   })
   
