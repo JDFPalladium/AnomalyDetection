@@ -10,18 +10,32 @@ library(data.table)
 library(shiny)
 library(shinydashboard)
 library(shinyWidgets)
+library(rintrojs)
 
 ui <- dashboardPage(
-  dashboardHeader(title = "Aomaly Detection"),
+  dashboardHeader(title = "Anomaly Detection"),
   dashboardSidebar(
+    introjsUI(),
     sidebarMenu(
-      selectInput("type", "Type",
-                  c('Recommender', 'Time Series')),
+      fluidRow(
+        conditionalPanel(
+          condition = "input.type == 'Recommender'",
+      actionButton("help", "Press for Recommender instructions"))),
+      
+      fluidRow(column(12,
+                      div(id="step4",
+          selectInput("type", "Type",
+                  c('Recommender', 'Time Series'))
+          ))),
       #### Recommender Menu ####
-      conditionalPanel(
-        condition = "input.type == 'Recommender'",
+      
+        conditionalPanel(condition = "input.type == 'Recommender'",
+          fluidRow(column(12,
+                      div(id="step2",
         menuItem(tabName = "recommender", startExpanded = TRUE,
                  tags$br(),
+                 fluidRow(column(12,
+                                 div(id="step5",
                  tags$b("Data Upload"),
                  numericInput("year", label = "Data Fiscal Year", value = 2022),
                  selectInput("quarter", "Quarter",
@@ -32,8 +46,15 @@ ui <- dashboardPage(
                            accept = c("text/csv",
                                       "text/comma-separated-values,text/plain",
                                       ".csv",
-                                      ".xlsx")),
+                                      ".xlsx"))
+                 )))
+        ))),
+                 fluidRow(column(10, offset =1,
+                                 div(id="step6",
                  actionButton("recdata", "Run Data Check"),
+                                 ))),
+                fluidRow(column(10,offset =1,
+                                div(id="step7",    
                  tags$b("Switch ON if you want to run,"), tags$br(),
                  tags$b("OFF if you do not"),tags$br(),tags$br(),
                  
@@ -55,8 +76,10 @@ ui <- dashboardPage(
                           "Each obs. compared against all", tags$br(),
                           "obs. of the same age group",
                           startExpanded = TRUE,
-                          switchInput(inputId = "age", value = FALSE)),
-                 
+                          switchInput(inputId = "age", value = FALSE))
+                                ))),
+                  fluidRow(column(10, offset=1,
+                                  div(id="step8", 
                  "Select the analyses to run with MER", tags$br(),
                  "data aggregated at the facility", tags$br(),
                  
@@ -69,19 +92,26 @@ ui <- dashboardPage(
                           "Each obs. compared against all",
                           tags$br(),
                           "obs. of the same PSNU",
-                          switchInput(inputId = "psnu", value = FALSE)),
-                 
+                          switchInput(inputId = "psnu", value = FALSE))
+                                  ))),
+        fluidRow(column(10, offset=1,
+                        div(id="step9",
                  "Switch ON to discount indicators", tags$br(),
                  "with very low values.",tags$br(), 
                  menuItem("Minimum Threshold", tabName = "min_thresh",startExpanded = TRUE,
-                          numericInput(inputId = "min_thresh", label = "", value = 10)),
+                          numericInput(inputId = "min_thresh", label = "", value = 10))
+                        ))),
+        fluidRow(column(10, offset=1,
+                        div(id="step10",
                  
                  "Switch ON if you want outputs to ", tags$br(),
                  "include both anomalous and non-anomalous", tags$br(),
                  "non-anomalous obs.",
+                 tags$br(),
                  menuItem("Return", tabName = "return",startExpanded = TRUE,
                           
                           switchInput(inputId = "return", value = FALSE))
+                        )))
         )
       ),
       #### Time Series Menu ####
@@ -163,7 +193,35 @@ ui <- dashboardPage(
   )
 )
 
-server <- function(input, output) {
+server <- function(input, output, session) {
+  steps <- reactive(
+    data.frame(
+      element=c(".main-header", "#step2", ".sidebar-toggle", "#step4", "#step2", "#step6", "#step7", "#step8", "#step9", "#step10"),
+      intro=c(
+        "The original Anomaly Detection tools were created as a series of R studio scripts. This ShinyApp converts the same functions of the scripts into an online application.",
+        "This is the main interactive sidebar menu. This is where you will upload data, define disaggregations and other detection settings.",
+        "This is a button that allows to close and open the sidebar.",
+        "Here you can choose which type of analysis you want to run either Recommender or Times Series.<br/><br/> The sidebar menu options will change based on this selection",
+        "Here you will upload your data for a Recommender analysis. <br/> 1. Enter the four-digit fiscal year. <br/> 2. Choose the correct quarter for the data. <br/> 3. Locate the file on your computer. <br/> <br/> NOTE: Only .csv, .xlsx, or .txt MER data files work function properly.",
+        "Click the Run Data Check button after uploading your data. This will double check the file to make sure the named variables are included. <br/><br/> A notice will appear in the Data Checks box to confirm data consistency.",
+        "Here are the three primary disggregation options: Observation, Sex, and Age",
+        "Here are the two additional disggregation options: Facility, and Age",
+        "After the disaggregations are selected, there are two more settings to define. <br/> First, you can decide to discount indicators with very low values. This is automaticaly set to ten but can be altered depending on the context",
+        "Second, you can chose whether or not to display both anomalous and non-anomalous outputs in the final tables. <br/> For large data sets, we would highly recommend to leave this setting off."
+        ),
+      position=c("right", "right", "bottom", "right", "right", "right", "right", "right", "right", "right")
+    )
+  )
+  observeEvent(input$help,
+               introjs(session,
+                       options = list(steps=steps(),
+                                      "nextLabel"="Next",
+                                      "prevLabel"="Previous",
+                                      "skipLabel"="Skip"
+                       ),
+                       events = list("oncomplete"=I('alert("Done")'))
+               )
+  )
   
   output$title <- renderText({
     if(input$type=="Recommender"){
