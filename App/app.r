@@ -11,6 +11,11 @@ library(shiny)
 library(shinydashboard)
 library(shinyWidgets)
 library(rintrojs)
+library(vroom)
+
+#Global Settings
+#In file statement upload size#
+options(shiny.maxRequestSize = 2000*1024^2)
 
 ui <- dashboardPage(
   dashboardHeader(title = "Anomaly Detection",
@@ -85,12 +90,13 @@ ui <- dashboardPage(
                            accept = c("text/csv",
                                       "text/comma-separated-values,text/plain",
                                       ".csv",
-                                      ".xlsx"))
+                                      ".xlsx",
+                                      ".txt"))
                  )))
         )))),
                  fluidRow(column(8, offset =2,
                                  div(id="step6",
-                 actionButton("recdata", "Run Data Check"),
+                 actionButton("recdatacheck", "Run Data Check"),
                                  ))),
                   tags$br(),
         #Step 7
@@ -209,7 +215,8 @@ ui <- dashboardPage(
       conditionalPanel(id="rec_datachecks",
       condition = "output.rec_data",
       box(title = "Data Checks", width = 12,
-          "Summary Table or Score Card")
+          "Summary Table or Score Card",
+          textOutput('year_check'))
     )
     )),
     fluidRow(div(id="rec_summarytable",
@@ -338,75 +345,73 @@ server <- function(input, output, session) {
     }
   })
   
-  output$plot <- renderPlot({
-    plot(rnorm(100))
-  }) 
-  
-  # observeEvent(switchInput$obs, {
-  #   toggle("plot")
-  # })
-  # RecData <- reactive({
-  #   inFile <- input$file1
-  #   if (is.null(inFile)) return(NULL)
-  #   data <- read.csv(inFile$datapath, header = TRUE)
-  #   data
-  # })
   RecData <- reactive({
-    inFile <- input$file1
-    if (is.null(inFile))
-      return(NULL)
-    df <- read.xlsx(inFile$datapath)
-    return(df)
+    file <-input$file1
+    ext <- tools::file_ext(input$file1$name)
+    switch(ext,
+           csv = vroom::vroom(input$file1$datapath, delim = ","),
+           tsv = vroom::vroom(input$file1$datapath, delim = "\t"),
+           validate("Invalid file; Please upload a .csv or .txt file")
+    )
+    
   })
   
-  observeEvent(input$recdata, {
+  observeEvent(input$recdatacheck, {
     
-    runChecks <- function(dat=mer_data,
-                          year_for_analysis=year,
-                          qtr_for_analysis = qtr,
-                          type_check = type,
-                          facility_strings_tmp = facility_strings){
+    runChecks <- reactive({
+      function(dat=RecData(),
+                          year_for_analysis=input$year
+                          # qtr_for_analysis = input$quarter
+                          # type_check = type,
+                          # facility_strings_tmp = facility_strings
+                          ){
       
       # Check to confirm if fiscal year selected by user for analysis exists in the dataset
       if(!year_for_analysis %in% unique(dat$fiscal_year)){
-        stop("Please confirm the fiscal year selected is included in the file uploaded.")
+        stop(
+          output$year_check <- renderText({
+            paste("Please confirm the fiscal year selected is included in the file uploaded.")
+          })
+        )
       }
       
       # Check to confirm age_groups is exactly "Over/Under 15" or "Five Year"
-      if(!age_groups %in% c("Over/Under 15", "Five Year")) {
-        stop("Please confirm that your age_groups entry is an exact match with either 'Over/Under 15' or 'Five Year' (case-sensitive)")
-      }
-      
-      # Check to confirm if quarter selected by user for analysis exists in the dataset
-      if(!qtr_for_analysis %in% names(dat)){
-        stop("Please confirm the quarter selected is included in the file uploaded.")
-      }
-      
-      # Check to confirm if other required variables exist in the dataset
-      if(any(!c("sitename","psnu","facility","indicator","numeratordenom",
-                "disaggregate","ageasentered","sex","primepartner") %in% names(dat))){
-        stop("Please confirm the file selected contains the required columns: 
-         sitename,psnu,facility,indicator,numeratordenom,disaggregate,ageasentered,sex,primepartner")
-      }
+      # if(!age_groups %in% c("Over/Under 15", "Five Year")) {
+      #   stop("Please confirm that your age_groups entry is an exact match with either 'Over/Under 15' or 'Five Year' (case-sensitive)")
+      # }
+      # 
+      # # Check to confirm if quarter selected by user for analysis exists in the dataset
+      # if(!qtr_for_analysis %in% names(dat)){
+      #   stop("Please confirm the quarter selected is included in the file uploaded.")
+      # }
+      # 
+      # # Check to confirm if other required variables exist in the dataset
+      # if(any(!c("sitename","psnu","facility","indicator","numeratordenom",
+      #           "disaggregate","ageasentered","sex","primepartner") %in% names(dat))){
+      #   stop("Please confirm the file selected contains the required columns: 
+      #    sitename,psnu,facility,indicator,numeratordenom,disaggregate,ageasentered,sex,primepartner")
+      # }
       
       # If user chooses to run analysis by facility type, check to confirm if facility type
       # descriptions exist in the dataset
-      if(type_check == TRUE){
-        for(i in facility_strings_tmp){
-          if(sum(grepl(i, unique(tolower(dat$facility))))==0){
-            print(sprintf("Facility type %s not found. All types should be lowercase.", i))
-          }
-        }
-      }
+      # if(type_check == TRUE){
+      #   for(i in facility_strings_tmp){
+      #     if(sum(grepl(i, unique(tolower(dat$facility))))==0){
+      #       print(sprintf("Facility type %s not found. All types should be lowercase.", i))
+      #     }
+      #   }
+      # }
       
     }
     runChecks(dat=RecData(),
-              year_for_analysis=input$Year,
-              qtr_for_analysis =input$Quarter,
-              type_check = type,
-              facility_strings_tmp = facility_strings)
+              year_for_analysis=input$year
+              # qtr_for_analysis =input$quarter
+              # type_check = type,
+              # facility_strings_tmp = facility_strings
+              )
   }
   )
+  })
   
   #RECOMMENDER DATA CHECK
   output$rec_data <- reactive({
