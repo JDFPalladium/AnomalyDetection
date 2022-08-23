@@ -17,6 +17,51 @@ library(vroom)
 #In file statement upload size#
 options(shiny.maxRequestSize = 2000*1024^2)
 
+runChecks <- function(dat,
+                      year_for_analysis
+                      # qtr_for_analysis = input$quarter
+                      # type_check = type,
+                      # facility_strings_tmp = facility_strings
+){
+  
+  # Check to confirm if fiscal year selected by user for analysis exists in the dataset
+  if(!year_for_analysis %in% unique(dat$fiscal_year)){
+    stop(
+      output$year_check <- renderText({
+        paste("Please confirm the fiscal year selected is included in the file uploaded.")
+      })
+    )
+  }
+  
+  # Check to confirm age_groups is exactly "Over/Under 15" or "Five Year"
+  # if(!age_groups %in% c("Over/Under 15", "Five Year")) {
+  #   stop("Please confirm that your age_groups entry is an exact match with either 'Over/Under 15' or 'Five Year' (case-sensitive)")
+  # }
+  # 
+  # # Check to confirm if quarter selected by user for analysis exists in the dataset
+  # if(!qtr_for_analysis %in% names(dat)){
+  #   stop("Please confirm the quarter selected is included in the file uploaded.")
+  # }
+  # 
+  # # Check to confirm if other required variables exist in the dataset
+  # if(any(!c("sitename","psnu","facility","indicator","numeratordenom",
+  #           "disaggregate","ageasentered","sex","primepartner") %in% names(dat))){
+  #   stop("Please confirm the file selected contains the required columns: 
+  #    sitename,psnu,facility,indicator,numeratordenom,disaggregate,ageasentered,sex,primepartner")
+  # }
+  
+  # If user chooses to run analysis by facility type, check to confirm if facility type
+  # descriptions exist in the dataset
+  # if(type_check == TRUE){
+  #   for(i in facility_strings_tmp){
+  #     if(sum(grepl(i, unique(tolower(dat$facility))))==0){
+  #       print(sprintf("Facility type %s not found. All types should be lowercase.", i))
+  #     }
+  #   }
+  # }
+  
+}
+
 ui <- dashboardPage(
   dashboardHeader(title = "Anomaly Detection",
                   tags$li(class = "dropdown", id= "download",
@@ -356,53 +401,11 @@ server <- function(input, output, session) {
     
   })
   
+
+  
   observeEvent(input$recdatacheck, {
     
-    runChecks <- reactive({
-      function(dat=RecData(),
-                          year_for_analysis=input$year
-                          # qtr_for_analysis = input$quarter
-                          # type_check = type,
-                          # facility_strings_tmp = facility_strings
-                          ){
-      
-      # Check to confirm if fiscal year selected by user for analysis exists in the dataset
-      if(!year_for_analysis %in% unique(dat$fiscal_year)){
-        stop(
-          output$year_check <- renderText({
-            paste("Please confirm the fiscal year selected is included in the file uploaded.")
-          })
-        )
-      }
-      
-      # Check to confirm age_groups is exactly "Over/Under 15" or "Five Year"
-      # if(!age_groups %in% c("Over/Under 15", "Five Year")) {
-      #   stop("Please confirm that your age_groups entry is an exact match with either 'Over/Under 15' or 'Five Year' (case-sensitive)")
-      # }
-      # 
-      # # Check to confirm if quarter selected by user for analysis exists in the dataset
-      # if(!qtr_for_analysis %in% names(dat)){
-      #   stop("Please confirm the quarter selected is included in the file uploaded.")
-      # }
-      # 
-      # # Check to confirm if other required variables exist in the dataset
-      # if(any(!c("sitename","psnu","facility","indicator","numeratordenom",
-      #           "disaggregate","ageasentered","sex","primepartner") %in% names(dat))){
-      #   stop("Please confirm the file selected contains the required columns: 
-      #    sitename,psnu,facility,indicator,numeratordenom,disaggregate,ageasentered,sex,primepartner")
-      # }
-      
-      # If user chooses to run analysis by facility type, check to confirm if facility type
-      # descriptions exist in the dataset
-      # if(type_check == TRUE){
-      #   for(i in facility_strings_tmp){
-      #     if(sum(grepl(i, unique(tolower(dat$facility))))==0){
-      #       print(sprintf("Facility type %s not found. All types should be lowercase.", i))
-      #     }
-      #   }
-      # }
-      
-    }
+    
     runChecks(dat=RecData(),
               year_for_analysis=input$year
               # qtr_for_analysis =input$quarter
@@ -411,7 +414,7 @@ server <- function(input, output, session) {
               )
   }
   )
-  })
+  
   
   #RECOMMENDER DATA CHECK
   output$rec_data <- reactive({
