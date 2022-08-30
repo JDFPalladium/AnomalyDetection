@@ -11,56 +11,18 @@ library(shiny)
 library(shinydashboard)
 library(shinyWidgets)
 library(rintrojs)
-library(vroom)
+library(htmltools)
+library(tidyverse)
+library(shinyalert)
+library(shinycssloaders)
 
 #Global Settings
 #In file statement upload size#
 options(shiny.maxRequestSize = 2000*1024^2)
 
-runChecks <- function(dat,
-                      year_for_analysis
-                      # qtr_for_analysis = input$quarter
-                      # type_check = type,
-                      # facility_strings_tmp = facility_strings
-){
+
   
-  # Check to confirm if fiscal year selected by user for analysis exists in the dataset
-  if(!year_for_analysis %in% unique(dat$fiscal_year)){
-    stop(
-      output$year_check <- renderText({
-        paste("Please confirm the fiscal year selected is included in the file uploaded.")
-      })
-    )
-  }
-  
-  # Check to confirm age_groups is exactly "Over/Under 15" or "Five Year"
-  # if(!age_groups %in% c("Over/Under 15", "Five Year")) {
-  #   stop("Please confirm that your age_groups entry is an exact match with either 'Over/Under 15' or 'Five Year' (case-sensitive)")
-  # }
-  # 
-  # # Check to confirm if quarter selected by user for analysis exists in the dataset
-  # if(!qtr_for_analysis %in% names(dat)){
-  #   stop("Please confirm the quarter selected is included in the file uploaded.")
-  # }
-  # 
-  # # Check to confirm if other required variables exist in the dataset
-  # if(any(!c("sitename","psnu","facility","indicator","numeratordenom",
-  #           "disaggregate","ageasentered","sex","primepartner") %in% names(dat))){
-  #   stop("Please confirm the file selected contains the required columns: 
-  #    sitename,psnu,facility,indicator,numeratordenom,disaggregate,ageasentered,sex,primepartner")
-  # }
-  
-  # If user chooses to run analysis by facility type, check to confirm if facility type
-  # descriptions exist in the dataset
-  # if(type_check == TRUE){
-  #   for(i in facility_strings_tmp){
-  #     if(sum(grepl(i, unique(tolower(dat$facility))))==0){
-  #       print(sprintf("Facility type %s not found. All types should be lowercase.", i))
-  #     }
-  #   }
-  # }
-  
-}
+
 
 ui <- dashboardPage(
   dashboardHeader(title = "Anomaly Detection",
@@ -130,13 +92,14 @@ ui <- dashboardPage(
                  selectInput("quarter", "Quarter",
                              c('Q1','Q2','Q3','Q4')),
                  tags$br(),
+                 selectInput("type", "File Type",
+                             c('.csv','.xlsx','.txt')),
                  fileInput("file1", "Choose MER file",
                            multiple = FALSE,
-                           accept = c("text/csv",
-                                      "text/comma-separated-values,text/plain",
-                                      ".csv",
+                           accept = c(".csv",
                                       ".xlsx",
                                       ".txt"))
+                 
                  )))
         )))),
                  fluidRow(column(8, offset =2,
@@ -261,7 +224,8 @@ ui <- dashboardPage(
       condition = "output.rec_data",
       box(title = "Data Checks", width = 12,
           "Summary Table or Score Card",
-          textOutput('year_check'))
+          textOutput('year_check'),
+          shinycssloaders::withSpinner(DT::dataTableOutput('test')))
     )
     )),
     fluidRow(div(id="rec_summarytable",
@@ -389,32 +353,195 @@ server <- function(input, output, session) {
       paste("Time Series Anomaly Detection")
     }
   })
+#   
+#   RecData <- reactive({
+#     file <-input$file1
+#     
+#     ext <- tools::file_ext(input$file1$name)
+#     switch(ext,
+#            csv = vroom::vroom(input$file1$datapath, delim = ","),
+#            tsv = vroom::vroom(input$file1$datapath, delim = "\t"),
+#            validate("Invalid file; Please upload a .csv or .txt file")
+#     )
+#     
+#   })
+#   
+#   
+#   
+#   output$test = DT::renderDataTable({
+#                 file <- input$file1
+#                 ext <- tools::file_ext(file$datapath)
+#                 req(file)
+# })
   
-  RecData <- reactive({
-    file <-input$file1
-    ext <- tools::file_ext(input$file1$name)
-    switch(ext,
-           csv = vroom::vroom(input$file1$datapath, delim = ","),
-           tsv = vroom::vroom(input$file1$datapath, delim = "\t"),
-           validate("Invalid file; Please upload a .csv or .txt file")
-    )
-    
+  
+  datasetInput <- reactive({
+    infile <- input$file1
+    if(is.null(infile))
+      return(NULL)
+    read.delim(infile$datapath)
   })
   
+  # datasetInput <- reactive({
+  #   req(input$file1)
+  #   data <- read_lines(input$file1$datapath)
+  #   text_df <- as_data_frame(data)
+  #   datasetInput <- text_df
+  #   datasetInput
+  # })
+  
+  output$test = DT::renderDataTable(datasetInput(), options = list(scrollX = TRUE))
 
   
+
+####Recommender DATA CHECK####  
   observeEvent(input$recdatacheck, {
+    runChecks <- function(dat,
+                        year_for_analysis,
+                        qtr_for_analysis
+                        # type_check = type,
+                        # facility_strings_tmp = facility_strings
+  ){
+    
+    # Check to confirm if fiscal year selected by user for analysis exists in the dataset
+    if(!year_for_analysis %in% unique(dat$fiscal_year)){
+      shinyalert("Check the data file", "Please confirm the fiscal year selected is included in the file uploaded.", type="error")
+    }
+    
+    # Check to confirm if quarter selected by user for analysis exists in the dataset
+    if(!qtr_for_analysis %in% names(dat)){
+      shinyalert("Check the data file", "Please confirm the quarter selected is included in the file uploaded.", type="error")
+    }
     
     
-    runChecks(dat=RecData(),
-              year_for_analysis=input$year
-              # qtr_for_analysis =input$quarter
+    if(any(!c("sitename","psnu","facility","indicator","numeratordenom",
+                        "disaggregate","ageasentered","sex") %in% names(dat))){ #I removed primepartner for now.
+      shinyalert("Check the data file","Please confirm the file selected contains the required columns:
+                 sitename,psnu,facility,indicator,numeratordenom,disaggregate,ageasentered,sex", type="error")
+    }
+    }
+    # Check to confirm age_groups is exactly "Over/Under 15" or "Five Year"
+    # if(!age_groups %in% c("Over/Under 15", "Five Year")) {
+    #   stop("Please confirm that your age_groups entry is an exact match with either 'Over/Under 15' or 'Five Year' (case-sensitive)")
+    # }
+    # 
+    # 
+    # 
+    # # Check to confirm if other required variables exist in the dataset
+    # if(any(!c("sitename","psnu","facility","indicator","numeratordenom",
+    #           "disaggregate","ageasentered","sex","primepartner") %in% names(dat))){
+    #   stop("Please confirm the file selected contains the required columns: 
+    #    sitename,psnu,facility,indicator,numeratordenom,disaggregate,ageasentered,sex,primepartner")
+    # }
+    
+    # If user chooses to run analysis by facility type, check to confirm if facility type
+    # descriptions exist in the dataset
+    # if(type_check == TRUE){
+    #   for(i in facility_strings_tmp){
+    #     if(sum(grepl(i, unique(tolower(dat$facility))))==0){
+    #       print(sprintf("Facility type %s not found. All types should be lowercase.", i))
+    #     }
+    #   }
+    # } 
+    runChecks(dat=datasetInput(),
+              year_for_analysis=input$year,
+              qtr_for_analysis =input$quarter
               # type_check = type,
               # facility_strings_tmp = facility_strings
               )
   }
   )
-  
+
+#### Recommender DATA PREP #####
+  datPrep <- function(dat=mer_data,
+                      year_for_analysis=year,
+                      qtr_for_analysis = qtr) {
+    
+    
+    # keep only the columns we need
+    cols_to_keep <- c("sitename","psnu","facility","indicator","numeratordenom",
+                      "disaggregate","ageasentered","sex", "fiscal_year","primepartner", "otherdisaggregate_sub", qtr_for_analysis)
+    dat <- dat[, cols_to_keep]
+    
+    # Confirm they are strings and not factors
+    dat$sitename <- as.character(dat$sitename)
+    dat$psnu <- as.character(dat$psnu)
+    dat$facility <- as.character(dat$facility)
+    dat$indicator <- as.character(dat$indicator)
+    dat$ageasentered <- as.character(dat$ageasentered)
+    dat$sex <- as.character(dat$sex)
+    dat$primepartner <- as.character(dat$primepartner)
+    dat$disaggregate <- as.character(dat$disaggregate)
+    dat$numeratordenom <- as.character(dat$numeratordenom)
+    dat$otherdisaggregate_sub <- as.character(dat$otherdisaggregate_sub)
+    
+    
+    # filter to the fiscal year entered by the user
+    dat <- dat %>% filter(fiscal_year == year_for_analysis)
+    
+    # remove the rows that report on Total Numerator or Total Denominator
+    dat <- dat %>% filter(!disaggregate %in% c("Total Numerator", "Total Denominator"))
+    dat <- dat %>% filter(tolower(facility) != "data reported above facility level")
+    
+    # remove rows that are aggregates of age groups (e.g. 15+ and 50+)
+    dat <- dat[-grep("\\+", dat$ageasentered),]
+    
+    # label indicators with N and D for those for which both numerators and denominators are reported
+    dat$indicator <- paste0(dat$indicator, "_", dat$numeratordenom)
+    
+    # add transgender to the sex column
+    dat$tg <- ifelse(grepl("TG", dat$otherdisaggregate_sub), "Transgender", "")
+    dat$sex2 <- paste(dat$sex, dat$tg, sep="")
+    cols_to_keep <- c("sitename","psnu","facility","indicator","numeratordenom",
+                      "disaggregate","ageasentered","sex2", "fiscal_year","primepartner", qtr_for_analysis)
+    dat <- dat[, cols_to_keep]
+    dat <- dat %>% rename(sex = sex2)
+    
+    # create the facility data frame which we will need later in this function for data prep of the facility level file 
+    dat_facility <- dat
+    
+    # for disaggregate output - create a column for the key population disaggregate
+    dat$kp <- ifelse(grepl("KeyPop", dat$disaggregate), "Yes", "No")
+    
+    # for disaggregate output - drop disaggregate and numeratordenom columns
+    cols_to_drop <- c("numeratordenom", "disaggregate")
+    dat <- dat[,!(names(dat) %in% cols_to_drop)]
+    
+    # for disaggregate output - we'll need the qtr variable - drop the 1/2/3/4 from quarter name 
+    # so that we can reference the variable regardless of the quarter selected
+    names(dat) <- gsub("[0-9]","", names(dat))
+    dat <- dat %>% 
+      filter(!is.na(qtr))
+    
+    # group by facility, age, sex, and indicator, kp, and psnu, and then summarize qtr (before pivot)
+    dat_grouped <- dat %>% group_by(facility, ageasentered, sex, indicator, kp, psnu, primepartner) %>% 
+      summarise(qtr_sum = sum(qtr, na.rm = TRUE)) 
+    
+    # for disaggregate output - pivot wider to get MER indicators in wide format
+    dat_out <- dat_grouped %>%
+      pivot_wider(names_from = "indicator", values_from = "qtr_sum") %>%
+      as.data.frame()
+    
+    # facility level file - filter for just the quarter of interest
+    names(dat_facility) <- gsub("[0-9]","", names(dat_facility))
+    dat_facility <- dat_facility %>% 
+      filter(!is.na(qtr))
+    
+    # facility level file - group by facility, psnu and indicator, and then summarize qtr 2 (before pivot)
+    dat_facility <- dat_facility %>% group_by(facility, indicator, psnu, primepartner) %>% 
+      summarise(qtr_sum = sum(qtr, na.rm = TRUE)) 
+    
+    # facility level file - pivot wider to get indicators in wide format
+    dat_facility_out <- dat_facility %>%
+      pivot_wider(names_from = "indicator", values_from = "qtr_sum") %>%
+      as.data.frame()
+    
+    # return data frames
+    return(list(
+      "dat_disag_out" = dat_out,
+      "dat_facility_out" = dat_facility_out))
+    
+  }
   
   #RECOMMENDER DATA CHECK
   output$rec_data <- reactive({
