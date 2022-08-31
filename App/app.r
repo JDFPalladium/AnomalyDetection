@@ -416,23 +416,26 @@ server <- function(input, output, session) {
     # Check to confirm if fiscal year selected by user for analysis exists in the dataset
     if(!year_for_analysis %in% unique(dat$fiscal_year)){
       shinyalert("Check the data file", "Please confirm the fiscal year selected is included in the file uploaded.", type="error")
-    } else if (year_for_analysis %in% unique(dat$fiscal_year)){
-      shinyalert("Success", "The fiscal year selected is included in the file uploaded.", type="success")
-    }
+    } 
+    #   else if (year_for_analysis %in% unique(dat$fiscal_year)){
+    #   shinyalert("Success", "The fiscal year selected is included in the file uploaded.", type="success")
+    # }
     # Check to confirm if quarter selected by user for analysis exists in the dataset
     if(!qtr_for_analysis %in% names(dat)){
       shinyalert("Check the data file", "Please confirm the quarter selected is included in the file uploaded.", type="error")
-    } else if(qtr_for_analysis %in% names(dat)){
-      shinyalert("Success", "The quarter selected is included in the file uploaded.", type="success")
-    }
+    } 
+    #   else if(qtr_for_analysis %in% names(dat)){
+    #   shinyalert("Success", "The quarter selected is included in the file uploaded.", type="success")
+    # }
     
     if(any(!c("sitename","psnu","facility","indicator","numeratordenom",
                         "disaggregate","ageasentered","sex") %in% names(dat))){ #I removed primepartner for now.
       shinyalert("Check the data file","Please confirm the file selected contains the required columns:
                  sitename,psnu,facility,indicator,numeratordenom,disaggregate,ageasentered,sex", type="error")
-    } else if (any(c("sitename","psnu","facility","indicator","numeratordenom", "disaggregate","ageasentered","sex") %in% names(dat))){
-      shinyalert("Success","The data upload contains the fiscal year, quarter, and all necessary variables. Please continue with the data preparation", type="success")
-    }
+    } 
+    #   else if (any(c("sitename","psnu","facility","indicator","numeratordenom", "disaggregate","ageasentered","sex") %in% names(dat))){
+    #   shinyalert("Success","The data upload contains the fiscal year, quarter, and all necessary variables. Please continue with the data preparation", type="success")
+    # }
       
       if((year_for_analysis %in% unique(dat$fiscal_year)) && (qtr_for_analysis %in% names(dat)) &&  (any(c("sitename","psnu","facility","indicator","numeratordenom",
                                                                                                             "disaggregate","ageasentered","sex") %in% names(dat)))) {
