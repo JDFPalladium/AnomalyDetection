@@ -10,11 +10,11 @@ library(data.table)
 library(shiny)
 library(shinydashboard)
 library(shinyWidgets)
-library(rintrojs)
+library(rintrojs) #Tutorial package
 library(htmltools)
 library(tidyverse)
-library(shinyalert)
-library(shinycssloaders)
+library(shinyalert) #Used in the data checks portion
+library(shinycssloaders) #Used from the loading spinning symbols throughout
 
 #Global Settings
 #In file statement upload size#
