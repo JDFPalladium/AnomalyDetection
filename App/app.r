@@ -90,7 +90,7 @@ ui <- dashboardPage(
                  tags$b("Data Upload"),
                  numericInput("year", label = "Data Fiscal Year", value = 2022),
                  selectInput("quarter", "Quarter",
-                             c('Q1','Q2','Q3','Q4')),
+                             c('qtr1','qtr2','qtr3','qtr4')),
                  tags$br(),
                  selectInput("type", "File Type",
                              c('.csv','.xlsx','.txt')),
@@ -106,13 +106,23 @@ ui <- dashboardPage(
                                  div(id="step6",
                  actionButton("recdatacheck", "Run Data Check"),
                                  ))),
+        tags$br(),
+        fluidRow(column(12, offset=1,
+                        tags$b("If data check was successful,"), tags$br(),
+                        tags$b("click the button below to prep"),tags$br(),
+                        tags$b("the data"),tags$br()
+        )),
+                  fluidRow(column(8, offset =2,
+                                  div(id="dataprep",
+                                      actionButton("recdataprep", "Run Data Prep"),
+                                  ))),
                   tags$br(),
         #Step 7
                 
-                 fluidRow(column(12, offset=1,
-                                 tags$b("Switch ON if you want to run,"), tags$br(),
-                                  tags$b("OFF if you do not"),tags$br(),tags$br()
-                 )),
+                 # fluidRow(column(12, offset=1,
+                 #                 tags$b("Switch ON if you want to run,"), tags$br(),
+                 #                  tags$b("OFF if you do not"),tags$br(),tags$br()
+                 # )),
         
         menuItem(tabName="disaggregations", id="step7",startExpanded = TRUE,
                  tags$br(),
@@ -406,19 +416,28 @@ server <- function(input, output, session) {
     # Check to confirm if fiscal year selected by user for analysis exists in the dataset
     if(!year_for_analysis %in% unique(dat$fiscal_year)){
       shinyalert("Check the data file", "Please confirm the fiscal year selected is included in the file uploaded.", type="error")
+    } else if (year_for_analysis %in% unique(dat$fiscal_year)){
+      shinyalert("Success", "The fiscal year selected is included in the file uploaded.", type="success")
     }
-    
     # Check to confirm if quarter selected by user for analysis exists in the dataset
     if(!qtr_for_analysis %in% names(dat)){
       shinyalert("Check the data file", "Please confirm the quarter selected is included in the file uploaded.", type="error")
+    } else if(qtr_for_analysis %in% names(dat)){
+      shinyalert("Success", "The quarter selected is included in the file uploaded.", type="success")
     }
-    
     
     if(any(!c("sitename","psnu","facility","indicator","numeratordenom",
                         "disaggregate","ageasentered","sex") %in% names(dat))){ #I removed primepartner for now.
       shinyalert("Check the data file","Please confirm the file selected contains the required columns:
                  sitename,psnu,facility,indicator,numeratordenom,disaggregate,ageasentered,sex", type="error")
+    } else if (any(c("sitename","psnu","facility","indicator","numeratordenom", "disaggregate","ageasentered","sex") %in% names(dat))){
+      shinyalert("Success","The data upload contains the fiscal year, quarter, and all necessary variables. Please continue with the data preparation", type="success")
     }
+      
+      if((year_for_analysis %in% unique(dat$fiscal_year)) && (qtr_for_analysis %in% names(dat)) &&  (any(c("sitename","psnu","facility","indicator","numeratordenom",
+                                                                                                            "disaggregate","ageasentered","sex") %in% names(dat)))) {
+        shinyalert("Proceed", "Continue to data preparation", type="success")
+      }
     }
     # Check to confirm age_groups is exactly "Over/Under 15" or "Five Year"
     # if(!age_groups %in% c("Over/Under 15", "Five Year")) {
@@ -427,13 +446,7 @@ server <- function(input, output, session) {
     # 
     # 
     # 
-    # # Check to confirm if other required variables exist in the dataset
-    # if(any(!c("sitename","psnu","facility","indicator","numeratordenom",
-    #           "disaggregate","ageasentered","sex","primepartner") %in% names(dat))){
-    #   stop("Please confirm the file selected contains the required columns: 
-    #    sitename,psnu,facility,indicator,numeratordenom,disaggregate,ageasentered,sex,primepartner")
-    # }
-    
+
     # If user chooses to run analysis by facility type, check to confirm if facility type
     # descriptions exist in the dataset
     # if(type_check == TRUE){
@@ -453,6 +466,7 @@ server <- function(input, output, session) {
   )
 
 #### Recommender DATA PREP #####
+  observeEvent(input$reddataprep, {
   datPrep <- function(dat=mer_data,
                       year_for_analysis=year,
                       qtr_for_analysis = qtr) {
@@ -542,6 +556,8 @@ server <- function(input, output, session) {
       "dat_facility_out" = dat_facility_out))
     
   }
+  }
+  )
   
   #RECOMMENDER DATA CHECK
   output$rec_data <- reactive({
