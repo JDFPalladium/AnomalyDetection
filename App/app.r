@@ -242,7 +242,9 @@ ui <- dashboardPage(
       conditionalPanel(
       condition = "output.rec_sum",
       box(title = "Summary Table:..", width = 12, 
-          "Summary Table or Score Card")
+          "Summary Table or Score Card",
+          shinycssloaders::withSpinner(DT::dataTableOutput('test2')),
+      shinycssloaders::withSpinner(DT::dataTableOutput('test3')))
     )
     )),
     conditionalPanel(
@@ -404,7 +406,7 @@ server <- function(input, output, session) {
 
   
 
-####Recommender DATA CHECK####  
+####Recommender DATA CHECK FUNCTION####  
   observeEvent(input$recdatacheck, {
     runChecks <- function(dat,
                         year_for_analysis,
@@ -429,16 +431,16 @@ server <- function(input, output, session) {
     # }
     
     if(any(!c("sitename","psnu","facility","indicator","numeratordenom",
-                        "disaggregate","ageasentered","sex") %in% names(dat))){ #I removed primepartner for now.
+                        "disaggregate","ageasentered","sex", "primepartner") %in% names(dat))){ #I removed primepartner for now.
       shinyalert("Check the data file","Please confirm the file selected contains the required columns:
-                 sitename,psnu,facility,indicator,numeratordenom,disaggregate,ageasentered,sex", type="error")
+                 sitename, psnu, facility, indicator, numeratordenom, disaggregate, ageasentered, sex, primepartner", type="error")
     } 
     #   else if (any(c("sitename","psnu","facility","indicator","numeratordenom", "disaggregate","ageasentered","sex") %in% names(dat))){
     #   shinyalert("Success","The data upload contains the fiscal year, quarter, and all necessary variables. Please continue with the data preparation", type="success")
     # }
       
-      if((year_for_analysis %in% unique(dat$fiscal_year)) && (qtr_for_analysis %in% names(dat)) &&  (any(c("sitename","psnu","facility","indicator","numeratordenom",
-                                                                                                            "disaggregate","ageasentered","sex") %in% names(dat)))) {
+      if((year_for_analysis %in% unique(dat$fiscal_year)) && (qtr_for_analysis %in% names(dat)) &&  (all(c("sitename","psnu","facility","indicator","numeratordenom",
+                                                                                                            "disaggregate","ageasentered","sex", "primepartner") %in% names(dat)))) {
         shinyalert("Proceed", "Continue to data preparation", type="success")
       }
     }
@@ -469,10 +471,10 @@ server <- function(input, output, session) {
   )
 
 #### Recommender DATA PREP #####
-  observeEvent(input$reddataprep, {
-  datPrep <- function(dat=mer_data,
-                      year_for_analysis=year,
-                      qtr_for_analysis = qtr) {
+  observeEvent(input$recdataprep, {
+  datPrep <- function(dat=datasetInput(),
+                      year_for_analysis=input$year,
+                      qtr_for_analysis =input$quarter) {
     
     
     # keep only the columns we need
@@ -558,54 +560,64 @@ server <- function(input, output, session) {
       "dat_disag_out" = dat_out,
       "dat_facility_out" = dat_facility_out))
     
+    dat_prepped <- datPrep()
+    dat_disag <- dat_prepped$dat_disag_out
+    dat_facility <- dat_prepped$dat_facility_out
+    
+    output$test2 = DT::renderDataTable(dat_disag)
+    output$test3 = DT::renderDataTable(dat_facility)
   }
+  
+  
   }
   )
   
+  
+  
   #RECOMMENDER DATA CHECK
   output$rec_data <- reactive({
-    input$type == 'Recommender' # Add whatever condition you want here. Must return TRUE or FALSE
+    input$type == 'Recommender' 
   })
   
   outputOptions(output, 'rec_data', suspendWhenHidden = FALSE)
   
   #RECOMMENDER OBSERVATION Each observation compared against all observations
   output$rec_sum <- reactive({
-    input$type == 'Recommender' # Add whatever condition you want here. Must return TRUE or FALSE
+    input$type == 'Recommender' 
   })
   
   outputOptions(output, 'rec_sum', suspendWhenHidden = FALSE)
   
   output$rec1 <- reactive({
-    input$obs == 'TRUE' & input$type == 'Recommender' # Add whatever condition you want here. Must return TRUE or FALSE
+    input$obs == 'TRUE' & input$type == 'Recommender' 
   })
   
   outputOptions(output, 'rec1', suspendWhenHidden = FALSE)
   
   #RECOMMENDER SEX
   output$rec2 <- reactive({
-    input$sex == 'TRUE' & input$type == 'Recommender' # Add whatever condition you want here. Must return TRUE or FALSE
+    input$sex == 'TRUE' & input$type == 'Recommender' 
   })
   
   outputOptions(output, 'rec2', suspendWhenHidden = FALSE)
   
   #RECOMMENDER AGE
   output$rec3 <- reactive({
-    input$age == 'TRUE' & input$type == 'Recommender' # Add whatever condition you want here. Must return TRUE or FALSE
+    input$age == 'TRUE' & input$type == 'Recommender' 
   })
   
   outputOptions(output, 'rec3', suspendWhenHidden = FALSE)
   
   #RECOMMENDER FACILITY
   output$rec4 <- reactive({
-    input$facility == 'TRUE' & input$type == 'Recommender' # Add whatever condition you want here. Must return TRUE or FALSE
+    input$facility == 'TRUE' & input$type == 'Recommender' 
   })
   
   outputOptions(output, 'rec4', suspendWhenHidden = FALSE)
   
   #RECOMMENDER PSNU
   output$rec5 <- reactive({
-    input$psnu == 'TRUE' & input$type == 'Recommender' # Add whatever condition you want here. Must return TRUE or FALSE
+    input$psnu == 'TRUE' & input$type == 'Recommender' 
   })
   
   outputOptions(output, 'rec5', suspendWhenHidden = FALSE)
@@ -614,7 +626,7 @@ server <- function(input, output, session) {
   
   #Time Series
   output$ts1 <- reactive({
-    input$type == 'Time Series' # Add whatever condition you want here. Must return TRUE or FALSE
+    input$type == 'Time Series' 
   })
   
   outputOptions(output, 'ts1', suspendWhenHidden = FALSE)
