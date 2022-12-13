@@ -12,10 +12,19 @@
 #' @export
 #'
 #' @examples
-sortOutputs <- function(dat,keys,scenario_tmp, return_all, min_thresh) {
+sortOutputs <- function(dat,keys,scenario_tmp, return_all, min_thresh, fund) {
+  
+  # remove funding scenario from keys
+  keys <- keys[!keys == "fundingagency"]
   
   # order columns by keys, DATIM values, estimates (prepended with "E_"),
   # normalize deviations (prepended with "D_"), Mahalanobis distance, and outlier flag
+  if(fund){
+    dat <- dat %>% filter(fundingagency == "USAID") 
+  }
+  
+  dat <- dat %>% select(-fundingagency)
+
   site_out_total <- dat %>%
     select(names(dat)[!grepl("^E_|^D_|^MD|outlier_sp", names(dat))],
            names(dat)[grepl("^E_", names(dat))],
@@ -26,11 +35,6 @@ sortOutputs <- function(dat,keys,scenario_tmp, return_all, min_thresh) {
   site_out_total <- site_out_total %>% 
     arrange(desc(outlier_sp), desc(MD)) %>%
     mutate(Indicator = NA)
-  
-  # If user wants to return anomalies only, then filter to anomalies
-  if(return_all == FALSE){
-    site_out_total <- site_out_total %>% filter(outlier_sp == 1)
-  }
   
   # Get number of columns and number of keys
   n_columns = sum(grepl("^E_", names(site_out_total)))
@@ -62,8 +66,7 @@ sortOutputs <- function(dat,keys,scenario_tmp, return_all, min_thresh) {
     
     # Create a column to contain the scenario name
     site_out_total$scenario <- paste0("outlier_", scenario_tmp)
-    
-    
+
   }
   
   # Concatenate reported values with estimates
@@ -73,7 +76,6 @@ sortOutputs <- function(dat,keys,scenario_tmp, return_all, min_thresh) {
                                          round(site_out_total[, n_keys+p+n_columns], 1),
                                          ")")
   }
-  
   
   return(site_out_total)
   
@@ -335,7 +337,7 @@ createSummaryTab <- function(dat_summary_list,
 #'
 #' @examples
 createScoreCard <- function(scorecard_in){
-  
+
   # Summarize the number of anomalies by facility and indicator primarily responsible 
   scorecard <- scorecard_in %>%
     filter(!is.na(Indicator)) %>%
@@ -349,9 +351,10 @@ createScoreCard <- function(scorecard_in){
   
   # Replace NAs with zeros (for facility-indicator combinations with no anomalies)
   scorecard[is.na(scorecard)] <- 0
-  
+
   # Create total row to sum number of anomalies by indicator
   scorecard$Total <- rowSums(scorecard[, 4:ncol(scorecard)])
+  scorecard <- scorecard %>% arrange(desc(Total))
   indicator_sums <- c(rep(0, 3), colSums(scorecard[, 4:ncol(scorecard)]))
   scorecard <- rbind(scorecard, indicator_sums)
   
@@ -414,12 +417,6 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
       shell_tmp$upper99 <- upper99
       shell_tmp$lower99 <- lower99
       actual <- tail(shell_tmp$value,1)
-      print(shell_tmp)
-      print(actual)
-      print(lower99)
-      print(upper99)
-      print(pred)
-      print(MIN_THRESH)
 
       if(!is.na(actual) & (actual < lower99 | actual > upper99) & (abs(actual - pred) > MIN_THRESH)){
         shell_tmp$outlier <- 1
@@ -592,6 +589,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
   cover <- cbind.data.frame(Facility = cover$facility, PrimePartner = cover$primepartner,
                             cover[, 3:ncol(cover)][order(colSums(cover[, 3:ncol(cover)]), decreasing = T)],
                             stringsAsFactors = FALSE)
+
   cover$Total <- rowSums(cover[, 3:ncol(cover)])
   cover <- cover %>% arrange(desc(Total))
   indicator_sums <- c(0,0, colSums(cover[, 3:ncol(cover)]))
@@ -599,6 +597,10 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
   cover[nrow(cover),1:2] <- "Total"
   
   })
+  
+  # stl_out <- stl_out %>% mutate(outlier = ifelse(outlier == 1, "Yes", "No"))
+  # arima_out <- arima_out %>% mutate(outlier = ifelse(outlier == 1, "Yes", "No"))
+  # ets_out <- ets_out %>% mutate(outlier = ifelse(outlier == 1, "Yes", "No"))
   
   outlist <- list("facility_scorecard" = cover,
                   "ip_scorecard" = ip_cover,
@@ -616,6 +618,10 @@ runChecks <- function(dat,
                       year_for_analysis,
                       qtr_for_analysis
 ){
+  
+  if("prime_partner_name" %in% names(dat)){
+    dat$primepartner <- dat$prime_partner_name
+  }
   
   # Check to confirm if fiscal year selected by user for analysis exists in the dataset
   if(!year_for_analysis %in% unique(dat$fiscal_year)){
@@ -645,4 +651,107 @@ runChecks <- function(dat,
                                                                                                        "disaggregate","ageasentered","sex", "primepartner") %in% names(dat)))) {
     shinyalert("Proceed", "Continue to Run Models.", type="success")
   }
+}
+
+
+#' formatCells
+#' 
+#' Function to color code cells by deciles of normalized deviation and to contatenate
+#' values as reported with estimated values
+#'
+#' @param sheet numeric position of Excel worksheet to format
+#' @param name name of Excel worksheet to format
+#' @param disags list of dataframes returned by runRecAnalysisDisag
+#' @param facilities list of dataframes returned by runRecAnalysisFacility
+#' @param keys_disag character vector of variables describing unique observation for disags
+#' @param keys_facility character vector of variables describing unique observation for facility 
+#' @param wb_format Excel workbook containing output
+#'
+#' @return formatted Excel workbook to save
+#' @export
+#'
+#' @examples
+formatCells <- function(name, disags, facilities, keys_disag, keys_facility, wb_format){
+  
+  name_sheet <- sub("_.*", "", name)
+
+  if(grepl("Sex|All|Age", name_sheet)){
+    dat <- disags
+    n_keys <- length(keys_disag)
+  } else {
+    dat <- facilities
+    n_keys <- length(keys_facility)
+  }
+  
+  dat_tmp <- dat[[name_sheet]]
+  n_columns <- sum(grepl("^E_", names(dat_tmp)))
+  nrows <- nrow(dat_tmp)+1
+  
+  # https://www.w3schools.com/colors/colors_picker.asp?colorhex=8B0000
+  cs1 <- createStyle(bgFill = "#FF0000")
+  cs2 <- createStyle(bgFill = "#FF8080")
+  cs3 <- createStyle(bgFill = "#FFFFFF")
+  
+  deviations <- dat_tmp[, (n_keys + 1 + (2*n_columns)):(n_keys + n_columns + (2*n_columns))]
+  quants <- suppressWarnings(quantile(as.numeric(reshape2::melt(deviations)$value), c(.8, .9), na.rm = TRUE))
+  
+  # loop through columns
+  for(j in 1:n_columns){
+    
+    # Get Excel column position of deviation
+    deviation_col <- n_keys + j + (2*n_columns)
+    estimation_col <- n_keys + j + n_columns
+    deviation_col <- if(deviation_col <= 26){
+      LETTERS[deviation_col]
+    } else if(deviation_col > 26 & deviation_col < 52){
+      paste0("A", LETTERS[deviation_col %% length(LETTERS)])
+    } else if(deviation_col == 52){
+      "AZ"
+    } else if(deviation_col > 52 & deviation_col < 78){
+      paste0("B", LETTERS[deviation_col %% length(LETTERS)])
+    } else if(deviation_col == 78){
+      "BZ"
+    } else if(deviation_col > 78 & deviation_col < 104){
+      paste0("C", LETTERS[deviation_col %% length(LETTERS)])
+    } else if(deviation_col == 104){
+      "CZ"
+    } else if(deviation_col > 104 & deviation_col <= 130){
+      paste0("D", LETTERS[deviation_col %% length(LETTERS)])
+    }
+    estimation_col <- if(estimation_col <= 26){
+      LETTERS[estimation_col]
+    } else if(estimation_col > 26 & estimation_col < 52){
+      paste0("A", LETTERS[estimation_col %% length(LETTERS)])
+    } else if(estimation_col == 52){
+      "AZ"
+    } else if(estimation_col > 52 & estimation_col < 78){
+      paste0("B", LETTERS[estimation_col %% length(LETTERS)])
+    } else if(estimation_col == 78){
+      "BZ"
+    }
+    
+    conditionalFormatting(wb_format, name,
+                          cols = n_keys + j,
+                          rows = 2:nrows,
+                          rule = paste0(deviation_col, 2, ">", quants[1]), 
+                          style = cs2)
+    
+    conditionalFormatting(wb_format, name,
+                          cols = n_keys + j,
+                          rows = 2:nrows,
+                          rule = paste0(deviation_col, 2, ">", quants[2]), 
+                          style = cs1)
+    
+    # If less than 10, set to no fill
+    conditionalFormatting(wb_format, name,
+                          cols = n_keys + j,
+                          rows = 2:nrows,
+                          rule = paste0(estimation_col, 2, "< 10"), 
+                          style = cs3)
+
+    
+  }
+  
+  setColWidths(wb_format, name, (n_keys+n_columns+1):(ncol(dat_tmp)+1), 0)
+  
 }
