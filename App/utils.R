@@ -647,10 +647,11 @@ runChecks <- function(dat,
   #   shinyalert("Success","The data upload contains the fiscal year, quarter, and all necessary variables. Please continue with the data preparation", type="success")
   # }
   
-  if((year_for_analysis %in% unique(dat$fiscal_year)) && (qtr_for_analysis %in% names(dat)) &&  (all(c("sitename","psnu","facility","indicator","numeratordenom",
-                                                                                                       "disaggregate","ageasentered","sex", "primepartner") %in% names(dat)))) {
-    shinyalert("Proceed", "Continue to Run Models.", type="success")
-  }
+  # if((year_for_analysis %in% unique(dat$fiscal_year)) &&
+  #    (qtr_for_analysis %in% names(dat)) &&
+  #    (all(c("sitename","psnu","facility","indicator","numeratordenom","disaggregate","ageasentered","sex", "primepartner") %in% names(dat)))) {
+  #   shinyalert("Proceed", "Continue to Run Models.", type="success")
+  # }
 }
 
 

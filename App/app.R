@@ -24,7 +24,7 @@ library(DT)
 
 #Global Settings
 #In file statement upload size#
-options(shiny.maxRequestSize = 3000 * 1024 ^ 2)
+options(shiny.maxRequestSize = 5000 * 1024 ^ 2)
 
 source("utils.R")
 
@@ -187,44 +187,6 @@ ui <- dashboardPage(
           selectInput("westafricafilter",
                       "Select Country",
                       choices = WESTAFRICA)),
-        # menuItem(
-        #   tabName = "disaggregations",
-        #   id = "step7",
-        #   startExpanded = TRUE,
-        #   tags$br(),
-        #   "Select the analyses to run:",
-        #   tags$br(),
-        #   menuItem(
-        #     "Observations",
-        #     tabName = "observations",
-        #     startExpanded = TRUE,
-        #     "Disaggregate by all",
-        #     tags$br(),
-        #     "available characteristics",
-        #     switchInput(inputId = "obs", value = TRUE)
-        #   ),
-        #   menuItem(
-        #     "Sex",
-        #     tabName = "sex",
-        #     startExpanded = TRUE,
-        #     "Disaggregate by sex",
-        #     switchInput(inputId = "sex", value = TRUE)
-        #   ),
-        #   menuItem(
-        #     "Age",
-        #     tabName = "age",
-        #     "Disaggregate by age",
-        #     startExpanded = TRUE,
-        #     switchInput(inputId = "age", value = TRUE)
-        #   ),
-        #   menuItem(
-        #     "Facility",
-        #     tabName = "facility",
-        #     startExpanded = TRUE,
-        #     "Disaggregate by facility",
-        #     switchInput(inputId = "facility", value = TRUE)
-        #   )
-        # ),
         tags$br(),
         menuItem(
           tabName = "settings",
@@ -298,13 +260,22 @@ ui <- dashboardPage(
           div(id = "tschecks",
               actionButton("tsdatacheck", "Run Data Check"), )
         )),
+        br(),
+        fluidRow(column(
+          8, offset = 2,
+          tags$b("Check region if applicable:"))),
+        fluidRow(column(width = 6,
+          checkboxInput("asiats", "Asia")),
+          column(width = 6,
+          checkboxInput("westafricafilterts", "West Africa"))
+        ),
         conditionalPanel(
-          condition = "output.asiats == true",
+          condition = "input.asiats == true",
           selectInput("asiafilterts",
                       "Select Country",
                       choices = ASIA)),
         conditionalPanel(
-          condition = "output.westafricats == true",
+          condition = "input.westafricats == true",
           selectInput("westafricafilterts",
                       "Select Country",
                       choices = WESTAFRICA)),
@@ -340,12 +311,12 @@ ui <- dashboardPage(
             "ON limits to USAID-funded sites.",
             switchInput(inputId = "tsfunder", value = TRUE)
           )),
-          fluidRow(column(
-            8, offset = 2,
-            tags$h4("Run Model"),
-            div(id = "tsrunmodel",
-                actionButton("tsrun", "Run Model"))
-          ),
+        fluidRow(column(
+          8, offset = 2,
+          tags$h4("Run Model"),
+          div(id = "tsrunmodel",
+              actionButton("tsrun", "Run Model"))
+        ),
         )
       )
     )
@@ -640,20 +611,20 @@ server <- function(input, output, session) {
       read.xlsx(infile$datapath)
     }
   })
-
+  
   output$asia <- reactive({
     
     withProgress(message = "Checking Region", value = 0.33, {
       
-    asia_bin <- ifelse(datasetInput()$operatingunit[1] == "Asia Region", TRUE, FALSE) 
-
-    if(asia_bin == TRUE){
-      shinyalert("Proceed",
-               "This dataset is for the Asia region. Please select country from dropdown on left:",
-               type = "success")
-    }
-    
-    return(asia_bin)
+      asia_bin <- ifelse(datasetInput()$operatingunit[1] == "Asia Region", TRUE, FALSE) 
+      
+      if(asia_bin == TRUE){
+        shinyalert("Proceed",
+                   "This dataset is for the Asia region. Please select country from dropdown on left:",
+                   type = "success")
+      }
+      
+      return(asia_bin)
     })
   })
   
@@ -679,16 +650,31 @@ server <- function(input, output, session) {
   
   
   ####Recommender DATA CHECK FUNCTION####
-  observeEvent(input$recdatacheck, {
-    withProgress(message = 'Running Checks', value = 0.5, {
-      runChecks(
-        dat = datasetInput(),
-        year_for_analysis = input$year,
-        qtr_for_analysis = input$quarter
-      )
-    })
-  })
-  
+  # observeEvent(input$recdatacheck, {
+  #   withProgress(message = 'Running Checks', value = 0.33, {
+  # 
+  #     dat <- datasetInput()
+  #     if("prime_partner_name" %in% names(dat)){
+  #       dat$primepartner <- ""
+  #       dat$primepartner <- dat$prime_partner_name
+  #     } 
+  #     
+  #     # Check to confirm if fiscal year selected by user for analysis exists in the dataset
+  #     if(!input$year %in% unique(dat$fiscal_year)){
+  #       shinyalert("Check the data file", "Please confirm the fiscal year selected is included in the file uploaded.", type="error")
+  #     }
+  #     # Check to confirm if quarter selected by user for analysis exists in the dataset
+  #     if(!input$quarter %in% names(dat)){
+  #       shinyalert("Check the data file", "Please confirm the quarter selected is included in the file uploaded.", type="error")
+  #     }
+  #     if(any(!c("sitename","psnu","facility","indicator","numeratordenom",
+  #               "disaggregate","ageasentered","sex", "primepartner") %in% names(dat))){ #I removed primepartner for now.
+  #       shinyalert("Check the data file","Please confirm the file selected contains the required columns:
+  #            sitename, psnu, facility, indicator, numeratordenom, disaggregate, ageasentered, sex, primepartner", type="error")
+  #     }
+  # 
+  #   })
+  # })
   #### Recommender DATA PREP #####
   dat_out <- reactive({
     
@@ -713,7 +699,7 @@ server <- function(input, output, session) {
         "otherdisaggregate_sub",
         input$quarter
       )
-
+    
     if("prime_partner_name" %in% names(datasetInput())){
       dat$primepartner <- dat$prime_partner_name
     }
@@ -723,9 +709,9 @@ server <- function(input, output, session) {
     if("countryname" %in% names(datasetInput())){
       dat$country <- dat$countryname
     }
-
+    
     dat <- dat[, cols_to_keep]
-
+    
     # if (input$recfunder) {
     #   dat <- dat %>% filter(fundingagency == "USAID")
     # }
@@ -793,7 +779,7 @@ server <- function(input, output, session) {
     
   })
   
-  dat_disag_out <- reactive({
+  dat_disag_out1 <- reactive({
     dat <- dat_out()
     
     # for disaggregate output - create a column for the key population disaggregate
@@ -821,8 +807,13 @@ server <- function(input, output, session) {
                        fundingagency) %>%
       summarise(qtr_sum = sum(qtr, na.rm = TRUE))
     
+    dat_grouped
+  })
+  
+  dat_disag_out <- reactive({
+    
     # for disaggregate output - pivot wider to get MER indicators in wide format
-    dat_out <- dat_grouped %>%
+    dat_out <- dat_disag_out1() %>%
       pivot_wider(names_from = "indicator", values_from = "qtr_sum") %>%
       as.data.frame()
     dat_out
@@ -851,6 +842,36 @@ server <- function(input, output, session) {
     
   })
   
+  observeEvent(input$recdatacheck, {
+    withProgress(message = 'Running Checks', value = 0.5, {
+      
+      dat <- datasetInput()
+      if("prime_partner_name" %in% names(dat)){
+        # dat$primepartner <- ""
+        dat$primepartner <- dat$prime_partner_name
+      } 
+      # Check to confirm if fiscal year selected by user for analysis exists in the dataset
+      if(!input$year %in% unique(dat$fiscal_year)){
+        shinyalert("Check the data file", "Please confirm the fiscal year selected is included in the file uploaded.", type="error")
+      } else
+      # Check to confirm if quarter selected by user for analysis exists in the dataset
+      if(!input$quarter %in% names(dat)){
+        shinyalert("Check the data file", "Please confirm the quarter selected is included in the file uploaded.", type="error")
+      } else 
+      if(any(!c("sitename","psnu","facility","indicator","numeratordenom",
+                "disaggregate","ageasentered","sex", "primepartner") %in% names(dat))){ #I removed primepartner for now.
+        shinyalert("Check the data file","Please confirm the file selected contains the required columns:
+             sitename, psnu, facility, indicator, numeratordenom, disaggregate, ageasentered, sex, primepartner", type="error")
+      } else 
+      if(n_distinct(dat_disag_out1()$indicator) < 3 | nrow(dat_disag_out()) < 100){
+        shinyalert("Check the data file", "There are fewer than three indicators present and/or fewer than 100 observations.", type="error")
+      } else {
+        shinyalert("Proceed", "Continue to Run Models.", type="success")
+      }
+
+    })
+  })
+  
   #### Run Rec Model ####
   
   forout_reactive <- reactiveValues()
@@ -869,16 +890,16 @@ server <- function(input, output, session) {
     withProgress(message = 'Running Models', value = 0, {
       # Scenario can take on values set by user including "all", "sex", and "age"
       # if (input$obs) {
-        incProgress(.2, detail = paste("Running Model with All Disaggregrates"))
+      incProgress(.2, detail = paste("Running Model with All Disaggregrates"))
+      
+      if(nrow(dat_disag_out())/ncol(dat_disag_out()) < 3){
+        shinyalert(title = "Warning",
+                   text = "Insufficient Data to Run Analysis with All Disaggregates",
+                   type = "warning")
+      }
+      
+      if(nrow(dat_disag_out())/ncol(dat_disag_out()) > 3){
         
-        if(nrow(dat_disag_out())/ncol(dat_disag_out()) < 3){
-          shinyalert(title = "Warning",
-                     text = "Insufficient Data to Run Analysis with All Disaggregates",
-                     type = "warning")
-        }
-        
-        if(nrow(dat_disag_out())/ncol(dat_disag_out()) > 3){
-          
         # Apply the runRecAnalysis function on entire dataset disaggregated by sex and age
         all_outputs <- tryCatch({
           runRecAnalysis(dat = dat_disag_out(), keys = keys_disag)
@@ -901,119 +922,28 @@ server <- function(input, output, session) {
           message(cond)
         })
         if(nrow(all_outputs)>0){
-        output$rec1 = DT::renderDT(
-          datatable(
-            all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
-            filter = "top",
-            options = list(scrollX = TRUE,
-                           columnDefs = list(list(
-                             visible = FALSE, targets = c(grep("^D_", colnames(
-                               all_outputs
-                             )),
-                             grep("^E_", colnames(
-                               all_outputs
-                             )))
-                           )))
-          ) %>%
-            formatStyle(
-              7:(6 + length(grep(
-                "^D_", colnames(all_outputs)
-              ))),
-              grep("^D_", colnames(all_outputs)),
-              backgroundColor = styleInterval(
-                as.numeric(quantile(
-                  all_outputs[, grep("^D_", colnames(all_outputs))],
-                  probs = c(.8, .9, 1),
-                  na.rm = T
-                )),
-                c(
-                  "rgb(255,255,255)",
-                  "rgb(255,170,170)",
-                  "rgb(255,80,80)",
-                  "rgb(255,0,0)"
-                )
-              )
-            )
-        )
-        forout_reactive$all_outputs <- all_outputs 
-        }
-        }
-      # }
-      
-      # if (input$sex) {
-        incProgress(.2, detail = paste("Running Model with Sex Disaggregrates"))
-        
-        dat <- dat_disag_out()
-        
-        # Confirm sex is a string and not a factor
-        dat$sex <- as.character(dat$sex)
-        
-        # Limit to observations that are male or female
-        dat <- dat[dat$sex %in% c("Male", "Female"), ]
-        
-        # Split dataset by sex and run Recommender analysis on each subset
-        site_split <- split(dat, dat$sex)
-        site_out <- list()
-        for (j in 1:length(site_split)) {
-
-          if(nrow(site_split[[j]])/ncol(site_split[[j]]) < 3){
-              shinyalert(title = "Warning",
-                         text = paste("Insufficient Data to Run Analysis for Sex Subgroup"),
-                         type = "warning")
-            }
-            
-            if(nrow(site_split[[j]])/ncol(site_split[[j]]) > 3){
-              site_out[[j]] <- tryCatch({
-                runRecAnalysis(site_split[[j]],
-                               keys = keys_disag)
-              }, error = function(cond) {
-                message("No Outliers Found for Sex Disag")
-                message(cond)
-              })
-            }
-        }
-        # stack the outputs
-        site_sex_outliers <- do.call(plyr::rbind.fill, site_out)
-        
-        site_sex_outliers <- tryCatch({
-          sortOutputs(
-            site_sex_outliers,
-            keys = keys_disag,
-            scenario_tmp = "sex",
-            return_all = TRUE,
-            min_thresh = input$min_thresh,
-            fund = input$recfunder
-          )
-        }, error = function(cond) {
-          message("No Outliers Found for Sex Disag")
-          message(cond)
-        })
-        if (nrow(site_sex_outliers) > 0) {
-          output$rec2 = DT::renderDT(
+          output$rec1 = DT::renderDT(
             datatable(
-              site_sex_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
+              all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
               filter = "top",
               options = list(scrollX = TRUE,
-                             columnDefs = list(
-                               list(
-                                 visible = FALSE,
-                                 targets = c(grep(
-                                   "^D_", colnames(site_sex_outliers)
-                                 ),
-                                 grep(
-                                   "^E_", colnames(site_sex_outliers)
-                                 ))
-                               )
-                             ))
+                             columnDefs = list(list(
+                               visible = FALSE, targets = c(grep("^D_", colnames(
+                                 all_outputs
+                               )),
+                               grep("^E_", colnames(
+                                 all_outputs
+                               )))
+                             )))
             ) %>%
               formatStyle(
                 7:(6 + length(grep(
-                  "^D_", colnames(site_sex_outliers)
+                  "^D_", colnames(all_outputs)
                 ))),
-                grep("^D_", colnames(site_sex_outliers)),
+                grep("^D_", colnames(all_outputs)),
                 backgroundColor = styleInterval(
                   as.numeric(quantile(
-                    site_sex_outliers[, grep("^D_", colnames(site_sex_outliers))],
+                    all_outputs[, grep("^D_", colnames(all_outputs))],
                     probs = c(.8, .9, 1),
                     na.rm = T
                   )),
@@ -1026,48 +956,139 @@ server <- function(input, output, session) {
                 )
               )
           )
-          
-          forout_reactive$site_sex_outliers <- site_sex_outliers 
-        } else {
-          shinyalert("Proceed",
-                     "Completed Sex Disag. No outliers found.",
-                     type = "success")
+          forout_reactive$all_outputs <- all_outputs 
         }
+      }
+      # }
+      
+      # if (input$sex) {
+      incProgress(.2, detail = paste("Running Model with Sex Disaggregrates"))
+      
+      dat <- dat_disag_out()
+      
+      # Confirm sex is a string and not a factor
+      dat$sex <- as.character(dat$sex)
+      
+      # Limit to observations that are male or female
+      dat <- dat[dat$sex %in% c("Male", "Female"), ]
+      
+      # Split dataset by sex and run Recommender analysis on each subset
+      site_split <- split(dat, dat$sex)
+      site_out <- list()
+      for (j in 1:length(site_split)) {
+        
+        if(nrow(site_split[[j]])/ncol(site_split[[j]]) < 3){
+          shinyalert(title = "Warning",
+                     text = paste("Insufficient Data to Run Analysis for Sex Subgroup"),
+                     type = "warning")
+        }
+        
+        if(nrow(site_split[[j]])/ncol(site_split[[j]]) > 3){
+          site_out[[j]] <- tryCatch({
+            runRecAnalysis(site_split[[j]],
+                           keys = keys_disag)
+          }, error = function(cond) {
+            message("No Outliers Found for Sex Disag")
+            message(cond)
+          })
+        }
+      }
+      # stack the outputs
+      site_sex_outliers <- do.call(plyr::rbind.fill, site_out)
+      
+      site_sex_outliers <- tryCatch({
+        sortOutputs(
+          site_sex_outliers,
+          keys = keys_disag,
+          scenario_tmp = "sex",
+          return_all = TRUE,
+          min_thresh = input$min_thresh,
+          fund = input$recfunder
+        )
+      }, error = function(cond) {
+        message("No Outliers Found for Sex Disag")
+        message(cond)
+      })
+      if (nrow(site_sex_outliers) > 0) {
+        output$rec2 = DT::renderDT(
+          datatable(
+            site_sex_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
+            filter = "top",
+            options = list(scrollX = TRUE,
+                           columnDefs = list(
+                             list(
+                               visible = FALSE,
+                               targets = c(grep(
+                                 "^D_", colnames(site_sex_outliers)
+                               ),
+                               grep(
+                                 "^E_", colnames(site_sex_outliers)
+                               ))
+                             )
+                           ))
+          ) %>%
+            formatStyle(
+              7:(6 + length(grep(
+                "^D_", colnames(site_sex_outliers)
+              ))),
+              grep("^D_", colnames(site_sex_outliers)),
+              backgroundColor = styleInterval(
+                as.numeric(quantile(
+                  site_sex_outliers[, grep("^D_", colnames(site_sex_outliers))],
+                  probs = c(.8, .9, 1),
+                  na.rm = T
+                )),
+                c(
+                  "rgb(255,255,255)",
+                  "rgb(255,170,170)",
+                  "rgb(255,80,80)",
+                  "rgb(255,0,0)"
+                )
+              )
+            )
+        )
+        
+        forout_reactive$site_sex_outliers <- site_sex_outliers 
+      } else {
+        shinyalert("Proceed",
+                   "Completed Sex Disag. No outliers found.",
+                   type = "success")
+      }
       # }
       
       # if (input$age) {
-        incProgress(.2, detail = paste("Running Model with Age Disaggregrates"))
-        
-        dat <- dat_disag_out() %>%
-          filter(ageasentered %in% c("01-04", "05-09", "10-14", "15-19", "20-24",
-                                     "25-29", "30-34", "35-39", "40-44", "45-49",
-                                     "50+"))
-        
-        # Create "agegroup" variable which takes value of Under 15 of Over 15 based on "ageasentered"
-        dat <-
-          cbind(
-            "agegroup" = ifelse(
-              dat$ageasentered %in% c("01-04", "05-09", "10-14"),
-              "Under 15",
-              "Over 15"
-            ),
-            dat,
-            stringsAsFactors = FALSE
-          )
-        
-        # dat <- dat %>%
-        #   group_by(agegroup) %>%
-        #   mutate(nrows = n(),
-        #          ncols = ncol(dat),
-        #          ratio = nrows/ncols) %>%
-        #   ungroup() %>%
-        #   filter(ratio > 3) %>%
-        #   select(-nrows, -ncols, -ratio)
-
-        # Split dataset by age group
-        site_split <- split(dat, factor(dat$agegroup))
-
-        if(length(site_split)>=1){
+      incProgress(.2, detail = paste("Running Model with Age Disaggregrates"))
+      
+      dat <- dat_disag_out() %>%
+        filter(ageasentered %in% c("01-04", "05-09", "10-14", "15-19", "20-24",
+                                   "25-29", "30-34", "35-39", "40-44", "45-49",
+                                   "50+"))
+      
+      # Create "agegroup" variable which takes value of Under 15 of Over 15 based on "ageasentered"
+      dat <-
+        cbind(
+          "agegroup" = ifelse(
+            dat$ageasentered %in% c("01-04", "05-09", "10-14"),
+            "Under 15",
+            "Over 15"
+          ),
+          dat,
+          stringsAsFactors = FALSE
+        )
+      
+      # dat <- dat %>%
+      #   group_by(agegroup) %>%
+      #   mutate(nrows = n(),
+      #          ncols = ncol(dat),
+      #          ratio = nrows/ncols) %>%
+      #   ungroup() %>%
+      #   filter(ratio > 3) %>%
+      #   select(-nrows, -ncols, -ratio)
+      
+      # Split dataset by age group
+      site_split <- split(dat, factor(dat$agegroup))
+      
+      if(length(site_split)>=1){
         
         # Loop through list and run Recommender analysis on each
         site_out <- list()
@@ -1093,9 +1114,9 @@ server <- function(input, output, session) {
               ))
               message(cond)
             })
-            }
+          }
         }
-
+        
         # site_out <- site_out[sapply(site_out, length) != 0]
         
         # stack the outputs and drop the age group variable so that outputs from all runs can be appropriately stacked
@@ -1155,29 +1176,29 @@ server <- function(input, output, session) {
                 )
               )
           )
-    forout_reactive$site_age_outliers <- site_age_outliers 
+          forout_reactive$site_age_outliers <- site_age_outliers 
         } else {
           shinyalert("Proceed",
                      "Completed Age Disag. No outliers found.",
                      type = "success")
         }
-        }
+      }
       # }
       
       # if (input$facility) {
-        incProgress(.2, detail = paste("Running Model at Facility Level"))
-        
-        if(nrow(dat_facility_out())/ncol(dat_facility_out()) < 3){
-          shinyalert(title = "Warning",
-                     text = "Insufficient Data to Run Analysis at Facility Level",
-                     type = "warning")
-        }
-        
-        if(nrow(dat_facility_out())/ncol(dat_facility_out()) > 3){
+      incProgress(.2, detail = paste("Running Model at Facility Level"))
+      
+      if(nrow(dat_facility_out())/ncol(dat_facility_out()) < 3){
+        shinyalert(title = "Warning",
+                   text = "Insufficient Data to Run Analysis at Facility Level",
+                   type = "warning")
+      }
+      
+      if(nrow(dat_facility_out())/ncol(dat_facility_out()) > 3){
         
         facility_outputs <- tryCatch({
           runRecAnalysis(dat = dat_facility_out(),
-                                           keys = keys_facility)
+                         keys = keys_facility)
         }, error = function(cond) {
           message("No Outliers Found at Facility Level")
           message(cond)
@@ -1241,7 +1262,7 @@ server <- function(input, output, session) {
                      type = "success")
         }
         
-        }
+      }
       # }
       
       disags_list <-
@@ -1322,227 +1343,147 @@ server <- function(input, output, session) {
       
     })
   })
-
-#RECOMMENDER DATA CHECK
-output$rec_data <- reactive({
-  input$type == 'Recommender'
-})
-
-outputOptions(output, 'rec_data', suspendWhenHidden = FALSE)
-
-#RECOMMENDER OBSERVATION Each observation compared against all observations
-output$rec_sum <- reactive({
-  input$type == 'Recommender'
-})
-
-outputOptions(output, 'rec_sum', suspendWhenHidden = FALSE)
-
-output$rec1 <- reactive({
-  (input$type == 'Recommender')
-})
-
-outputOptions(output, 'rec1', suspendWhenHidden = FALSE)
-
-#RECOMMENDER SEX
-output$rec2 <- reactive({
-  (input$type == 'Recommender')
-})
-
-outputOptions(output, 'rec2', suspendWhenHidden = FALSE)
-
-#RECOMMENDER AGE
-output$rec3 <- reactive({
-  (input$type == 'Recommender')
-})
-
-outputOptions(output, 'rec3', suspendWhenHidden = FALSE)
-
-#RECOMMENDER FACILITY
-output$rec4 <- reactive({
-  (input$type == 'Recommender')
-})
-
-outputOptions(output, 'rec4', suspendWhenHidden = FALSE)
-
-#RECOMMENDER PSNU
-output$rec5 <- reactive({
-  (input$type == 'Recommender')
-})
-
-outputOptions(output, 'rec5', suspendWhenHidden = FALSE)
-
-#RECOMMENDER Disag Summary
-output$rec6 <- reactive({
-  (input$type == 'Recommender')
-})
-
-outputOptions(output, 'rec6', suspendWhenHidden = FALSE)
-
-#RECOMMENDER Facility Summary
-output$rec7 <- reactive({
-  (input$type == 'Recommender')
-})
-
-outputOptions(output, 'rec7', suspendWhenHidden = FALSE)
-
-#RECOMMENDER Facility Summary
-output$rec8 <- reactive({
-  (input$type == 'Recommender')
-})
-
-outputOptions(output, 'rec8', suspendWhenHidden = FALSE)
-
-#RECOMMENDER IP Summary
-output$rec9 <- reactive({
-  (input$type == 'Recommender')
-})
-
-outputOptions(output, 'rec9', suspendWhenHidden = FALSE)
-
-#Time Series
-output$ts1 <- reactive({
-  input$type == 'Time Series'
-})
-
-outputOptions(output, 'ts1', suspendWhenHidden = FALSE)
-
-output$ts2 <- reactive({
-  input$type == 'Time Series'
-})
-
-outputOptions(output, 'ts2', suspendWhenHidden = FALSE)
-
-output$ts3 <- reactive({
-  input$type == 'Time Series'
-})
-
-outputOptions(output, 'ts3', suspendWhenHidden = FALSE)
-
-output$ts4 <- reactive({
-  input$type == 'Time Series'
-})
-
-outputOptions(output, 'ts4', suspendWhenHidden = FALSE)
-
-output$ts5 <- reactive({
-  input$type == 'Time Series'
-})
-
-outputOptions(output, 'ts5', suspendWhenHidden = FALSE)
-
-output$ts6 <- reactive({
-  input$type == 'Time Series'
-})
-
-outputOptions(output, 'ts6', suspendWhenHidden = FALSE)
-
-output$ts7 <- reactive({
-  input$type == 'Time Series'
-})
-
-outputOptions(output, 'ts7', suspendWhenHidden = FALSE)
-
-output$ts8 <- reactive({
-  input$type == 'Time Series'
-})
-
-outputOptions(output, 'ts8', suspendWhenHidden = FALSE)
-
-datasetInputTS <- reactive({
-  infile <- input$file2
   
-  mer_list <- list()
-  for (i in 1:nrow(infile)) {
-    ext <- tools::file_ext(infile[i, 'datapath'])
+  #RECOMMENDER DATA CHECK
+  output$rec_data <- reactive({
+    input$type == 'Recommender'
+  })
+  
+  outputOptions(output, 'rec_data', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER OBSERVATION Each observation compared against all observations
+  output$rec_sum <- reactive({
+    input$type == 'Recommender'
+  })
+  
+  outputOptions(output, 'rec_sum', suspendWhenHidden = FALSE)
+  
+  output$rec1 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec1', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER SEX
+  output$rec2 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec2', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER AGE
+  output$rec3 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec3', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER FACILITY
+  output$rec4 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec4', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER PSNU
+  output$rec5 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec5', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER Disag Summary
+  output$rec6 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec6', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER Facility Summary
+  output$rec7 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec7', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER Facility Summary
+  output$rec8 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec8', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER IP Summary
+  output$rec9 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec9', suspendWhenHidden = FALSE)
+  
+  #Time Series
+  output$ts1 <- reactive({
+    input$type == 'Time Series'
+  })
+  
+  outputOptions(output, 'ts1', suspendWhenHidden = FALSE)
+  
+  output$ts2 <- reactive({
+    input$type == 'Time Series'
+  })
+  
+  outputOptions(output, 'ts2', suspendWhenHidden = FALSE)
+  
+  output$ts3 <- reactive({
+    input$type == 'Time Series'
+  })
+  
+  outputOptions(output, 'ts3', suspendWhenHidden = FALSE)
+  
+  output$ts4 <- reactive({
+    input$type == 'Time Series'
+  })
+  
+  outputOptions(output, 'ts4', suspendWhenHidden = FALSE)
+  
+  output$ts5 <- reactive({
+    input$type == 'Time Series'
+  })
+  
+  outputOptions(output, 'ts5', suspendWhenHidden = FALSE)
+  
+  output$ts6 <- reactive({
+    input$type == 'Time Series'
+  })
+  
+  outputOptions(output, 'ts6', suspendWhenHidden = FALSE)
+  
+  output$ts7 <- reactive({
+    input$type == 'Time Series'
+  })
+  
+  outputOptions(output, 'ts7', suspendWhenHidden = FALSE)
+  
+  output$ts8 <- reactive({
+    input$type == 'Time Series'
+  })
+  
+  outputOptions(output, 'ts8', suspendWhenHidden = FALSE)
+  
+  datasetInputTS <- reactive({
+    infile <- input$file2
+    print(infile)
+    ext <- tools::file_ext(infile$datapath)
+    print(ext)
     if (is.null(infile)) {
       return(NULL)
     } else if (ext == "txt") {
-      # print(head(read.delim(infile$datapath)))
-      mer_list[[i]] <- read.delim(infile[i, 'datapath'])
+      mer_data <- read.delim(infile$datapath) 
     } else if (ext == "csv") {
-      # print(head(read.csv(infile$datapath, stringsAsFactors = FALSE)))
-      mer_list[[i]] <-
-        read.csv(infile[i, 'datapath'], stringsAsFactors = FALSE)
+      mer_data <- read.csv(infile$datapath, stringsAsFactors = FALSE)
     } else if (ext == "xlsx") {
-      # print(head(read.xlsx(infile$datapath)))
-      mer_list[[i]] <- read.xlsx(infile[i, 'datapath'])
+      mer_data <- read.xlsx(infile$datapath)
     }
-  }
-  
-  mer_data <- rbindlist(mer_list) %>% as.data.frame()
-  
-  cols_to_keep <-
-    c(
-      "facility",
-      "indicator",
-      "psnu",
-      "operatingunit",
-      "country",
-      "numeratordenom",
-      "disaggregate",
-      "statushiv",
-      "ageasentered",
-      "primepartner",
-      "fiscal_year",
-      "qtr1",
-      "qtr2",
-      "qtr3",
-      "qtr4",
-      "fundingagency"
-    )
-  if("prime_partner_name" %in% names(mer_data)){
-    mer_data$primepartner <- mer_data$prime_partner_name
-  }
-  if("funding_agency" %in% names(mer_data)){
-    mer_data$fundingagency <- mer_data$funding_agency
-  }
-  if("countryname" %in% names(mer_data)){
-    mer_data$country <- mer_data$countryname
-  }
-
-  mer_data <- mer_data[, cols_to_keep]
-  mer_data
-})
-
-output$asiats <- reactive({
-  
-  withProgress(message = "Checking Region", value = 0.5, {
-
-    asia_bin_ts <- ifelse(datasetInputTS()$operatingunit[1] == "Asia Region", TRUE, FALSE)
-
-    if(asia_bin_ts == TRUE){
-      shinyalert("Proceed",
-                 "This dataset is for the Asia region. Please select country from dropdown on left:",
-                 type = "success")
-    }
-
-    return(asia_bin_ts)
-  })
-})
-
-outputOptions(output, "asiats", suspendWhenHidden = FALSE)
-
-output$westafricats <- reactive({
-  
-  withProgress(message = "Checking Region", value = 0.5, {
-
-    westafrica_bin_ts <- ifelse(datasetInputTS()$operatingunit[1] == "West Africa Region", TRUE, FALSE)
-
-    if(westafrica_bin_ts == TRUE){
-      shinyalert("Proceed",
-                 "This dataset is for the West Africa region. Please select country from dropdown on left:",
-                 type = "success")
-    }
-
-    return(westafrica_bin_ts)
-  })
-})
-
-outputOptions(output, "westafricats", suspendWhenHidden = FALSE)
-
-#### Time Series DATA CHECK FUNCTION####
-observeEvent(input$tsdatacheck, {
-  withProgress(message = 'Running Checks', value = .5, {
+    
     cols_to_keep <-
       c(
         "facility",
@@ -1562,432 +1503,516 @@ observeEvent(input$tsdatacheck, {
         "qtr4",
         "fundingagency"
       )
+    if("prime_partner_name" %in% names(mer_data)){
+      mer_data$primepartner <- mer_data$prime_partner_name
+    }
+    if("funding_agency" %in% names(mer_data)){
+      mer_data$fundingagency <- mer_data$funding_agency
+    }
+    if("countryname" %in% names(mer_data)){
+      mer_data$country <- mer_data$countryname
+    }
     
+    mer_data <- mer_data[, cols_to_keep]
+    mer_data
+  })
+  
+  # output$asiats <- reactive({
+  #   
+  #   withProgress(message = "Checking Region", value = 0.5, {
+  #     
+  #     asia_bin_ts <- ifelse(datasetInputTS()$operatingunit[1] == "Asia Region", TRUE, FALSE)
+  #     
+  #     if(asia_bin_ts == TRUE){
+  #       shinyalert("Proceed",
+  #                  "This dataset is for the Asia region. Please select country from dropdown on left:",
+  #                  type = "success")
+  #     }
+  #     
+  #     return(asia_bin_ts)
+  #   })
+  # })
+  # 
+  # outputOptions(output, "asiats", suspendWhenHidden = FALSE)
+  # 
+  # output$westafricats <- reactive({
+  #   
+  #   withProgress(message = "Checking Region", value = 0.5, {
+  #     
+  #     westafrica_bin_ts <- ifelse(datasetInputTS()$operatingunit[1] == "West Africa Region", TRUE, FALSE)
+  #     
+  #     if(westafrica_bin_ts == TRUE){
+  #       shinyalert("Proceed",
+  #                  "This dataset is for the West Africa region. Please select country from dropdown on left:",
+  #                  type = "success")
+  #     }
+  #     
+  #     return(westafrica_bin_ts)
+  #   })
+  # })
+  # 
+  # outputOptions(output, "westafricats", suspendWhenHidden = FALSE)
+  
+  #### Time Series DATA CHECK FUNCTION####
+  
+  tsdata <- reactive({
+    mer_data <- datasetInputTS()
     
-    if (sum(!cols_to_keep %in% names(datasetInputTS())) > 0) {
+    recent_year <- input$tsyear
+    recent_qtr <- input$tsquarter
+    
+    # Keep only USAID sites
+    if (input$tsfunder) {
+      mer_data <- mer_data %>% filter(fundingagency == "USAID")
+    }
+    
+    if(mer_data$operatingunit[1] == "Asia Region"){
+      mer_data <- mer_data %>% filter(country == input$asiafilterts)
+    }
+    
+    if(mer_data$operatingunit[1] == "West Africa Region"){
+      mer_data <- mer_data %>% filter(country == input$westafricafilterts)
+    }
+    
+    mer_data$indicator <- as.character(mer_data$indicator)
+    mer_data <- mer_data %>%
+      filter(indicator %in% quarterly_indicators)
+    
+    mer_data$indicator <-
+      paste0(mer_data$indicator, "_", mer_data$numeratordenom)
+    
+    # remove the rows that report on Total Numerator or Total Denominator data
+    mer_data <-
+      mer_data %>% filter(!disaggregate %in% c("Total Numerator", "Total Denominator"))
+    
+    mer_data <-
+      mer_data %>% filter(tolower(facility) != "data reported above facility level")
+    
+    # remove rows that are aggregates of age groups (e.g. 15+) but keep 50+
+    mer_data <-
+      rbind(mer_data[-grep("\\+", mer_data$ageasentered), ],
+            mer_data[grep("50+", mer_data$ageasentered), ])
+    
+    mer_data <- mer_data[-grep("<+[0-9]", mer_data$ageasentered), ]
+    
+    # For HTS_INDEX, keep only those rows where statushiv is positive or negative
+    mer_data <- rbind(mer_data[mer_data$indicator != 'HTS_INDEX', ],
+                      mer_data[mer_data$indicator == 'HTS_INDEX' &
+                                 (mer_data$statushiv %in% c('Negative', 'Positive')), ])
+    
+    # Drop deduplication rows from prime partner
+    mer_data <-
+      mer_data[!mer_data$primepartner %in% c("Dedup", "TBD"),]
+    
+    mer_data <-
+      mer_data[,!names(mer_data) %in% c("numeratordenom",
+                                        "disaggregate",
+                                        "ageasentered",
+                                        "statushiv")]
+    
+    # Pivot longer to get all the values in one column
+    mer_data_long <- pivot_longer(mer_data,
+                                  cols = names(mer_data)[grepl("qtr", names(mer_data))],
+                                  names_to = "qtr")
+    
+    # What are the indicators reported in the most recent quarter
+    indicators_to_keep <- mer_data_long %>%
+      filter(fiscal_year == recent_year) %>%
+      filter(qtr == recent_qtr) %>%
+      filter(!is.na(value)) %>%
+      .$indicator %>%
+      unique()
+    
+    if (length(indicators_to_keep) == 0) {
       shinyalert(
-        "Check the data file",
-        "One or more of the required columns are missing from your dataset. Please make sure
-        that your dataset contains all the following columns: facility, indicator, psnu,
-        numeratordenom, disaggregate, fiscal_year, qtr1, qtr2, qtr3, and qtr4.",
+        "No data found in target year and quarter.",
+        "Please confirm that the dataset includes the year and quarter selected.",
         type = "error"
       )
-    } else {
-      shinyalert("Proceed", "Continue to run models.", type = "success")
     }
+    
+    facilities_to_keep <- mer_data_long %>%
+      filter(fiscal_year == recent_year) %>%
+      filter(qtr == recent_qtr) %>%
+      filter(!is.na(value)) %>%
+      .$facility %>%
+      unique() %>%
+      as.character()
+    # Only keep these indicators
+    mer_data_long <-
+      mer_data_long[mer_data_long$indicator %in% indicators_to_keep,]
+    
+    mer_data_long <-
+      mer_data_long[as.character(mer_data_long$facility) %in% facilities_to_keep,]
+    
+    # Turn quarter into a number for sorting
+    mer_data_long$qtr <-
+      as.numeric(gsub(".*?([0-9]+).*", "\\1", mer_data_long$qtr))
+    
+    # Take primepartner from most recent quarter in case it changed
+    mer_data_long <- mer_data_long %>% arrange(desc(fiscal_year))
+    mer_data_long <- mer_data_long %>%
+      group_by(facility, indicator) %>%
+      mutate(primepartner = primepartner[1])
+    
+    # summarize by facility/indicator/fiscal_year/qtr
+    mer_data_long <- mer_data_long %>%
+      group_by(psnu, primepartner, facility, indicator, fiscal_year, qtr) %>%
+      summarize(value = sum(value, na.rm = TRUE), .groups = "drop")
+    
+    earliest_year <- min(mer_data_long$fiscal_year)
+    shell <-
+      expand.grid(fiscal_year = earliest_year:recent_year, qtr = 1:4) %>%
+      filter(!(fiscal_year >= recent_year &
+                 qtr > as.numeric(
+                   gsub(".*?([0-9]+).*", "\\1", recent_qtr)
+                 ))) %>%
+      arrange(desc(fiscal_year), desc(qtr)) %>%
+      mutate(rownum = row_number()) %>% filter(rownum <= 12) %>% select(-rownum) %>%
+      mutate(keep = paste0(fiscal_year, qtr))
+    
+    obs_to_keep <- mer_data_long %>%
+      mutate(yrqtr = paste0(fiscal_year, qtr)) %>%
+      mutate(keep = ifelse(yrqtr %in% shell$keep, 1, 0)) %>%
+      group_by(psnu, facility, indicator) %>%
+      mutate(count = sum(keep)) %>%
+      filter(count >= 10) %>%
+      ungroup() %>%
+      select(-count,-yrqtr,-keep)
+    
+    # convert facility to character string
+    obs_to_keep$facility <- as.character(obs_to_keep$facility)
+    
+    obs_to_keep
+    
   })
-})
-
-tsdata <- reactive({
-  mer_data <- datasetInputTS()
   
-  recent_year <- input$tsyear
-  recent_qtr <- input$tsquarter
+  observeEvent(input$tsdatacheck, {
+    withProgress(message = 'Running Checks', value = .5, {
+      cols_to_keep <-
+        c(
+          "facility",
+          "indicator",
+          "psnu",
+          "operatingunit",
+          "country",
+          "numeratordenom",
+          "disaggregate",
+          "statushiv",
+          "ageasentered",
+          "primepartner",
+          "fiscal_year",
+          "qtr1",
+          "qtr2",
+          "qtr3",
+          "qtr4",
+          "fundingagency"
+        )
+      
+      
+      if (sum(!cols_to_keep %in% names(datasetInputTS())) > 0) {
+        shinyalert(
+          "Check the data file",
+          "One or more of the required columns are missing from your dataset. Please make sure
+        that your dataset contains all the following columns: facility, indicator, psnu,
+        numeratordenom, disaggregate, fiscal_year, qtr1, qtr2, qtr3, and qtr4.",
+          type = "error"
+        )
+      }
+      
+      if (n_distinct(tsdata()[, c("fiscal_year", "qtr")]) < 12) {
+        shinyalert(
+          "Check the data file",
+          "There are fewer than 12 quarters of data.",
+          type = "error"
+        )
+      } else {
+        shinyalert("Proceed", "Continue to run models.", type = "success")
+      }
+      
+    })
+  })
   
-  # Keep only USAID sites
-  if (input$tsfunder) {
-    mer_data <- mer_data %>% filter(fundingagency == "USAID")
-  }
+ 
   
-  if(mer_data$operatingunit[1] == "Asia Region"){
-    mer_data <- mer_data %>% filter(country == input$asiafilterts)
-  }
+  # returnAllts <- reactive({
+  #   if (input$tsreturn) {
+  #     TRUE
+  #   } else {
+  #     FALSE
+  #   }
+  # })
   
-  if(mer_data$operatingunit[1] == "West Africa Region"){
-    mer_data <- mer_data %>% filter(country == input$westafricafilterts)
-  }
+  forout_reactive_ts <- reactiveValues()
   
-  mer_data$indicator <- as.character(mer_data$indicator)
-  mer_data <- mer_data %>%
-    filter(indicator %in% quarterly_indicators)
-  
-  mer_data$indicator <-
-    paste0(mer_data$indicator, "_", mer_data$numeratordenom)
-  
-  # remove the rows that report on Total Numerator or Total Denominator data
-  mer_data <-
-    mer_data %>% filter(!disaggregate %in% c("Total Numerator", "Total Denominator"))
-  
-  mer_data <-
-    mer_data %>% filter(tolower(facility) != "data reported above facility level")
-  
-  # remove rows that are aggregates of age groups (e.g. 15+) but keep 50+
-  mer_data <-
-    rbind(mer_data[-grep("\\+", mer_data$ageasentered), ],
-          mer_data[grep("50+", mer_data$ageasentered), ])
-  
-  mer_data <- mer_data[-grep("<+[0-9]", mer_data$ageasentered), ]
-  
-  # For HTS_INDEX, keep only those rows where statushiv is positive or negative
-  mer_data <- rbind(mer_data[mer_data$indicator != 'HTS_INDEX', ],
-                    mer_data[mer_data$indicator == 'HTS_INDEX' &
-                               (mer_data$statushiv %in% c('Negative', 'Positive')), ])
-  
-  # Drop deduplication rows from prime partner
-  mer_data <-
-    mer_data[!mer_data$primepartner %in% c("Dedup", "TBD"),]
-  
-  mer_data <-
-    mer_data[,!names(mer_data) %in% c("numeratordenom",
-                                      "disaggregate",
-                                      "ageasentered",
-                                      "statushiv")]
-  
-  # Pivot longer to get all the values in one column
-  mer_data_long <- pivot_longer(mer_data,
-                                cols = names(mer_data)[grepl("qtr", names(mer_data))],
-                                names_to = "qtr")
-  
-  # What are the indicators reported in the most recent quarter
-  indicators_to_keep <- mer_data_long %>%
-    filter(fiscal_year == recent_year) %>%
-    filter(qtr == recent_qtr) %>%
-    filter(!is.na(value)) %>%
-    .$indicator %>%
-    unique()
-  
-  if (length(indicators_to_keep) == 0) {
-    shinyalert(
-      "No data found in target year and quarter.",
-      "Please confirm that the dataset includes the year and quarter selected.",
-      type = "error"
+  observeEvent(input$tsrun, {
+    tsoutputs <- runTimeSeries(
+      dat = tsdata(),
+      recent_year = input$tsyear,
+      recent_qtr = input$tsquarter,
+      MIN_THRESH = input$tsminthresh,
+      RETURN_ALL = TRUE,
+      keys = keysts
     )
-  }
-  
-  facilities_to_keep <- mer_data_long %>%
-    filter(fiscal_year == recent_year) %>%
-    filter(qtr == recent_qtr) %>%
-    filter(!is.na(value)) %>%
-    .$facility %>%
-    unique() %>%
-    as.character()
-  # Only keep these indicators
-  mer_data_long <-
-    mer_data_long[mer_data_long$indicator %in% indicators_to_keep,]
-  
-  mer_data_long <-
-    mer_data_long[as.character(mer_data_long$facility) %in% facilities_to_keep,]
-  
-  # Turn quarter into a number for sorting
-  mer_data_long$qtr <-
-    as.numeric(gsub(".*?([0-9]+).*", "\\1", mer_data_long$qtr))
-  
-  # Take primepartner from most recent quarter in case it changed
-  mer_data_long <- mer_data_long %>% arrange(desc(fiscal_year))
-  mer_data_long <- mer_data_long %>%
-    group_by(facility, indicator) %>%
-    mutate(primepartner = primepartner[1])
-  
-  # summarize by facility/indicator/fiscal_year/qtr
-  mer_data_long <- mer_data_long %>%
-    group_by(psnu, primepartner, facility, indicator, fiscal_year, qtr) %>%
-    summarize(value = sum(value, na.rm = TRUE), .groups = "drop")
-  
-  earliest_year <- min(mer_data_long$fiscal_year)
-  shell <-
-    expand.grid(fiscal_year = earliest_year:recent_year, qtr = 1:4) %>%
-    filter(!(fiscal_year >= recent_year &
-               qtr > as.numeric(
-                 gsub(".*?([0-9]+).*", "\\1", recent_qtr)
-               ))) %>%
-    arrange(desc(fiscal_year), desc(qtr)) %>%
-    mutate(rownum = row_number()) %>% filter(rownum <= 12) %>% select(-rownum) %>%
-    mutate(keep = paste0(fiscal_year, qtr))
-  
-  obs_to_keep <- mer_data_long %>%
-    mutate(yrqtr = paste0(fiscal_year, qtr)) %>%
-    mutate(keep = ifelse(yrqtr %in% shell$keep, 1, 0)) %>%
-    group_by(psnu, facility, indicator) %>%
-    mutate(count = sum(keep)) %>%
-    filter(count >= 10) %>%
-    ungroup() %>%
-    select(-count,-yrqtr,-keep)
-  
-  # convert facility to character string
-  obs_to_keep$facility <- as.character(obs_to_keep$facility)
-  
-  obs_to_keep
-  
-})
-
-# returnAllts <- reactive({
-#   if (input$tsreturn) {
-#     TRUE
-#   } else {
-#     FALSE
-#   }
-# })
-
-forout_reactive_ts <- reactiveValues()
-
-observeEvent(input$tsrun, {
-  tsoutputs <- runTimeSeries(
-    dat = tsdata(),
-    recent_year = input$tsyear,
-    recent_qtr = input$tsquarter,
-    MIN_THRESH = input$tsminthresh,
-    RETURN_ALL = TRUE,
-    keys = keysts
-  )
-  print("end")
-  output$ts2 = DT::renderDT(tsoutputs$ARIMA,
-                            filter = "top",
-                            options = list(scrollX = TRUE))
-  
-  output$ts3 = DT::renderDT(tsoutputs$ETS,
-                            filter = "top",
-                            options = list(scrollX = TRUE))
-  
-  output$ts4 = DT::renderDT(tsoutputs$STL,
-                            filter = "top",
-                            options = list(scrollX = TRUE))
-  
-  output$ts5 = DT::renderDT(tsoutputs$Summary,
-                            filter = "top",
-                            options = list(scrollX = TRUE))
-  
-  output$ts6 = DT::renderDT(
-    tsoutputs$facility_scorecard,
-    filter = "top",
-    options = list(scrollX = TRUE)
-  )
-  
-  output$ts7 = DT::renderDT(tsoutputs$ip_scorecard,
-                            filter = "top",
-                            options = list(scrollX = TRUE))
-  
-  forout_reactive_ts$ARIMA <- tsoutputs$ARIMA
-  forout_reactive_ts$ETS <- tsoutputs$ETS
-  forout_reactive_ts$STL <- tsoutputs$STL
-  forout_reactive_ts$Summary <- tsoutputs$Summary
-  forout_reactive_ts$FacilityScorecard <-
-    tsoutputs$facility_scorecard
-  forout_reactive_ts$IPScorecard <- tsoutputs$ip_scorecard
-  
-  shinyalert("Proceed", "Completed Time series Models", type = "success")
-  
-})
-
-output$download_rec_sum <- downloadHandler(
-  filename = function() {
-    "recommender_summary.xlsx"
-  },
-  content = function(file) {
-    # Get cover sheet
-    wb <- loadWorkbook("RecommenderCoverSheet.xlsx")
+    print("end")
+    output$ts2 = DT::renderDT(tsoutputs$ARIMA,
+                              filter = "top",
+                              options = list(scrollX = TRUE))
     
+    output$ts3 = DT::renderDT(tsoutputs$ETS,
+                              filter = "top",
+                              options = list(scrollX = TRUE))
     
-    # Create header style
-    headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
-    textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
+    output$ts4 = DT::renderDT(tsoutputs$STL,
+                              filter = "top",
+                              options = list(scrollX = TRUE))
     
-    if(length(forout_reactive$scorecard)>0){
-      addWorksheet(wb, 'Facility Scorecard', tabColour = "blue")
-      writeData(wb, sheet = 'Facility Scorecard', forout_reactive$scorecard, startRow = 3)
-      writeData(wb, sheet = 'Facility Scorecard', "This tab shows the indicators most commonly flagged by facility.")
-      addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 1, cols = 1:ncol(forout_reactive$scorecard))
-      addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive$scorecard))
-      setColWidths(wb, sheet = 'Facility Scorecard', 1:20, width = "auto")
-    }
+    output$ts5 = DT::renderDT(tsoutputs$Summary,
+                              filter = "top",
+                              options = list(scrollX = TRUE))
     
-    if(length(forout_reactive$ipcover)>0){
-      addWorksheet(wb, 'IP Scorecard', tabColour = "blue")
-      writeData(wb, sheet = 'IP Scorecard', forout_reactive$ipcover, startRow = 3)
-      writeData(wb, sheet = 'IP Scorecard', "This tab shows the indicators most commonly flagged by IP.")
-      addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 1, cols = 1:ncol(forout_reactive$ipcover))
-      addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive$ipcover))
-      setColWidths(wb, sheet = 'IP Scorecard', 1:20, width = "auto")
-    }
+    output$ts6 = DT::renderDT(
+      tsoutputs$facility_scorecard,
+      filter = "top",
+      options = list(scrollX = TRUE)
+    )
     
-    if(length(forout_reactive$facility_summary)>0){
-      addWorksheet(wb, 'Summary By Facility', tabColour = "orange")
-      writeData(wb, sheet = 'Summary By Facility', forout_reactive$facility_summary)
-      addStyle(wb, sheet = 'Summary By Facility', headerStyle, rows = 1, cols = 1:ncol(forout_reactive$facility_summary))
-      setColWidths(wb, sheet = 'Summary By Facility', 1:length(keys_facility), width = "auto")
+    output$ts7 = DT::renderDT(tsoutputs$ip_scorecard,
+                              filter = "top",
+                              options = list(scrollX = TRUE))
+    
+    forout_reactive_ts$ARIMA <- tsoutputs$ARIMA
+    forout_reactive_ts$ETS <- tsoutputs$ETS
+    forout_reactive_ts$STL <- tsoutputs$STL
+    forout_reactive_ts$Summary <- tsoutputs$Summary
+    forout_reactive_ts$FacilityScorecard <-
+      tsoutputs$facility_scorecard
+    forout_reactive_ts$IPScorecard <- tsoutputs$ip_scorecard
+    
+    shinyalert("Proceed", "Completed Time series Models", type = "success")
+    
+  })
+  
+  output$download_rec_sum <- downloadHandler(
+    filename = function() {
+      "recommender_summary.xlsx"
+    },
+    content = function(file) {
+      # Get cover sheet
+      wb <- loadWorkbook("RecommenderCoverSheet.xlsx")
+      
+      
+      # Create header style
+      headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
+      textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
+      
+      if(length(forout_reactive$scorecard)>0){
+        addWorksheet(wb, 'Facility Scorecard', tabColour = "blue")
+        writeData(wb, sheet = 'Facility Scorecard', forout_reactive$scorecard, startRow = 3)
+        writeData(wb, sheet = 'Facility Scorecard', "This tab shows the indicators most commonly flagged by facility.")
+        addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 1, cols = 1:ncol(forout_reactive$scorecard))
+        addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive$scorecard))
+        setColWidths(wb, sheet = 'Facility Scorecard', 1:20, width = "auto")
+      }
+      
+      if(length(forout_reactive$ipcover)>0){
+        addWorksheet(wb, 'IP Scorecard', tabColour = "blue")
+        writeData(wb, sheet = 'IP Scorecard', forout_reactive$ipcover, startRow = 3)
+        writeData(wb, sheet = 'IP Scorecard', "This tab shows the indicators most commonly flagged by IP.")
+        addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 1, cols = 1:ncol(forout_reactive$ipcover))
+        addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive$ipcover))
+        setColWidths(wb, sheet = 'IP Scorecard', 1:20, width = "auto")
+      }
+      
+      if(length(forout_reactive$facility_summary)>0){
+        addWorksheet(wb, 'Summary By Facility', tabColour = "orange")
+        writeData(wb, sheet = 'Summary By Facility', forout_reactive$facility_summary)
+        addStyle(wb, sheet = 'Summary By Facility', headerStyle, rows = 1, cols = 1:ncol(forout_reactive$facility_summary))
+        setColWidths(wb, sheet = 'Summary By Facility', 1:length(keys_facility), width = "auto")
+        
+      }
+      
+      if(length(forout_reactive$disags_summary)>0){
+        addWorksheet(wb, 'Summary By Disag', tabColour = "orange")
+        writeData(wb, sheet = 'Summary By Disag', forout_reactive$disags_summary)
+        addStyle(wb, sheet = 'Summary By Disag', headerStyle, rows = 1, cols = 1:ncol(forout_reactive$disags_summary))
+        setColWidths(wb, sheet = 'Summary By Disag', 1:length(keys_disag), width = "auto")
+      }
+      
+      saveWorkbook(wb, file, overwrite = TRUE)
       
     }
-    
-    if(length(forout_reactive$disags_summary)>0){
-      addWorksheet(wb, 'Summary By Disag', tabColour = "orange")
-      writeData(wb, sheet = 'Summary By Disag', forout_reactive$disags_summary)
-      addStyle(wb, sheet = 'Summary By Disag', headerStyle, rows = 1, cols = 1:ncol(forout_reactive$disags_summary))
-      setColWidths(wb, sheet = 'Summary By Disag', 1:length(keys_disag), width = "auto")
-    }
-    
-    saveWorkbook(wb, file, overwrite = TRUE)
-    
-  }
-)
-
-output$download_rec_all <- downloadHandler(
-  filename = function() {
-    "recommender_all.xlsx"
-  },
-  content = function(file) {
-   
-    # Get cover sheet
-    wb <- loadWorkbook("RecommenderCoverSheet.xlsx")
-    
-    
-    # Create header style
-    headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
-    textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
-    
-    if(length(forout_reactive$scorecard)>0){
-      addWorksheet(wb, 'Facility Scorecard', tabColour = "blue")
-      writeData(wb, sheet = 'Facility Scorecard', forout_reactive$scorecard, startRow = 3)
-      writeData(wb, sheet = 'Facility Scorecard', "This tab shows the indicators most commonly flagged by facility.")
-      addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 1, cols = 1:ncol(forout_reactive$scorecard))
-      addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive$scorecard))
-      setColWidths(wb, sheet = 'Facility Scorecard', 1:20, width = "auto")
-    }
-     
-     if(length(forout_reactive$ipcover)>0){
-       addWorksheet(wb, 'IP Scorecard', tabColour = "blue")
-       writeData(wb, sheet = 'IP Scorecard', forout_reactive$ipcover, startRow = 3)
-       writeData(wb, sheet = 'IP Scorecard', "This tab shows the indicators most commonly flagged by IP.")
-       addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 1, cols = 1:ncol(forout_reactive$ipcover))
-       addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive$ipcover))
-       setColWidths(wb, sheet = 'IP Scorecard', 1:20, width = "auto")
-     }
-     
-     if(length(forout_reactive$facility_summary)>0){
-       addWorksheet(wb, 'Summary By Facility', tabColour = "orange")
-       writeData(wb, sheet = 'Summary By Facility', forout_reactive$facility_summary)
-       addStyle(wb, sheet = 'Summary By Facility', headerStyle, rows = 1, cols = 1:ncol(forout_reactive$facility_summary))
-       setColWidths(wb, sheet = 'Summary By Facility', 1:length(keys_facility), width = "auto")
-       
-     }
-     
-     if(length(forout_reactive$disags_summary)>0){
-       addWorksheet(wb, 'Summary By Disag', tabColour = "orange")
-       writeData(wb, sheet = 'Summary By Disag', forout_reactive$disags_summary)
-       addStyle(wb, sheet = 'Summary By Disag', headerStyle, rows = 1, cols = 1:ncol(forout_reactive$disags_summary))
-       setColWidths(wb, sheet = 'Summary By Disag', 1:length(keys_disag), width = "auto")
-     }
-     
-     if(length(forout_reactive$all_outputs)>0){
-       addWorksheet(wb, "Outliers All Disags", tabColour = "green")
-       writeData(wb, "Outliers All Disags", forout_reactive$all_outputs)
-     }
-     
-     if(length(forout_reactive$site_sex_outliers)>0){
-       addWorksheet(wb, "Outliers Sex Disags", tabColour = "green")
-       writeData(wb, "Outliers Sex Disags", forout_reactive$site_sex_outliers)
-     }
-     
-     if(length(forout_reactive$site_age_outliers)>0){
-       addWorksheet(wb, "Outliers Age Disags", tabColour = "green")
-       writeData(wb, "Outliers Age Disags", forout_reactive$site_age_outliers)
-     }
-     
-     if(length(forout_reactive$facility_outputs)>0){
-       addWorksheet(wb, "Outliers Facility Level", tabColour = "green")
-       writeData(wb, "Outliers Facility Level", forout_reactive$facility_outputs)
-     }
-    
-     # Format individual runs - these are the tabs that do not contain scorecard or summary in the names
-     sheets_to_format <- names(wb)[which(grepl("Outliers",names(wb)))]
-     
-     # Loop through sheets to format and run formatCells function to color code output
-     for(i in sheets_to_format){
-       print(paste("Formatting Excel sheet for:", i))
-       formatCells(name = i,
-                   disags = list("Outliers All Disags" = forout_reactive$all_outputs,
+  )
+  
+  output$download_rec_all <- downloadHandler(
+    filename = function() {
+      "recommender_all.xlsx"
+    },
+    content = function(file) {
+      
+      # Get cover sheet
+      wb <- loadWorkbook("RecommenderCoverSheet.xlsx")
+      
+      
+      # Create header style
+      headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
+      textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
+      
+      if(length(forout_reactive$scorecard)>0){
+        addWorksheet(wb, 'Facility Scorecard', tabColour = "blue")
+        writeData(wb, sheet = 'Facility Scorecard', forout_reactive$scorecard, startRow = 3)
+        writeData(wb, sheet = 'Facility Scorecard', "This tab shows the indicators most commonly flagged by facility.")
+        addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 1, cols = 1:ncol(forout_reactive$scorecard))
+        addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive$scorecard))
+        setColWidths(wb, sheet = 'Facility Scorecard', 1:20, width = "auto")
+      }
+      
+      if(length(forout_reactive$ipcover)>0){
+        addWorksheet(wb, 'IP Scorecard', tabColour = "blue")
+        writeData(wb, sheet = 'IP Scorecard', forout_reactive$ipcover, startRow = 3)
+        writeData(wb, sheet = 'IP Scorecard', "This tab shows the indicators most commonly flagged by IP.")
+        addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 1, cols = 1:ncol(forout_reactive$ipcover))
+        addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive$ipcover))
+        setColWidths(wb, sheet = 'IP Scorecard', 1:20, width = "auto")
+      }
+      
+      if(length(forout_reactive$facility_summary)>0){
+        addWorksheet(wb, 'Summary By Facility', tabColour = "orange")
+        writeData(wb, sheet = 'Summary By Facility', forout_reactive$facility_summary)
+        addStyle(wb, sheet = 'Summary By Facility', headerStyle, rows = 1, cols = 1:ncol(forout_reactive$facility_summary))
+        setColWidths(wb, sheet = 'Summary By Facility', 1:length(keys_facility), width = "auto")
+        
+      }
+      
+      if(length(forout_reactive$disags_summary)>0){
+        addWorksheet(wb, 'Summary By Disag', tabColour = "orange")
+        writeData(wb, sheet = 'Summary By Disag', forout_reactive$disags_summary)
+        addStyle(wb, sheet = 'Summary By Disag', headerStyle, rows = 1, cols = 1:ncol(forout_reactive$disags_summary))
+        setColWidths(wb, sheet = 'Summary By Disag', 1:length(keys_disag), width = "auto")
+      }
+      
+      if(length(forout_reactive$all_outputs)>0){
+        addWorksheet(wb, "Outliers All Disags", tabColour = "green")
+        writeData(wb, "Outliers All Disags", forout_reactive$all_outputs)
+      }
+      
+      if(length(forout_reactive$site_sex_outliers)>0){
+        addWorksheet(wb, "Outliers Sex Disags", tabColour = "green")
+        writeData(wb, "Outliers Sex Disags", forout_reactive$site_sex_outliers)
+      }
+      
+      if(length(forout_reactive$site_age_outliers)>0){
+        addWorksheet(wb, "Outliers Age Disags", tabColour = "green")
+        writeData(wb, "Outliers Age Disags", forout_reactive$site_age_outliers)
+      }
+      
+      if(length(forout_reactive$facility_outputs)>0){
+        addWorksheet(wb, "Outliers Facility Level", tabColour = "green")
+        writeData(wb, "Outliers Facility Level", forout_reactive$facility_outputs)
+      }
+      
+      # Format individual runs - these are the tabs that do not contain scorecard or summary in the names
+      sheets_to_format <- names(wb)[which(grepl("Outliers",names(wb)))]
+      
+      # Loop through sheets to format and run formatCells function to color code output
+      for(i in sheets_to_format){
+        print(paste("Formatting Excel sheet for:", i))
+        formatCells(name = i,
+                    disags = list("Outliers All Disags" = forout_reactive$all_outputs,
                                   "Outliers Sex Disags" = forout_reactive$site_sex_outliers,
                                   "Outliers Age Disags" = forout_reactive$site_age_outliers),
-                   facilities = list("Outliers Facility Level" = forout_reactive$facility_outputs),
-                   keys_disag = keys_disag,
-                   keys_facility = keys_facility,
-                   wb_format = wb)
-     }
-     
-    saveWorkbook(wb, file, overwrite = TRUE)
-  }
-)
-
-output$download_ts_sum <- downloadHandler(
-  filename = function() {
-    "timeseries_summary.xlsx"
-  },
-  content = function(file) {
-    wb <- loadWorkbook("TimeSeriesCoverSheet.xlsx")
-    # Create styles
-    headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
-    textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
-    
-    addWorksheet(wb, 'IP Scorecard', tabColour = "blue")
-    writeData(wb, sheet = 'IP Scorecard', "This tab contains a summary of anomalies by IP by indicator.")
-    writeData(wb, sheet = 'IP Scorecard', forout_reactive_ts$IPScorecard, startRow = 3)
-    setColWidths(wb, sheet = 'IP Scorecard', 1:20, width = "auto")
-    addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 1, cols = 1)
-    addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive_ts$IPScorecard))
-    
-    addWorksheet(wb, 'Facility Scorecard', tabColour = "blue")
-    writeData(wb, sheet = 'Facility Scorecard', "This tab contains a summary of anomalies by facility.")
-    writeData(wb, sheet = 'Facility Scorecard', forout_reactive_ts$FacilityScorecard, startRow = 3)
-    setColWidths(wb, sheet = 'Facility Scorecard', 1:20, width = "auto")
-    addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 1, cols = 1)
-    addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive_ts$FacilityScorecard))
-    
-    addWorksheet(wb, 'Summary', tabColour = "orange")
-    writeData(wb, sheet = 'Summary', forout_reactive_ts$Summary)
-    setColWidths(wb, sheet = 'Summary', 1:3, width = "auto")
-    addStyle(wb, sheet = 'Summary', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$Summary))
-    
-    saveWorkbook(wb, file, overwrite = TRUE)
-  }
-)
-
-output$download_ts_all <- downloadHandler(
-  filename = function() {
-    "timeseries_all.xlsx"
-  },
-  content = function(file) {
-    wb <- loadWorkbook("TimeSeriesCoverSheet.xlsx")
-    # Create styles
-    headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
-    textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
-    
-    addWorksheet(wb, 'IP Scorecard', tabColour = "blue")
-    writeData(wb, sheet = 'IP Scorecard', "This tab contains a summary of anomalies by IP by indicator.")
-    writeData(wb, sheet = 'IP Scorecard', forout_reactive_ts$IPScorecard, startRow = 3)
-    setColWidths(wb, sheet = 'IP Scorecard', 1:20, width = "auto")
-    addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 1, cols = 1)
-    addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive_ts$IPScorecard))
-    
-    addWorksheet(wb, 'Facility Scorecard', tabColour = "blue")
-    writeData(wb, sheet = 'Facility Scorecard', "This tab contains a summary of anomalies by facility.")
-    writeData(wb, sheet = 'Facility Scorecard', forout_reactive_ts$FacilityScorecard, startRow = 3)
-    setColWidths(wb, sheet = 'Facility Scorecard', 1:20, width = "auto")
-    addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 1, cols = 1)
-    addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive_ts$FacilityScorecard))
-    
-    addWorksheet(wb, 'Summary', tabColour = "orange")
-    writeData(wb, sheet = 'Summary', forout_reactive_ts$Summary)
-    setColWidths(wb, sheet = 'Summary', 1:3, width = "auto")
-    addStyle(wb, sheet = 'Summary', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$Summary))
-    
-    addWorksheet(wb, 'ARIMA', tabColour = "green")
-    writeData(wb, sheet = 'ARIMA', forout_reactive_ts$ARIMA)
-    setColWidths(wb, sheet = 'ARIMA', 1:3, width = "auto")
-    addStyle(wb, sheet = 'ARIMA', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$ARIMA))
-    
-    addWorksheet(wb, 'ETS', tabColour = "green")
-    writeData(wb, sheet = 'ETS', forout_reactive_ts$ETS)
-    setColWidths(wb, sheet = 'ETS', 1:3, width = "auto")
-    addStyle(wb, sheet = 'ETS', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$ETS))
-    
-    addWorksheet(wb, 'STL', tabColour = "green")
-    writeData(wb, sheet = 'STL', forout_reactive_ts$STL)
-    setColWidths(wb, sheet = 'STL', 1:3, width = "auto")
-    addStyle(wb, sheet = 'STL', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$STL))
-    
-    saveWorkbook(wb, file, overwrite = TRUE)
-    
-  }
-)
-
+                    facilities = list("Outliers Facility Level" = forout_reactive$facility_outputs),
+                    keys_disag = keys_disag,
+                    keys_facility = keys_facility,
+                    wb_format = wb)
+      }
+      
+      saveWorkbook(wb, file, overwrite = TRUE)
+    }
+  )
+  
+  output$download_ts_sum <- downloadHandler(
+    filename = function() {
+      "timeseries_summary.xlsx"
+    },
+    content = function(file) {
+      wb <- loadWorkbook("TimeSeriesCoverSheet.xlsx")
+      # Create styles
+      headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
+      textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
+      
+      addWorksheet(wb, 'IP Scorecard', tabColour = "blue")
+      writeData(wb, sheet = 'IP Scorecard', "This tab contains a summary of anomalies by IP by indicator.")
+      writeData(wb, sheet = 'IP Scorecard', forout_reactive_ts$IPScorecard, startRow = 3)
+      setColWidths(wb, sheet = 'IP Scorecard', 1:20, width = "auto")
+      addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 1, cols = 1)
+      addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive_ts$IPScorecard))
+      
+      addWorksheet(wb, 'Facility Scorecard', tabColour = "blue")
+      writeData(wb, sheet = 'Facility Scorecard', "This tab contains a summary of anomalies by facility.")
+      writeData(wb, sheet = 'Facility Scorecard', forout_reactive_ts$FacilityScorecard, startRow = 3)
+      setColWidths(wb, sheet = 'Facility Scorecard', 1:20, width = "auto")
+      addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 1, cols = 1)
+      addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive_ts$FacilityScorecard))
+      
+      addWorksheet(wb, 'Summary', tabColour = "orange")
+      writeData(wb, sheet = 'Summary', forout_reactive_ts$Summary)
+      setColWidths(wb, sheet = 'Summary', 1:3, width = "auto")
+      addStyle(wb, sheet = 'Summary', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$Summary))
+      
+      saveWorkbook(wb, file, overwrite = TRUE)
+    }
+  )
+  
+  output$download_ts_all <- downloadHandler(
+    filename = function() {
+      "timeseries_all.xlsx"
+    },
+    content = function(file) {
+      wb <- loadWorkbook("TimeSeriesCoverSheet.xlsx")
+      # Create styles
+      headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
+      textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
+      
+      addWorksheet(wb, 'IP Scorecard', tabColour = "blue")
+      writeData(wb, sheet = 'IP Scorecard', "This tab contains a summary of anomalies by IP by indicator.")
+      writeData(wb, sheet = 'IP Scorecard', forout_reactive_ts$IPScorecard, startRow = 3)
+      setColWidths(wb, sheet = 'IP Scorecard', 1:20, width = "auto")
+      addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 1, cols = 1)
+      addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive_ts$IPScorecard))
+      
+      addWorksheet(wb, 'Facility Scorecard', tabColour = "blue")
+      writeData(wb, sheet = 'Facility Scorecard', "This tab contains a summary of anomalies by facility.")
+      writeData(wb, sheet = 'Facility Scorecard', forout_reactive_ts$FacilityScorecard, startRow = 3)
+      setColWidths(wb, sheet = 'Facility Scorecard', 1:20, width = "auto")
+      addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 1, cols = 1)
+      addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive_ts$FacilityScorecard))
+      
+      addWorksheet(wb, 'Summary', tabColour = "orange")
+      writeData(wb, sheet = 'Summary', forout_reactive_ts$Summary)
+      setColWidths(wb, sheet = 'Summary', 1:3, width = "auto")
+      addStyle(wb, sheet = 'Summary', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$Summary))
+      
+      addWorksheet(wb, 'ARIMA', tabColour = "green")
+      writeData(wb, sheet = 'ARIMA', forout_reactive_ts$ARIMA)
+      setColWidths(wb, sheet = 'ARIMA', 1:3, width = "auto")
+      addStyle(wb, sheet = 'ARIMA', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$ARIMA))
+      
+      addWorksheet(wb, 'ETS', tabColour = "green")
+      writeData(wb, sheet = 'ETS', forout_reactive_ts$ETS)
+      setColWidths(wb, sheet = 'ETS', 1:3, width = "auto")
+      addStyle(wb, sheet = 'ETS', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$ETS))
+      
+      addWorksheet(wb, 'STL', tabColour = "green")
+      writeData(wb, sheet = 'STL', forout_reactive_ts$STL)
+      setColWidths(wb, sheet = 'STL', 1:3, width = "auto")
+      addStyle(wb, sheet = 'STL', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$STL))
+      
+      saveWorkbook(wb, file, overwrite = TRUE)
+      
+    }
+  )
+  
 }
 # Complete app with UI and server components
 shinyApp(ui, server)
