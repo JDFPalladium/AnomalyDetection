@@ -579,22 +579,24 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
   
   # Create facility scorecard sheet
   cover <- summary %>%
-    group_by(facility, primepartner, indicator) %>%
+    group_by(facility, psnu, primepartner, indicator) %>%
     summarize(Outliers = sum(Outliers, na.rm = TRUE), .groups = "drop") %>% 
     mutate(facility = as.character(facility)) %>%
-    pivot_wider(., id_cols = c("facility", "primepartner"), names_from = "indicator", values_from = "Outliers") %>%
+    pivot_wider(., id_cols = c("facility", "psnu", "primepartner"), names_from = "indicator", values_from = "Outliers") %>%
     as.data.frame()
   cover[is.na(cover)] <- 0
   # sort columns by number of outliers
-  cover <- cbind.data.frame(Facility = cover$facility, PrimePartner = cover$primepartner,
-                            cover[, 3:ncol(cover)][order(colSums(cover[, 3:ncol(cover)]), decreasing = T)],
+  cover <- cbind.data.frame(Facility = cover$facility,
+                            PrimePartner = cover$primepartner,
+                            PSNU = cover$psnu,
+                            cover[, 4:ncol(cover)][order(colSums(cover[, 4:ncol(cover)]), decreasing = T)],
                             stringsAsFactors = FALSE)
 
-  cover$Total <- rowSums(cover[, 3:ncol(cover)])
+  cover$Total <- rowSums(cover[, 4:ncol(cover)])
   cover <- cover %>% arrange(desc(Total))
-  indicator_sums <- c(0,0, colSums(cover[, 3:ncol(cover)]))
+  indicator_sums <- c(0,0,0, colSums(cover[, 4:ncol(cover)]))
   cover <- rbind(cover, indicator_sums)
-  cover[nrow(cover),1:2] <- "Total"
+  cover[nrow(cover),1:3] <- "Total"
   
   })
   

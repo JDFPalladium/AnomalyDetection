@@ -177,13 +177,22 @@ ui <- dashboardPage(
           div(id = "step6",
               actionButton("recdatacheck", "Run Data Check"), )
         )),
+        br(),
+        fluidRow(column(
+          8, offset = 2,
+          tags$b("Check region if applicable:"))),
+        fluidRow(column(width = 6,
+                        checkboxInput("asia", "Asia")),
+                 column(width = 6,
+                        checkboxInput("westafricafilter", "West Africa"))
+        ),
         conditionalPanel(
-          condition = "output.asia == true",
+          condition = "input.asia == true",
           selectInput("asiafilter",
                       "Select Country",
                       choices = ASIA)),
         conditionalPanel(
-          condition = "output.westafrica == true",
+          condition = "input.westafrica == true",
           selectInput("westafricafilter",
                       "Select Country",
                       choices = WESTAFRICA)),
@@ -612,41 +621,41 @@ server <- function(input, output, session) {
     }
   })
   
-  output$asia <- reactive({
-    
-    withProgress(message = "Checking Region", value = 0.33, {
-      
-      asia_bin <- ifelse(datasetInput()$operatingunit[1] == "Asia Region", TRUE, FALSE) 
-      
-      if(asia_bin == TRUE){
-        shinyalert("Proceed",
-                   "This dataset is for the Asia region. Please select country from dropdown on left:",
-                   type = "success")
-      }
-      
-      return(asia_bin)
-    })
-  })
-  
-  outputOptions(output, "asia", suspendWhenHidden = FALSE)
-  
-  output$westafrica <- reactive({
-    
-    withProgress(message = "Checking Region", value = 0.67, {
-      
-      westafrica_bin <- ifelse(datasetInput()$operatingunit[1] == "West Africa Region", TRUE, FALSE) 
-      
-      if(westafrica_bin == TRUE){
-        shinyalert("Proceed",
-                   "This dataset is for the West Africa region. Please select country from dropdown on left:",
-                   type = "success")
-      }
-      
-      return(westafrica_bin)
-    })
-  })
-  
-  outputOptions(output, "westafrica", suspendWhenHidden = FALSE)
+  # output$asia <- reactive({
+  #   
+  #   withProgress(message = "Checking Region", value = 0.33, {
+  #     
+  #     asia_bin <- ifelse(datasetInput()$operatingunit[1] == "Asia Region", TRUE, FALSE) 
+  #     
+  #     if(asia_bin == TRUE){
+  #       shinyalert("Proceed",
+  #                  "This dataset is for the Asia region. Please select country from dropdown on left:",
+  #                  type = "success")
+  #     }
+  #     
+  #     return(asia_bin)
+  #   })
+  # })
+  # 
+  # outputOptions(output, "asia", suspendWhenHidden = FALSE)
+  # 
+  # output$westafrica <- reactive({
+  #   
+  #   withProgress(message = "Checking Region", value = 0.67, {
+  #     
+  #     westafrica_bin <- ifelse(datasetInput()$operatingunit[1] == "West Africa Region", TRUE, FALSE) 
+  #     
+  #     if(westafrica_bin == TRUE){
+  #       shinyalert("Proceed",
+  #                  "This dataset is for the West Africa region. Please select country from dropdown on left:",
+  #                  type = "success")
+  #     }
+  #     
+  #     return(westafrica_bin)
+  #   })
+  # })
+  # 
+  # outputOptions(output, "westafrica", suspendWhenHidden = FALSE)
   
   
   ####Recommender DATA CHECK FUNCTION####
