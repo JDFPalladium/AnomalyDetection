@@ -1,1 +1,0 @@
-This directory will contain all USAID-provided datasets and Panorama datasets
