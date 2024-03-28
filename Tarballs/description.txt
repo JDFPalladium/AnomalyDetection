@@ -1,1 +1,0 @@
-This folder contains the tarball and installation guide to set up the anomaly detection solution
