@@ -1,50 +1,238 @@
+################ OAuth Client information #####################################
+if (interactive()) {
+  # testing url
+  options(shiny.port = 3123)
+  APP_URL <- "http://127.0.0.1:3123/"# This will be your local host path
+} else {
+  # deployed URL
+  APP_URL <- Sys.getenv("APP_URL") #This will be your shiny server path
+}
+
+{
+  
+  oauth_app <- httr::oauth_app(Sys.getenv("OAUTH_APPNAME"),
+                               key = Sys.getenv("OAUTH_KEYNAME"),        # dhis2 = Client ID
+                               secret = Sys.getenv("OAUTH_SECRET"), #dhis2 = Client Secret
+                               redirect_uri = APP_URL
+  )
+  
+  oauth_api <- httr::oauth_endpoint(base_url = paste0(Sys.getenv("BASE_URL"),"uaa/oauth"),
+                                    request=NULL,# Documentation says to leave this NULL for OAuth2
+                                    authorize = "authorize",
+                                    access="token"
+  )
+  
+  oauth_scope <- "ALL"
+}
+
+has_auth_code <- function(params) {
+  
+  return(!is.null(params$code))
+}
+
 
 server <- function(input, output, session) {
 
 
-#### App Landing Page ---------------  
-  
-  observeEvent("",{
-    showModal(modalDialog(
-      id = "passwordModal",
-      title = "Login",
-      textInput("username", "Username"),
-      passwordInput("password", "Password"),
-      footer = actionButton("submitBtn", "Submit", class = "btn-primary")
-    )
-    )
-  })
+
   
   user <- reactiveValues(type = NULL)
+  user_input  <-  reactiveValues(authenticated = FALSE,
+                                 status = "",
+                                 d2_session = NULL,
+                                 memo_authorized = FALSE,
+                                 modal = TRUE)
   
-  observeEvent(input$submitBtn, {
-    
-    # Check if entered username and password match
-    tryCatch({
-        datimutils::loginToDATIM(base_url = "https://test.datim.org/",
-                                 username = input$username,
-                                 password = input$password
-        )
-
-        # store data so call is made only once
-        user$type <- datimutils::getMyUserType()
-
-        if(user$type %in% c(USG_USERS, PARTNER_USERS)){
-          
-          removeModal()
-          showModal(modalDialog(includeHTML("intro_text.html"),
-                                easyClose = TRUE))
-
-        }
-        },
-        # This function throws an error if the login is not successful
-        error = function(e) {
-          showNotification("Incorrect username or password. Please try again.", type = "warning")
-          flog.info(paste0("User ", input$username, " login failed."), name = "datapack")
-        }
-    )
-
+  
+  
+  #### App Landing Page ---------------  
+  
+  # observeEvent("",{
+  #   showModal(modalDialog(
+  #     id = "passwordModal",
+  #     title = "Login",
+  #     textInput("username", "Username"),
+  #     passwordInput("password", "Password"),
+  #     footer = actionButton("submitBtn", "Submit", class = "btn-primary")
+  #   )
+  #   )
+  # })
+  # 
+  
+  observeEvent(user_input$modal, {
+    if (user_input$modal) {
+      showModal(modalDialog(
+        id = "passwordModal",
+        title = "Login",
+        # textInput("username", "Username"),
+        # passwordInput("password", "Password"),
+        footer = actionButton("login_button_oauth", "Log in with DATIM")
+      ))
+    }
   })
+  
+  #UI that will display when redirected to OAuth login agent
+  output$ui_redirect <- renderUI({
+    #print(input$login_button_oauth) useful for debugging
+    if (!is.null(input$login_button_oauth)) { # nolint
+      if (input$login_button_oauth > 0) { # nolint
+        url <- httr::oauth2.0_authorize_url(oauth_api, oauth_app, scope = oauth_scope)
+        redirect <- sprintf("location.replace(\"%s\");", url)
+        tags$script(HTML(redirect))
+      } else NULL
+    } else NULL
+  })
+  
+  # # is the user authenticated?
+  # output$ui <- renderUI({
+  #   if(user_input$authenticated == FALSE) {
+  #     uiOutput("uiLogin")
+  #   } else {
+  #     uiOutput("authenticated")
+  #   }
+  # })
+  
+  
+  observeEvent(input$submitBtn > 0, {
+    
+    print("submitting to modal...")
+    print(session$clientData$url_search)
+    
+    #Grabs the code from the url
+    params <- parseQueryString(session$clientData$url_search)
+    #Wait until the auth code actually exists
+    req(has_auth_code(params))
+    
+    #Manually create a token
+    token <- httr::oauth2.0_token(
+      app = oauth_app,
+      endpoint = oauth_api,
+      scope = oauth_scope,
+      use_basic_auth = TRUE,
+      oob_value = APP_URL,
+      cache = FALSE,
+      credentials = httr::oauth2.0_access_token(endpoint = oauth_api,
+                                                app = oauth_app,
+                                                code = params$code,
+                                                use_basic_auth = TRUE)
+    )
+    
+    print("here is your token...")
+    print(token)
+    
+    loginAttempt <- tryCatch({
+      print("attempting to login")
+      user_input$uuid <- uuid::UUIDgenerate()
+      datimutils::loginToDATIMOAuth(base_url =  Sys.getenv("BASE_URL"),
+                                    token = token,
+                                    app = oauth_app,
+                                    api = oauth_api,
+                                    redirect_uri = APP_URL,
+                                    scope = oauth_scope,
+                                    d2_session_envir = parent.env(environment())
+      )
+      
+      # DISALLOW USER ACCESS TO THE APP-----
+      
+      # store data so call is made only once
+      userGroups$streams <-  datimutils::getMyStreams()
+      user$type <- datimutils::getMyUserType()
+      mechanisms$my_cat_ops <- datimutils::listMechs()
+      
+      # if a user is not to be allowed deny them entry
+      if (!user$type %in% c(USG_USERS, PARTNER_USERS)) {
+        
+        # alert the user they cannot access the app
+        sendSweetAlert(
+          session,
+          title = "YOU CANNOT LOG IN",
+          text = "You are not authorized to use this application",
+          type = "error"
+        )
+        
+        # log them out
+        Sys.sleep(3)
+        flog.info(paste0("User ", user_input$d2_session$me$userCredentials$username, " logged out."))
+        user_input$authenticated  <-  FALSE
+        use_input$modal <- FALSE
+        user_input$user_name <- ""
+        user_input$authorized  <-  FALSE
+        user_input$d2_session  <-  NULL
+        d2_default_session <- NULL
+        gc()
+        session$reload()
+        
+      }
+    },
+    # This function throws an error if the login is not successful
+    error = function(e) {
+      flog.info(paste0("User ", input$user_name, " login failed. ", e$message), name = "usgpartners")
+    }
+    )
+    
+    if (exists("d2_default_session")) {
+      
+      user_input$authenticated  <-  TRUE
+      user_input$d2_session  <-  d2_default_session$clone()
+      d2_default_session <- NULL
+      
+      #Need to check the user is a member of the PRIME Data Systems Group, COP Memo group, or a super user
+      user_input$memo_authorized <-
+        grepl("VDEqY8YeCEk|ezh8nmc4JbX", user_input$d2_session$me$userGroups) |
+        grepl(
+          "jtzbVV4ZmdP",
+          user_input$d2_session$me$userCredentials$userRoles
+        )
+      flog.info(
+        paste0(
+          "User ",
+          user_input$d2_session$me$userCredentials$username,
+          " logged in."
+        ),
+        name = "usgpartners"
+      )
+      
+      flog.info(
+        paste0(
+          "User ",
+          user_input$d2_session$me$userCredentials$username,
+          " logged in."
+        ),
+        name = "usgpartners"
+      )
+    }
+    
+  })
+  
+  
+    # observeEvent(input$submitBtn, {
+  #   
+  #   # Check if entered username and password match
+  #   tryCatch({
+  #       datimutils::loginToDATIM(base_url = Sys.getenv("BASE_URL"),
+  #                                username = input$username,
+  #                                password = input$password
+  #       )
+  # 
+  #       # store data so call is made only once
+  #       user$type <- datimutils::getMyUserType()
+  # 
+  #       if(user$type %in% c(USG_USERS, PARTNER_USERS)){
+  #         
+  #         removeModal()
+  #         showModal(modalDialog(includeHTML("intro_text.html"),
+  #                               easyClose = TRUE))
+  # 
+  #       }
+  #       },
+  #       # This function throws an error if the login is not successful
+  #       error = function(e) {
+  #         showNotification("Incorrect username or password. Please try again.", type = "warning")
+  #         flog.info(paste0("User ", input$username, " login failed."), name = "datapack")
+  #       }
+  #   )
+  # 
+  # })
   
   # observeEvent("", {
   #   showModal(modalDialog(includeHTML("intro_text.html"),
@@ -164,6 +352,8 @@ server <- function(input, output, session) {
     my_data_recent <- my_items[grepl(input$country_selected, my_items$file_names) &
                                  grepl("Site", my_items$file_names) &
                                  grepl("Recent", my_items$file_names),]$path_names
+    
+    print(my_data_recent)
 
     data_recent <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
                                         trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
@@ -1714,5 +1904,440 @@ server <- function(input, output, session) {
       
     }
   )
+  
+  
+  # ui ----
+  
+  # output$ui <- renderUI({
+  #   dashboardPage(
+  #     dashboardHeader(
+  #       title = "Anomaly Detection",
+  #       tags$li(
+  #         class = "dropdown",
+  #         id = "download",
+  #         dropMenu(
+  #           dropdownButton("Info",  icon = icon('download')),
+  #           conditionalPanel(
+  #             condition = "input.type == 'Recommender'",
+  #             downloadButton("download_rec_sum", "Download SUMMARY Recommender outputs."),
+  #             tags$br(),
+  #             tags$br(),
+  #             downloadButton("download_rec_all", "Download ALL Recommender outputs.")
+  #           ),
+  #           conditionalPanel(
+  #             condition = "input.type == 'Time Series'",
+  #             downloadButton("download_ts_sum", "Download SUMMARY Times Series outputs."),
+  #             tags$br(),
+  #             tags$br(),
+  #             downloadButton("download_ts_all", "Download All Times Series outputs.")
+  #           ),
+  #           placement = "bottom",
+  #           arrow = TRUE
+  #         )
+  # 
+  #       ),
+  #       tags$li(
+  #         a(
+  #           strong("INFO"),
+  #           height = 40,
+  #           href = "https://github.com/JDFPalladium/AnomalyDetection/blob/main/README.md",
+  #           title = "",
+  #           target = "_blank",
+  #         ),
+  #         class = "dropdown"
+  #       )
+  #     ),
+  #     ####Recommender Sidebar ####
+  #     dashboardSidebar(
+  #       # tags$head(includeHTML(("google-analytics.html"))),
+  #       shinyjs::useShinyjs(),
+  #       introjsUI(),
+  #       sidebarMenu(
+  #         fluidRow(column(
+  #           12,
+  #           offset = 0,
+  #           conditionalPanel(condition = "input.type == 'Recommender'",
+  #                            tags$br(),
+  #                            actionButton("help", HTML(
+  #                              "Recommender instructions"
+  #                            )))
+  #         )),
+  #         fluidRow(column(
+  #           12,
+  #           offset = 0,
+  #           conditionalPanel(condition = "input.type == 'Time Series'",
+  #                            tags$br(),
+  #                            actionButton("help2", HTML(
+  #                              "Time Series instructions"
+  #                            )))
+  #         )),
+  #         fluidRow(column(12,
+  #                         div(
+  #                           # id = "step4",
+  #                           selectInput("type", "Type",
+  #                                       c('Recommender', 'Time Series'))
+  #                         ))),
+  #         #### Recommender Menu ####
+  # 
+  #         conditionalPanel(
+  #           condition = "input.type == 'Recommender'",
+  #           fluidRow(column(12, div(
+  #             menuItem(
+  #               tabName = "recommender",
+  #               startExpanded = TRUE,
+  #               tags$br(),
+  #               fluidRow(column(
+  #                 12,
+  #                 div(
+  #                   id = "step1",
+  #                   tags$b("Data Upload"),
+  #                   selectInput("country_selected",
+  #                               "Select OU",
+  #                               choices = sort(COUNTRIES),
+  #                               selected = NULL)))),
+  #               fluidRow(column(
+  #                 12,
+  #                 div(
+  #                   conditionalPanel(
+  #                     condition = "input.country_selected == 'Asia'",
+  #                     pickerInput("asiafilter",
+  #                                 "Select from Region",
+  #                                 choices = ASIA,
+  #                                 selected = ASIA,
+  #                                 options = list(`actions-box` = TRUE),
+  #                                 multiple = TRUE)),
+  #                   conditionalPanel(
+  #                     condition = "input.country_selected == 'West Africa'",
+  #                     pickerInput("westafricafilter",
+  #                                 "Select from Region",
+  #                                 choices = WESTAFRICA,
+  #                                 selected = WESTAFRICA,
+  #                                 options = list(`actions-box` = TRUE),
+  #                                 multiple = TRUE)),
+  #                   conditionalPanel(
+  #                     condition = "input.country_selected == 'Western Hemisphere'",
+  #                     pickerInput("westernhemishpherefilter",
+  #                                 "Select from Region",
+  #                                 choices = WESTERNHEMISPHERE,
+  #                                 selected = WESTERNHEMISPHERE,
+  #                                 options = list(`actions-box` = TRUE),
+  #                                 multiple = TRUE))))),
+  #               fluidRow(column(
+  #                 12,
+  #                 div(
+  #                   actionButton(
+  #                     "rec_upload",
+  #                     "Load Data")))),
+  #               br(),
+  #               fluidRow(column(
+  #                 12,
+  #                 div(id = "step2",
+  #                     tags$b("Data Checks"),
+  #                     numericInput("year",
+  #                                  label = "Select Fiscal Year",
+  #                                  value = 2023),
+  #                     selectInput("quarter",
+  #                                 "Select Quarter",
+  #                                 c('qtr1', 'qtr2', 'qtr3', 'qtr4')),
+  #                     div(
+  #                       actionButton("recdatacheck", "Run Data Check"))))),
+  #               br(),
+  #               fluidRow(column(
+  #                 12,
+  #                 div(
+  #                   id = "step3",
+  #                   tags$b("Set Parameters"),
+  #                   numericInput(
+  #                     inputId = "min_thresh",
+  #                     label = "Ignore values below",
+  #                     value = 10),
+  #                   pickerInput(inputId = "recfunder",
+  #                               label = "Select supported sites",
+  #                               choices = NULL,
+  #                               selected = NULL,
+  #                               options = list(`actions-box` = TRUE),
+  #                               multiple = TRUE)
+  #                 ))), br(),
+  #               fluidRow(column(
+  #                 12,
+  #                 tags$b("Run Model"),
+  #                 div(id = "step4",
+  #                     actionButton("recrun", "Run Model"), )
+  #               )))))))
+  # 
+  # 
+  #         ,
+  #         #### Time Series Menu ####
+  #         conditionalPanel(
+  #           condition = "input.type == 'Time Series'",
+  #           menuItem(
+  #             tabName = "time",
+  #             startExpanded = TRUE,
+  #             tags$br(),
+  #             fluidRow(column(
+  #               12,
+  #               div(
+  #                 id = "tsstep1",
+  #                 tags$b("Data Upload"),
+  #                 selectInput("country_selected_ts",
+  #                             "Select OU",
+  #                             choices = sort(COUNTRIES),
+  #                             selected = NULL)))),
+  #             fluidRow(column(
+  #               12,
+  #               div(
+  #                 conditionalPanel(
+  #                   condition = "input.country_selected_ts == 'Asia'",
+  #                   pickerInput("asiafilter_ts",
+  #                               "Select from Region",
+  #                               choices = ASIA,
+  #                               selected = ASIA,
+  #                               options = list(`actions-box` = TRUE),
+  #                               multiple = TRUE)),
+  #                 conditionalPanel(
+  #                   condition = "input.country_selected_ts == 'West Africa'",
+  #                   pickerInput("westafricafilter_ts",
+  #                               "Select from Region",
+  #                               choices = WESTAFRICA,
+  #                               selected = WESTAFRICA,
+  #                               options = list(`actions-box` = TRUE),
+  #                               multiple = TRUE)),
+  #                 conditionalPanel(
+  #                   condition = "input.country_selected_ts == 'Western Hemisphere'",
+  #                   pickerInput("westernhemishpherefilter_ts",
+  #                               "Select from Region",
+  #                               choices = WESTERNHEMISPHERE,
+  #                               selected = WESTERNHEMISPHERE,
+  #                               options = list(`actions-box` = TRUE),
+  #                               multiple = TRUE))))),
+  #             fluidRow(column(
+  #               12,
+  #               div(
+  #                 pickerInput("ts_vars",
+  #                             label = "Select Indicators",
+  #                             choices = quarterly_indicators,
+  #                             selected = NULL,
+  #                             options = list(`actions-box` = TRUE),
+  #                             multiple = TRUE)))),
+  #             fluidRow(column(
+  #               12,
+  #               div(
+  #                 actionButton(
+  #                   "ts_upload",
+  #                   "Load Data")))),
+  #             br(),
+  #             fluidRow(column(
+  #               12,
+  #               div(id = "tsstep2",
+  #                   tags$b("Data Checks"),
+  #                   numericInput("tsyear",
+  #                                label = "Select Fiscal Year",
+  #                                value = 2023),
+  #                   selectInput("tsquarter",
+  #                               "Select Quarter",
+  #                               c('qtr1', 'qtr2', 'qtr3', 'qtr4')),
+  #                   div(id = "step6",
+  #                       actionButton("tsdatacheck", "Run Data Check")))))
+  #           ),
+  #           br(),
+  #           fluidRow(column(
+  #             12,
+  #             div(
+  #               id = "tsstep3",
+  #               tags$b("Set Parameters"),
+  #               numericInput(
+  #                 inputId = "min_threshts",
+  #                 label = "Ignore values below",
+  #                 value = 10),
+  #               pickerInput(inputId = "tsfunder",
+  #                           label = "Select supported sites",
+  #                           choices = NULL,
+  #                           selected = NULL,
+  #                           options = list(`actions-box` = TRUE),
+  #                           multiple = TRUE)
+  #             ))), br(),
+  #           fluidRow(column(
+  #             12,
+  #             tags$b("Run Model"),
+  #             div(id = "tsstep4",
+  #                 actionButton("tsrun", "Run Model"))
+  #           )))
+  #       )
+  #     ),
+  #     dashboardBody(
+  #       fluidRow(div(id = "body_title",
+  #                    (h2(
+  #                      textOutput('title')
+  #                    )))),
+  #       conditionalPanel(condition = "input.type == 'Recommender'",
+  #                        fluidRow(div(
+  #                          id = "rec_summary",
+  #                          tabsetPanel(
+  #                            tabPanel(
+  #                              h4(icon("list-check"), "Summary"),
+  #                              conditionalPanel(
+  #                                condition = "output.rec6",
+  #                                box(
+  #                                  title = "Outliers from analysis using age group patterns, sex-based patterns, and overall patterns.",
+  #                                  width = 12,
+  #                                  "Disaggregate Summary Table",
+  #                                  collapsible = TRUE,
+  #                                  shinycssloaders::withSpinner(DT::DTOutput('rec6'))
+  #                                )
+  #                              ),
+  #                              conditionalPanel(
+  #                                condition = "output.rec7",
+  #                                box(
+  #                                  title = "Outliers from analysis using facility-level patterns.",
+  #                                  width = 12,
+  #                                  "Facility Summary Table",
+  #                                  collapsible = TRUE,
+  #                                  shinycssloaders::withSpinner(DT::DTOutput('rec7'))
+  #                                )
+  #                              ),
+  #                              conditionalPanel(
+  #                                condition = "output.rec8",
+  #                                box(
+  #                                  title = "Facility Scorecard",
+  #                                  width = 12,
+  #                                  "Scorecard Table",
+  #                                  collapsible = TRUE,
+  #                                  shinycssloaders::withSpinner(DT::DTOutput('rec8'))
+  #                                )
+  #                              ),
+  #                              conditionalPanel(
+  #                                condition = "output.rec9",
+  #                                box(
+  #                                  title = "IP Scorecard",
+  #                                  width = 12,
+  #                                  collapsible = TRUE,
+  #                                  "IP Scorecard",
+  #                                  shinycssloaders::withSpinner(DT::DTOutput('rec9'))
+  #                                )
+  #                              )
+  #                            ),
+  #                            tabPanel(
+  #                              h4(icon("circle-user"), "Observation"),
+  #                              conditionalPanel(
+  #                                condition = "output.rec1",
+  #                                box(
+  #                                  title = "Observations: The number for each outcome is shown, with the expected value shown in parentheses. Red cells show the largest deviations.",
+  #                                  width = 12,
+  #                                  "All Disaggregates table",
+  #                                  collapsible = TRUE,
+  #                                  shinycssloaders::withSpinner(DT::DTOutput('rec1'))
+  #                                )
+  #                              ),
+  #                              conditionalPanel(
+  #                                condition = "output.rec2",
+  #                                box(
+  #                                  title = "Observations: The number for each outcome is shown, with the expected value shown in parentheses. Red cells show the largest deviations.",
+  #                                  width = 12,
+  #                                  "Sex Disaggregate Table",
+  #                                  collapsible = TRUE,
+  #                                  shinycssloaders::withSpinner(DT::DTOutput('rec2'))
+  #                                )
+  #                              ),
+  #                              conditionalPanel(
+  #                                condition = "output.rec3",
+  #                                box(
+  #                                  title = "Observations: The number for each outcome is shown, with the expected value shown in parentheses. Red cells show the largest deviations.",
+  #                                  width = 12,
+  #                                  "Age Disaggregate Table",
+  #                                  collapsible = TRUE,
+  #                                  shinycssloaders::withSpinner(DT::DTOutput('rec3'))
+  #                                )
+  #                              ),
+  #                              conditionalPanel(
+  #                                condition = "output.rec4",
+  #                                box(
+  #                                  title = "Observations: The number for each outcome is shown, with the expected value shown in parentheses. Red cells show the largest deviations.",
+  #                                  width = 12,
+  #                                  "Facility Disaggregate Table",
+  #                                  collapsible = TRUE,
+  #                                  shinycssloaders::withSpinner(DT::DTOutput('rec4'))
+  #                                )
+  #                              )
+  #                            )
+  #                          )
+  #                        ))),
+  #       conditionalPanel(condition = "input.type == 'Time Series'",
+  #                        fluidRow(div(
+  #                          id = "ts_summary",
+  #                          tabsetPanel(
+  #                            tabPanel(
+  #                              h4(icon("list-check"), "Summary"),
+  #                              conditionalPanel(
+  #                                condition = "output.ts5",
+  #                                box(
+  #                                  title = "Summary of Outliers",
+  #                                  width = 12,
+  #                                  collapsible = TRUE,
+  #                                  "Summary of Outliers",
+  #                                  shinycssloaders::withSpinner(DT::DTOutput('ts5'))
+  #                                )
+  #                              ),
+  #                              conditionalPanel(
+  #                                condition = "output.ts6",
+  #                                box(
+  #                                  title = "Facility Scorecard",
+  #                                  width = 12,
+  #                                  collapsible = TRUE,
+  #                                  "Facility Scorecard",
+  #                                  shinycssloaders::withSpinner(DT::DTOutput('ts6'))
+  #                                )
+  #                              ),
+  #                              conditionalPanel(
+  #                                condition = "output.ts7",
+  #                                box(
+  #                                  title = "IP Scorecard",
+  #                                  width = 12,
+  #                                  collapsible = TRUE,
+  #                                  "IP Scorecard",
+  #                                  shinycssloaders::withSpinner(DT::DTOutput('ts7'))
+  #                                )
+  #                              )
+  #                            ),
+  #                            tabPanel(
+  #                              h4(icon("circle-user"), "Observation"),
+  #                              conditionalPanel(
+  #                                condition = "output.ts2",
+  #                                box(
+  #                                  title = "Observations: ARIMA Outputs",
+  #                                  width = 12,
+  #                                  collapsible = TRUE,
+  #                                  "ARIMA Outputs",
+  #                                  shinycssloaders::withSpinner(DT::DTOutput('ts2'))
+  #                                )
+  #                              ),
+  #                              conditionalPanel(
+  #                                condition = "output.ts3",
+  #                                box(
+  #                                  title = "Observations: ETS Outputs",
+  #                                  width = 12,
+  #                                  collapsible = TRUE,
+  #                                  "ETS Outputs",
+  #                                  shinycssloaders::withSpinner(DT::DTOutput('ts3'))
+  #                                )
+  #                              ),
+  #                              conditionalPanel(
+  #                                condition = "output.ts4",
+  #                                box(
+  #                                  title = "Observations: STL Outputs",
+  #                                  width = 12,
+  #                                  collapsible = TRUE,
+  #                                  "STL Outputs",
+  #                                  shinycssloaders::withSpinner(DT::DTOutput('ts4'))
+  #                                )
+  #                              )
+  #                            )
+  #                          )
+  #                        )))
+  # 
+  # 
+  #     )
+  #   )
+  # })
+  
   
 }

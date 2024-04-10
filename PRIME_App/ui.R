@@ -1,4 +1,8 @@
+library(shiny)
 
+# ui <- shinyUI(
+#   uiOutput("ui")
+# )
 
 ui <- dashboardPage(
   dashboardHeader(
@@ -25,7 +29,7 @@ ui <- dashboardPage(
         placement = "bottom",
         arrow = TRUE
       )
-      
+
     ),
     tags$li(
       a(
@@ -69,7 +73,7 @@ ui <- dashboardPage(
                                     c('Recommender', 'Time Series'))
                       ))),
       #### Recommender Menu ####
-      
+
       conditionalPanel(
         condition = "input.type == 'Recommender'",
         fluidRow(column(12, div(
@@ -83,7 +87,7 @@ ui <- dashboardPage(
                 id = "step1",
                 tags$b("Data Upload"),
                 selectInput("country_selected",
-                            "Select OU", 
+                            "Select OU",
                             choices = sort(COUNTRIES),
                             selected = NULL)))),
             fluidRow(column(
@@ -119,7 +123,7 @@ ui <- dashboardPage(
                 actionButton(
                   "rec_upload",
                   "Load Data")))),
-                br(), 
+                br(),
               fluidRow(column(
                 12,
                 div(id = "step2",
@@ -155,8 +159,8 @@ ui <- dashboardPage(
           div(id = "step4",
               actionButton("recrun", "Run Model"), )
         )))))))
-      
-      
+
+
       ,
       #### Time Series Menu ####
       conditionalPanel(
@@ -171,7 +175,7 @@ ui <- dashboardPage(
               id = "tsstep1",
               tags$b("Data Upload"),
               selectInput("country_selected_ts",
-                          "Select OU", 
+                          "Select OU",
                           choices = sort(COUNTRIES),
                           selected = NULL)))),
           fluidRow(column(
@@ -216,7 +220,7 @@ ui <- dashboardPage(
               actionButton(
                 "ts_upload",
                 "Load Data")))),
-          br(), 
+          br(),
           fluidRow(column(
             12,
             div(id = "tsstep2",
@@ -256,6 +260,7 @@ ui <- dashboardPage(
     )
   ),
   dashboardBody(
+    uiOutput("ui_redirect"),
     fluidRow(div(id = "body_title",
                  (h2(
                    textOutput('title')
@@ -424,7 +429,7 @@ ui <- dashboardPage(
                          )
                        )
                      )))
-    
-    
+
+
   )
 )
