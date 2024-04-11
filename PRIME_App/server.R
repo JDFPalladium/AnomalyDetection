@@ -41,11 +41,26 @@ server <- function(input, output, session) {
                                  status = "",
                                  d2_session = NULL,
                                  memo_authorized = FALSE,
-                                 modal = TRUE)
+                                 #modal = TRUE
+                                 )
+  # User and mechanisms reactive value pulled only once ----
+  user <- reactiveValues(type = NULL)
+  mechanisms <- reactiveValues(my_cat_ops = NULL)
+  userGroups <- reactiveValues(streams = NULL)
   
   
   
   #### App Landing Page ---------------  
+  
+  showModal(
+    modalDialog(
+      id = "passwordModal",
+      title = "Please Login",
+      # textInput("username", "Username"),
+      # passwordInput("password", "Password"),
+      footer = actionButton("login_button_oauth", "Log in with DATIM")
+    )
+  )
   
   # observeEvent("",{
   #   showModal(modalDialog(
@@ -59,17 +74,27 @@ server <- function(input, output, session) {
   # })
   # 
   
-  observeEvent(user_input$modal, {
-    if (user_input$modal) {
-      showModal(modalDialog(
-        id = "passwordModal",
-        title = "Login",
-        # textInput("username", "Username"),
-        # passwordInput("password", "Password"),
-        footer = actionButton("login_button_oauth", "Log in with DATIM")
-      ))
-    }
-  })
+  # observeEvent(user_input$modal, {
+  #   
+  #   print(
+  #     paste0(
+  #       "your modal value is: ",
+  #       user_input$modal
+  #     )
+  #   )
+  #   
+  #   if (user_input$modal) {
+  #     showModal(
+  #       modalDialog(
+  #       id = "passwordModal",
+  #       title = "Login",
+  #       # textInput("username", "Username"),
+  #       # passwordInput("password", "Password"),
+  #       footer = actionButton("login_button_oauth", "Log in with DATIM")
+  #       )
+  #     )
+  #   }
+  # })
   
   #UI that will display when redirected to OAuth login agent
   output$ui_redirect <- renderUI({
@@ -96,7 +121,7 @@ server <- function(input, output, session) {
   observeEvent(input$submitBtn > 0, {
     
     print("submitting to modal...")
-    print(session$clientData$url_search)
+    #print(session$clientData$url_search)
     
     #Grabs the code from the url
     params <- parseQueryString(session$clientData$url_search)
@@ -117,8 +142,8 @@ server <- function(input, output, session) {
                                                 use_basic_auth = TRUE)
     )
     
-    print("here is your token...")
-    print(token)
+    #print("here is your token...")
+    #print(token)
     
     loginAttempt <- tryCatch({
       print("attempting to login")
@@ -154,7 +179,6 @@ server <- function(input, output, session) {
         Sys.sleep(3)
         flog.info(paste0("User ", user_input$d2_session$me$userCredentials$username, " logged out."))
         user_input$authenticated  <-  FALSE
-        use_input$modal <- FALSE
         user_input$user_name <- ""
         user_input$authorized  <-  FALSE
         user_input$d2_session  <-  NULL
@@ -172,6 +196,8 @@ server <- function(input, output, session) {
     
     if (exists("d2_default_session")) {
       
+      #user_input$modal <- FALSE
+      removeModal()
       user_input$authenticated  <-  TRUE
       user_input$d2_session  <-  d2_default_session$clone()
       d2_default_session <- NULL
