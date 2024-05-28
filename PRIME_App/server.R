@@ -32,6 +32,14 @@ has_auth_code <- function(params) {
 
 
 server <- function(input, output, session) {
+  
+  # connect to s3
+  tryCatch({
+    pdaprules::s3_connect()
+  },
+  error = function(e) {
+    print(e)
+  })
 
 
 
@@ -195,15 +203,6 @@ server <- function(input, output, session) {
     )
     
     if (exists("d2_default_session")) {
-      
-      # connect to s3
-      tryCatch({
-        pdaprules::s3_connect()
-      },
-      error = function(e) {
-        print(e)
-      })
-      
       
       #user_input$modal <- FALSE
       removeModal()
