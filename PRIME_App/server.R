@@ -6,6 +6,16 @@ error = function(e) {
   print(e)
 })
 
+# test connection
+my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"))
+sample_file <- my_items[10,2]
+data_recent <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
+                                    trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
+                                    bucket = Sys.getenv("S3_READ"),
+                                    object = sample_file)
+
+print(head(data_recent))
+
 
 ################ OAuth Client information #####################################
 if (interactive()) {
