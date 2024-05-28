@@ -1,3 +1,12 @@
+# connect to s3
+tryCatch({
+  pdaprules::s3_connect()
+},
+error = function(e) {
+  print(e)
+})
+
+
 ################ OAuth Client information #####################################
 if (interactive()) {
   # testing url
@@ -32,16 +41,6 @@ has_auth_code <- function(params) {
 
 
 server <- function(input, output, session) {
-  
-  # connect to s3
-  tryCatch({
-    pdaprules::s3_connect()
-  },
-  error = function(e) {
-    print(e)
-  })
-
-
 
   
   user <- reactiveValues(type = NULL)
