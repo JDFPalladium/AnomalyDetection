@@ -1318,8 +1318,14 @@
     "pdaprules": {
       "Package": "pdaprules",
       "Version": "0.1.0",
-      "Source": "unknown",
-      "Hash": "f5e16f2af909b6e71e20691b0e28e2e2",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "pdaprules",
+      "RemoteUsername": "pepfar-datim",
+      "RemoteRef": "main",
+      "RemoteSha": "108df5ef66b5fd5bc968814c0943bc64074ffc99",
+      "Hash": "1fc563d48a9bc827a1ebca75bc5ad70a",
       "Requirements": []
     },
     "pillar": {
