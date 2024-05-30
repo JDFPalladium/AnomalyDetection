@@ -166,18 +166,6 @@
       ],
       "Hash": "1acd2b3db6e118dd161ee6cabedc4d4e"
     },
-    "XML": {
-      "Package": "XML",
-      "Version": "3.99-0.9",
-      "Source": "Repository",
-      "Repository": "RSPM",
-      "Requirements": [
-        "R",
-        "methods",
-        "utils"
-      ],
-      "Hash": "6e75b3884423e21eda89b424a98e091d"
-    },
     "abind": {
       "Package": "abind",
       "Version": "1.4-5",
@@ -528,31 +516,25 @@
     },
     "datimutils": {
       "Package": "datimutils",
-      "Version": "0.3.0.0.0.0.1653459671",
-      "Source": "Repository",
-      "Repository": "RSPM",
+      "Version": "0.7.0",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "datimutils",
+      "RemoteUsername": "pepfar-datim",
+      "RemoteRef": "master",
+      "RemoteSha": "338c374674876850707f642d1998f8aff4a41096",
       "Requirements": [
         "R",
-        "data.table",
-        "dplyr",
-        "getPass",
+        "R6",
         "httr",
         "jsonlite",
         "keyring",
-        "lazyeval",
-        "lubridate",
-        "magrittr",
-        "purrr",
-        "readr",
         "rlang",
-        "rlist",
-        "stats",
         "stringi",
-        "stringr",
-        "tibble",
         "tidyr"
       ],
-      "Hash": "3942510889fc200562a415f16c25e7dd"
+      "Hash": "c7316c3d97e7e893e2125b2b5bec4ffa"
     },
     "dbplyr": {
       "Package": "dbplyr",
@@ -855,18 +837,6 @@
         "methods"
       ],
       "Hash": "15e9634c0fcd294799e9b2e929ed1b86"
-    },
-    "getPass": {
-      "Package": "getPass",
-      "Version": "0.2-2",
-      "Source": "Repository",
-      "Repository": "RSPM",
-      "Requirements": [
-        "R",
-        "rstudioapi",
-        "utils"
-      ],
-      "Hash": "07a91f99e56951818ab911366db77700"
     },
     "ggplot2": {
       "Package": "ggplot2",
@@ -1529,13 +1499,13 @@
     },
     "openssl": {
       "Package": "openssl",
-      "Version": "2.0.1",
+      "Version": "2.2.0",
       "Source": "Repository",
-      "Repository": "RSPM",
+      "Repository": "CRAN",
       "Requirements": [
         "askpass"
       ],
-      "Hash": "edde731e84cf3d42aa9b7f04b8de5941"
+      "Hash": "2bcca3848e4734eb3b16103bc9aa4b8e"
     },
     "openxlsx": {
       "Package": "openxlsx",
@@ -2115,20 +2085,6 @@
         "utils"
       ],
       "Hash": "42548638fae05fd9a9b5f3f437fbbbe2"
-    },
-    "rlist": {
-      "Package": "rlist",
-      "Version": "0.4.6.2",
-      "Source": "Repository",
-      "Repository": "RSPM",
-      "Requirements": [
-        "R",
-        "XML",
-        "data.table",
-        "jsonlite",
-        "yaml"
-      ],
-      "Hash": "290c8ea0700d2e7258082d0025386e68"
     },
     "rmarkdown": {
       "Package": "rmarkdown",
