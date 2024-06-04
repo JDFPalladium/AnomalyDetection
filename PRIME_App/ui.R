@@ -260,6 +260,7 @@ ui <- dashboardPage(
     )
   ),
   dashboardBody(
+    uiOutput("password_modal_ui"),
     uiOutput("ui_redirect"),
     fluidRow(div(id = "body_title",
                  (h2(

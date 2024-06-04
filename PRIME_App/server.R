@@ -52,8 +52,6 @@ has_auth_code <- function(params) {
 
 server <- function(input, output, session) {
 
-  
-  user <- reactiveValues(type = NULL)
   user_input  <-  reactiveValues(authenticated = FALSE,
                                  status = "",
                                  d2_session = NULL,
@@ -69,15 +67,17 @@ server <- function(input, output, session) {
   
   #### App Landing Page ---------------  
   
-  showModal(
-    modalDialog(
-      id = "passwordModal",
-      title = "Please Login",
-      # textInput("username", "Username"),
-      # passwordInput("password", "Password"),
-      footer = actionButton("login_button_oauth", "Log in with DATIM")
-    )
-  )
+  output$password_modal_ui <- renderUI({
+    if (!user_input$authenticated) {
+      showModal(
+        modalDialog(
+          id = "passwordModal",
+          title = "Please Login",
+          footer = actionButton("login_button_oauth", "Log in with DATIM")
+        )
+      )
+    }
+  })
   
   # observeEvent("",{
   #   showModal(modalDialog(
@@ -174,6 +174,16 @@ server <- function(input, output, session) {
                                     d2_session_envir = parent.env(environment())
       )
       
+      # we remove the login modal as we continue to validate access
+      removeModal()
+      showModal(
+        modalDialog(
+          id = "transitionModal",
+          title = "One moment while we validate credentials ...",
+          footer = NULL
+        )
+      )
+      
       # DISALLOW USER ACCESS TO THE APP-----
       
       # store data so call is made only once
@@ -213,7 +223,6 @@ server <- function(input, output, session) {
     
     if (exists("d2_default_session")) {
       
-      #user_input$modal <- FALSE
       removeModal()
       user_input$authenticated  <-  TRUE
       user_input$d2_session  <-  d2_default_session$clone()
