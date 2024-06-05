@@ -118,11 +118,11 @@ runRecAnalysis <- function(dat,keys) {
   # Identify indicators with zero variance to drop
   cols_to_drop <- names(site_keep[,(ncol(keys)+1):ncol(site_keep)])[var_inds == 0] 
   site_keep <- site_keep[,!(names(site_keep) %in% cols_to_drop)]
+  
   ## Drop variables that are colinear
   # Create pairwise correlation matrix
-  # Convert dataframe to matrix
   dat_df <- site_keep
-  
+  # Convert dataframe to matrix
   dat_matrix <- data.matrix(site_keep[,(ncol(keys)+1):ncol(site_keep)], rownames.force = NA)
   # Calculate pairwise correlations
   cormat <- suppressWarnings(cor(dat_matrix, use = "pairwise.complete.obs"))
@@ -151,16 +151,18 @@ runRecAnalysis <- function(dat,keys) {
   
   # assign output, with collinear variables dropped, to site_keep
   site_keep <- dat_df
-  ## Drop rows with three or fewer MER indicators present 
+ 
+  ## Drop rows/observations with three or fewer MER indicators present 
   # calculate number of present indicators for each observation
   obs_count <- apply(site_keep[, (ncol(keys)+1):ncol(site_keep)], 1, function(x) length(which(!is.na(x))))
   # keep observations with at least 4 present values
   obs_to_keep <- which(obs_count > 3) 
   site_keep <- site_keep[obs_to_keep,]
-  
-  # sum of present values by variable; use na.rm so we remove NAs
+
+  ## Now, create sparse covariance matrix - refer to paper for further explanation
+  # Get sparse sum of each indicator - sum of present values by variable; use na.rm so we remove NAs
   sum_sparse <- colSums(site_keep[, (ncol(keys)+1):ncol(site_keep)], na.rm = TRUE) 
-  # get number of present values by indicator
+  # get number of present values by indicator - this is denominator of sparse average
   count_present_keep <- apply(site_keep[, (ncol(keys)+1):ncol(site_keep)], 2, function(x) length(which(!is.na(x))))
   # get sparse mu (vector of means)
   mu <- sum_sparse / count_present_keep 
@@ -178,10 +180,10 @@ runRecAnalysis <- function(dat,keys) {
   # N is the counts, s is where we store the covariances, and I is useful for some calculations
   S <- matrix(0, k, k) 
   
-  # Loop through each observations
+  # Loop through each observation
   for (i in 1:nrow(site_keep)){
-    
-    dat <- site_keep[i, ]
+
+    dat <- site_keep[i, ] # get corresponding row
     inds <- which(!is.na(dat[(ncol(keys)+1):ncol(site_keep)])) # inds returns the index of the columns that have non NA values
     yt <- dat[(ncol(keys)+1):ncol(site_keep)][inds] # yt are the actual values that are associated with the indices in inds
     yt_mu <- as.matrix(yt - mu[inds]) # yt_mu subtracts the mu for each indicator from yt for each indicator
@@ -189,7 +191,7 @@ runRecAnalysis <- function(dat,keys) {
     Hyt <- as.matrix(i_mat[inds, ]) # hyt is a matrix that has the number of present values as rows and the numbers of all variables as columns
     if(dim(Hyt)[2] == 1){Hyt <- t(Hyt)} #this relevant if we set the threshold too high and we only have 1 indicator column coming through
     
-    S <- S + (t(Hyt) %*% (t(yt_mu) %*% yt_mu) %*% Hyt)
+    S <- S + (t(Hyt) %*% (t(yt_mu) %*% yt_mu) %*% Hyt) # update covariance matrix
   }
 
   # Compute sparse correlation matrix
@@ -205,11 +207,12 @@ runRecAnalysis <- function(dat,keys) {
   cv<-qchisq(.95,df=ncol(site_sparse)-1)
   site_sparse$outlier_sp <- ifelse(site_sparse$MD>cv, 1, 0)
   
-  # Get outliers only for generating estimates
+  # Generating estimates is computationally expensive, so only generate for outliers
   site_outliers <- site_sparse[site_sparse$outlier_sp == 1, ]
 
   # Estimate present values - xt is the value to predict, yt are the other present values
   # value will be Rxtyt %*% Ryt_inv %*% yt-uyt + uxt
+  # refer to paper for explanation
   preds <- matrix(data = NA, nrow = nrow(site_outliers), ncol = k) # set up matrix to hold estimates
 
   # Loop through each row
@@ -252,10 +255,16 @@ runRecAnalysis <- function(dat,keys) {
   site_all <- cbind(site_outliers, preds_df)
 
   # Take the difference between estimate and actual and normalize by dividing by sample variance
+  # First, get the deviation
   deviation <- abs(site_all[, (ncol(site_sparse)+1):(ncol(site_all))] - site_all[, (ncol(keys)+1):(ncol(site_sparse)-2)])
+  # Then normalize by dividing by sample variance
   deviation <- mapply('/', deviation, diag(R))
   deviation <- data.frame(deviation)
+                              
+  # Prepend "D" so it's clear it refers to deviation
   names(deviation) <- paste0("D_", names(site_sparse)[(ncol(keys)+1):(ncol(site_sparse)-2)])
+                              
+  # Horizontally stack deviations to table with original values and estimates
   site_out_total <- cbind(site_all, deviation)
   return(site_out_total)
 
