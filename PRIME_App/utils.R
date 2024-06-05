@@ -6,7 +6,7 @@
 #' @param dat dataframe returned by runRecAnalysis function
 #' @param keys character vector defined above
 #' @param scenario_tmp character of scenario ran
-#' @param return_all logical, indicates to return anomalies only or all observations
+#' @param return_all logical, indicates to return anomalies only or all observations - this is now defunct, always returning anomalies only
 #' @param min_thresh numeric, minimum value to consider as important deviation from expected value
 #' @param fund character of funding agencies to include in output
 #'
@@ -290,20 +290,23 @@ createSummaryTab <- function(dat_summary_list,
                       "kp", "scenario", "Indicator", "outlier_sp") 
     dat <- lapply(dat_summary_list, function(x) x[, cols_to_keep])
   } else {
+  # If summary tab to be created is for facility table
     cols_to_keep <- c("psnu", "facility", "primepartner", "scenario", "Indicator", "outlier_sp") 
     dat <- lapply(dat_summary_list, function(x) x[, cols_to_keep])
   }
   
-  # Bind list of dataframes into a single dataframe
+  # Bind list of dataframes into a single dataframe (only relevant with disags)
   dat <- rbindlist(dat)
   # Underlying tabs may contain all results, but summary tabs should present only outliers
+  # this is now redundant since sortOutputs was updated to always only return outliers
   dat <- dat[dat$outlier_sp == 1, ]
   # Drop the actual outlier flag as everything remaining is an outlier
   dat <- dat %>% select(-outlier_sp)
   
   # PSNU, Facility, Primepartner are keys for the scorecard - returned separately
   dat_for_scorecard <- dat[, c("psnu", "facility", "primepartner", "Indicator")]
-  
+
+  # everything remaining is an outlier - creating a flag so that we can use numeric operations later to summarize
   dat$outlier <- 1
   
   # Summarize data - create wide dataframe so that each scenario run becomes a column
@@ -718,9 +721,11 @@ runChecks <- function(dat,
 #'
 #' @examples
 formatCells <- function(name, disags, facilities, keys_disag, keys_facility, wb_format){
-  
+
+  # get the name of the sheet to create so we can know what output table to pull
   name_sheet <- sub("_.*", "", name)
 
+  # gather if sheet name indicates information is from disag or facility
   if(grepl("Sex|All|Age", name_sheet)){
     dat <- disags
     n_keys <- length(keys_disag)
@@ -729,22 +734,25 @@ formatCells <- function(name, disags, facilities, keys_disag, keys_facility, wb_
     n_keys <- length(keys_facility)
   }
   
-  dat_tmp <- dat[[name_sheet]]
-  n_columns <- sum(grepl("^E_", names(dat_tmp)))
+  dat_tmp <- dat[[name_sheet]] # get corresponding output table
+  n_columns <- sum(grepl("^E_", names(dat_tmp))) # number of indicators
   nrows <- nrow(dat_tmp)+1
   
   # https://www.w3schools.com/colors/colors_picker.asp?colorhex=8B0000
   cs1 <- createStyle(bgFill = "#FF0000")
   cs2 <- createStyle(bgFill = "#FF8080")
   cs3 <- createStyle(bgFill = "#FFFFFF")
-  
+
+  # get the columns that correspond to the deviation values
   deviations <- dat_tmp[, (n_keys + 1 + (2*n_columns)):(n_keys + n_columns + (2*n_columns))]
+  # create cutoffs for 80th and 90th percentile of deviation value range
   quants <- suppressWarnings(quantile(as.numeric(reshape2::melt(deviations)$value), c(.8, .9), na.rm = TRUE))
   
   # loop through columns
   for(j in 1:n_columns){
     
-    # Get Excel column position of deviation
+    # Get Excel column position of deviation and deviation
+    # since this is Excel, 27th column is AA, so code identifies which block of 26 a column is in
     deviation_col <- n_keys + j + (2*n_columns)
     estimation_col <- n_keys + j + n_columns
     deviation_col <- if(deviation_col <= 26){
@@ -775,20 +783,21 @@ formatCells <- function(name, disags, facilities, keys_disag, keys_facility, wb_
     } else if(estimation_col == 78){
       "BZ"
     }
-    
+
+    # apply conditional formatting - if deviation is above 80th percentile, color reported value with cs2
     conditionalFormatting(wb_format, name,
                           cols = n_keys + j,
                           rows = 2:nrows,
                           rule = paste0(deviation_col, 2, ">", quants[1]), 
                           style = cs2)
-    
+    # apply conditional formatting - if deviation is above 90th percentile, color reported value with cs1
     conditionalFormatting(wb_format, name,
                           cols = n_keys + j,
                           rows = 2:nrows,
                           rule = paste0(deviation_col, 2, ">", quants[2]), 
                           style = cs1)
     
-    # If less than 10, set to no fill
+    # If value is less than 10, set to no fill
     conditionalFormatting(wb_format, name,
                           cols = n_keys + j,
                           rows = 2:nrows,
@@ -797,7 +806,8 @@ formatCells <- function(name, disags, facilities, keys_disag, keys_facility, wb_
 
     
   }
-  
+
+  # shrink column width for estimated values and deviation columns
   setColWidths(wb_format, name, (n_keys+n_columns+1):(ncol(dat_tmp)+1), 0)
   
 }
