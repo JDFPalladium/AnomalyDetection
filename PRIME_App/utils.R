@@ -382,69 +382,100 @@ createScoreCard <- function(scorecard_in){
   
 }
 
+
+#' runTimeSeries
+#' 
+#' Function to run time series anomaly detection using ARIMA, STL, ETS, and to create summary tables of anomalies found
+#'
+#' @param dat dataframe of values by facility and indicator organized chronologically
+#' @param recent_year numeric the year selected by the user for classification
+#' @param recent_qtr character the quarter selected by the user for classification
+#' @param MIN_THRESH numeric value below which to not consider as anomalous
+#' @param RETURN_ALL logical whether to return anomalies only or all values
+#' @param keys character vector of variables describing unique observation 
+#'
+#' @return list of dataframes
+#' @export
+#'
+#' @examples
+                  
 runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, keys) {
-  
+
+  # provide progress updates to users
   withProgress(message = 'Running Models', value = 0, {
   
   incProgress(.2, detail = paste("Preparing Data"))
     
-  # split by facility and indicator
+  # split by facility so we can loop through
   dat_split <- split(dat, dat$facility)
   
-  # Create shell
+  # Create shell so we retain placeholders for missing values
   earliest_year <- as.numeric(min(dat$fiscal_year))
   shell <- expand.grid(fiscal_year = earliest_year:recent_year, qtr = 1:4) %>%
     filter(!(fiscal_year >= recent_year & qtr > as.numeric(gsub(".*?([0-9]+).*", "\\1", recent_qtr)))) %>%
     arrange(fiscal_year, qtr)
-  
+
+  # initialize list to hold model outputs as we loop through facilities and indicators
   outlist_arima <- list()
   outlist_ets <- list()
   outlist_stl_arima <- list()
   
-  # for each facility
+  # loop through each facility
   for(i in 1:length(dat_split)){
 
+    # tell user what number facility we're up to and how many are remaining
     incProgress(1/length(dat_split), detail = paste("Running facility:", i, "of", length(dat_split)))
-    
+
+    # subset to get facility data
     dat_tmp <- dat_split[[i]]
+
+    # now split by indicator, since model is run per indicator
     ind_split <- split(dat_tmp, dat_tmp$indicator)
 
-    
+    # loop through indicators
     for(j in 1:length(ind_split)){
 
+      # subset to get data per indicator
       dat_ind <- ind_split[[j]]
-      
+
+      # join on shell, left join, so we retain placeholders for missing values
       shell_tmp <- merge(shell, dat_ind, by = c("fiscal_year", "qtr"), all.x = TRUE) 
  
       # set up as time series
       dat_ts <- ts(shell_tmp[1:(nrow(shell_tmp)-1), 'value'], start = c(earliest_year, 1), frequency = 4) %>%
-        na.trim(sides = "left") %>%
-        na_interpolation()
+        na.trim(sides = "left") %>% # removing leading zeros from earliest periods, if there are any
+        na_interpolation() # interpolate missing values with last observed value
       
       # Fit STL model and forecast last present period
       stlf_arima_forecast <- stlf(dat_ts,
                                   method = "arima",
                                   level = c(99),
                                   h = 1)
-      
+
+      # get 99% forecast interval and point forecast
       upper99 <- stlf_arima_forecast$upper[1]
       lower99 <- stlf_arima_forecast$lower[1]
       pred <- stlf_arima_forecast$mean[1]
       
 
+      # add forecast range to shell which we'll carry through
       shell_tmp$upper99 <- upper99
       shell_tmp$lower99 <- lower99
+
+      # get the actual value we observed for comparison with forecast interval
       actual <- tail(shell_tmp$value,1)
 
+      # if the observed value is outside the forecast interval and is above min_thresh, consider it an outlier
       if(!is.na(actual) & (actual < lower99 | actual > upper99) & (abs(actual - pred) > MIN_THRESH)){
         shell_tmp$outlier <- 1
       } else {
         shell_tmp$outlier <- 0
       }
-      
+
+      # add these results to the list initialized above
       outlist_stl_arima[[length(outlist_stl_arima)+1]] <- shell_tmp
       
-      # Fit STL model and forecast last present period
+      # Repeat for ETS model
       stlf_arima_forecast <- stlf(dat_ts,
                                   method = "ets",
                                   level = c(99),
@@ -465,7 +496,8 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
       }
       
       outlist_ets[[length(outlist_ets)+1]] <- shell_tmp
-      
+
+      # Repeat for ARIMA model
       arima_mod <- suppressWarnings(auto.arima(dat_ts,
                                                seasonal=TRUE,
                                                approximation = TRUE,
@@ -493,23 +525,33 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
     }
     
   }
-  
+
+
+  # With loops complete, now stack results for each time series model
   out_stl_arima <- rbindlist(outlist_stl_arima)
   out_ets <- rbindlist(outlist_ets)
   out_arima <- rbindlist(outlist_arima)
-  
+
+  # First, let's proces ARIMA outputs, then we'll process STL and ETS the same way
+  # sort outputs in reverse chronological order and drop missing values
   out_arima <- out_arima %>%
     arrange(desc(fiscal_year), desc(qtr)) %>%
     filter(!is.na(value))
+  # pivot wider so that each facility-indicator combination becomes a row, with values sorted from
+  # left to right, most recent to least (so that the most recent value, ie the one the user is interested in,
+  # is the first that appears)
   out_arima_wide <- pivot_wider(out_arima,
                                 id_cols = c("psnu", "facility", "primepartner", "indicator", "lower99", "upper99", "outlier"),
                                 names_from = c("fiscal_year", "qtr"),
                                 values_from = c("value"))
+  # this is now defunct - we always return all values for time series. used to give user the option to select.
   if(RETURN_ALL == FALSE){
     out_arima_wide <- out_arima_wide %>% filter(outlier == 1)
   }
-  
-  # Let's calculate by how much the differ (difference / range of interval)
+
+  # we want to not only push outliers to the top, but also to sort by degree of deviation from forecast range,
+  # meaning to get the most anomalous at the top. 
+  # Let's calculate by how much they differ (difference / range of interval)
   arima_out <- out_arima_wide %>%
     filter(!is.na(.[[length(keysts)+1]])) %>%
     mutate(gap = ifelse(.[[length(keys)]] > upper99, .[[length(keys)]] - upper99, lower99 - .[[length(keys)]]),
@@ -521,7 +563,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
   
   out_arima_wide <- out_arima_wide %>% filter(outlier == 1)
   
-  
+  # Now, repeat process for ETS
   out_ets <- out_ets %>%
     arrange(desc(fiscal_year), desc(qtr)) %>%
     filter(!is.na(value))
@@ -541,7 +583,8 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
   ets_out[, length(keys)] <- ets_out$most_recent 
   ets_out <- ets_out %>% select(-most_recent, -gap, -deviation, -upper99, -lower99) %>% as.data.frame()
   out_ets_wide <- out_ets_wide %>% filter(outlier == 1)
-  
+
+  # And repeat process for STL
   out_stl_arima <- out_stl_arima %>%
     arrange(desc(fiscal_year), desc(qtr)) %>%
     filter(!is.na(value))
@@ -562,7 +605,8 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
   stl_out <- stl_out %>% select(-most_recent, -gap, -deviation, -upper99, -lower99) %>% as.data.frame()
   out_stl_arima_wide <- out_stl_arima_wide %>% filter(outlier == 1)
   
-  # Create Summary Tab
+  # Create Summary Tab - merge the three outputs together and sum the number of outliers for each
+  # facility-indicator combination
   summary <- merge(out_arima_wide[, c("psnu", "facility", "primepartner",  "indicator", "upper99")],
                    out_stl_arima_wide[, c("psnu","facility", "primepartner", "indicator", "upper99")],
                    by = c("psnu","facility", "primepartner",  "indicator"), all = TRUE) %>%
@@ -580,7 +624,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
   summary <- summary %>%
     arrange(desc(Outliers))
   
-  # Create IP scorecard sheet
+  # Create IP scorecard sheet - identify the five indicators most commonly flagged as outliers per IP - as with recommender
   cover_ip <- summary %>%
     group_by(primepartner, indicator) %>%
     summarize(Outliers = sum(Outliers, na.rm = TRUE), .groups = "drop") %>% 
@@ -598,7 +642,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
     names(ip_cover)[i] <- ips[i]
   }
   
-  # Create facility scorecard sheet
+  # Create facility scorecard sheet - sum number of anomalies by indicator and by facility
   cover <- summary %>%
     group_by(facility, psnu, primepartner, indicator) %>%
     summarize(Outliers = sum(Outliers, na.rm = TRUE), .groups = "drop") %>% 
@@ -606,15 +650,10 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
     pivot_wider(., id_cols = c("facility", "psnu", "primepartner"), names_from = "indicator", values_from = "Outliers") %>%
     as.data.frame()
   cover[is.na(cover)] <- 0
-  # sort columns by number of outliers
-  # cover <- cbind.data.frame(PSNU = cover$psnu,
-  #                           Facility = cover$facility,
-  #                           PrimePartner = cover$primepartner,
-  #                           cover[, 4:ncol(cover)][order(colSums(cover[, 4:ncol(cover)]), decreasing = T)],
-  #                           stringsAsFactors = FALSE)
-
 
   # if multiple indicators selected, use rowsums and colsums to aggregate
+  # cover's first three columns are keys - psnu, primepartner, facility, so column four is the number of outliers
+  # this will be the case if more than one indicator is selected by user for analysis 
   if(ncol(cover)>4){
     cover <- cbind.data.frame(PSNU = cover$psnu,
                               Facility = cover$facility,
@@ -628,7 +667,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
     cover[nrow(cover),1:3] <- "Total"
   }
   
-  # If only one indicator selected, don't use rowsums and colsums
+  # If only one indicator selected, don't use rowsums and colsums which will break 
   if(ncol(cover) == 4){
     cover <- cbind.data.frame(PSNU = cover$psnu,
                               Facility = cover$facility,
@@ -645,11 +684,8 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
   }
 
   })
-  
-  # stl_out <- stl_out %>% mutate(outlier = ifelse(outlier == 1, "Yes", "No"))
-  # arima_out <- arima_out %>% mutate(outlier = ifelse(outlier == 1, "Yes", "No"))
-  # ets_out <- ets_out %>% mutate(outlier = ifelse(outlier == 1, "Yes", "No"))
-  
+
+  # return list of dataframes to then send back to UI and for download
   outlist <- list("facility_scorecard" = cover,
                   "ip_scorecard" = ip_cover,
                   "Summary" = summary,
@@ -659,47 +695,6 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
   
   return(outlist)
   
-}
-
-
-runChecks <- function(dat,
-                      year_for_analysis,
-                      qtr_for_analysis
-){
-  
-  if("prime_partner_name" %in% names(dat)){
-    dat$primepartner <- dat$prime_partner_name
-  }
-  
-  # Check to confirm if fiscal year selected by user for analysis exists in the dataset
-  if(!year_for_analysis %in% unique(dat$fiscal_year)){
-    shinyalert("Check the data file", "Please confirm the fiscal year selected is included in the file uploaded.", type="error")
-  } 
-  #   else if (year_for_analysis %in% unique(dat$fiscal_year)){
-  #   shinyalert("Success", "The fiscal year selected is included in the file uploaded.", type="success")
-  # }
-  # Check to confirm if quarter selected by user for analysis exists in the dataset
-  if(!qtr_for_analysis %in% names(dat)){
-    shinyalert("Check the data file", "Please confirm the quarter selected is included in the file uploaded.", type="error")
-  } 
-  #   else if(qtr_for_analysis %in% names(dat)){
-  #   shinyalert("Success", "The quarter selected is included in the file uploaded.", type="success")
-  # }
-  
-  if(any(!c("sitename","psnu","facility","indicator","numeratordenom",
-            "standardizeddisaggregate","ageasentered","sex", "primepartner") %in% names(dat))){ #I removed primepartner for now.
-    shinyalert("Check the data file","Please confirm the file selected contains the required columns:
-                 sitename, psnu, facility, indicator, numeratordenom, standardizeddisaggregate, ageasentered, sex, primepartner", type="error")
-  } 
-  #   else if (any(c("sitename","psnu","facility","indicator","numeratordenom", "standardizeddisaggregate","ageasentered","sex") %in% names(dat))){
-  #   shinyalert("Success","The data upload contains the fiscal year, quarter, and all necessary variables. Please continue with the data preparation", type="success")
-  # }
-  
-  # if((year_for_analysis %in% unique(dat$fiscal_year)) &&
-  #    (qtr_for_analysis %in% names(dat)) &&
-  #    (all(c("sitename","psnu","facility","indicator","numeratordenom","standardizeddisaggregate","ageasentered","sex", "primepartner") %in% names(dat)))) {
-  #   shinyalert("Proceed", "Continue to Run Models.", type="success")
-  # }
 }
 
 
