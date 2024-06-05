@@ -1,5 +1,8 @@
 #### server.R, intakes items from ui.R, performs calculations, returns outputs to UI ####
 
+
+
+# initialize server function
 server <- function(input, output, session) {
 
 
@@ -1410,26 +1413,35 @@ server <- function(input, output, session) {
   observeEvent(input$tsdatacheck, {
     
     withProgress(message = 'Running Checks', value = 0.5, {
-      
+
+    # create copy, as before, so we retain the original dataset in case the user changes year or quarter and 
+    # needs to rerun from here
     input_reactive_ts$mer_data <- input_reactive_ts$data_loaded
-    
+
+    # get the user selected year and quarter
     recent_year <- input$tsyear
     recent_qtr <- input$tsquarter
-    
+
+    # filter to user-selected funding agencies and indicators
     input_reactive_ts$mer_data <- input_reactive_ts$mer_data[input_reactive_ts$mer_data$fundingagency %in% input$tsfunder,]
     input_reactive_ts$mer_data <- input_reactive_ts$mer_data[input_reactive_ts$mer_data$indicator %in% input$ts_vars, ]
-    
+
+    # make sure indicator is a string
     input_reactive_ts$mer_data$indicator <- as.character(input_reactive_ts$mer_data$indicator)
+
+    # make sure indicator is a quarterly indicator
     input_reactive_ts$mer_data <- input_reactive_ts$mer_data %>%
       filter(indicator %in% quarterly_indicators)
-    
+
+    # concatenate indicator with N-D so we can track them separately
     input_reactive_ts$mer_data$indicator <-
       paste0(input_reactive_ts$mer_data$indicator, "_", input_reactive_ts$mer_data$numeratordenom)
     
     # remove the rows that report on Total Numerator or Total Denominator data
     input_reactive_ts$mer_data <-
       input_reactive_ts$mer_data %>% filter(!standardizeddisaggregate %in% c("Total Numerator", "Total Denominator"))
-    
+
+    # remove rows where facility is actually an aggregate
     input_reactive_ts$mer_data <-
       input_reactive_ts$mer_data %>% filter(tolower(facility) != "data reported above facility level")
     
@@ -1437,7 +1449,8 @@ server <- function(input, output, session) {
     input_reactive_ts$mer_data <-
       rbind(input_reactive_ts$mer_data[-grep("\\+", input_reactive_ts$mer_data$ageasentered), ],
             input_reactive_ts$mer_data[grep("50+", input_reactive_ts$mer_data$ageasentered), ])
-    
+
+    # remove rows that contain this no longer used age group of 0-9
     input_reactive_ts$mer_data <- input_reactive_ts$mer_data[-grep("<+[0-9]", input_reactive_ts$mer_data$ageasentered), ]
     
     # For HTS_INDEX, keep only those rows where statushiv is positive or negative
@@ -1448,7 +1461,8 @@ server <- function(input, output, session) {
     # Drop deduplication rows from prime partner
     input_reactive_ts$mer_data <-
       input_reactive_ts$mer_data[!input_reactive_ts$mer_data$primepartner %in% c("Dedup", "TBD"),]
-    
+
+    # drop columns no longer needed
     input_reactive_ts$mer_data <-
       input_reactive_ts$mer_data[,!names(input_reactive_ts$mer_data) %in% c("numeratordenom",
                                         "standardizeddisaggregate",
@@ -1469,7 +1483,9 @@ server <- function(input, output, session) {
       filter(!is.na(value)) %>%
       .$indicator %>%
       unique()
-    
+
+    # precautionary step to make sure there is data in the time period selected - should not be triggered based on 
+    # steps added above, but keeping just in case
     if (length(indicators_to_keep) == 0) {
       shinyalert(
         "No data found in target year and quarter.",
@@ -1477,7 +1493,8 @@ server <- function(input, output, session) {
         type = "error"
       )
     }
-    
+
+    # only keep facilities that had values present in the selected year and quarter
     facilities_to_keep <- input_reactive_ts$mer_data_long %>%
       filter(fiscal_year == recent_year) %>%
       filter(qtr == recent_qtr) %>%
@@ -1485,10 +1502,12 @@ server <- function(input, output, session) {
       .$facility %>%
       unique() %>%
       as.character()
-    # Only keep these indicators
+      
+    # Only keep these indicators that are present in the year and quarter selected
     input_reactive_ts$mer_data_long <-
       input_reactive_ts$mer_data_long[input_reactive_ts$mer_data_long$indicator %in% indicators_to_keep,]
-    
+
+    # Only keep these facilities that are present in the year and quarter selected
     input_reactive_ts$mer_data_long <-
       input_reactive_ts$mer_data_long[as.character(input_reactive_ts$mer_data_long$facility) %in% facilities_to_keep,]
     
@@ -1497,27 +1516,30 @@ server <- function(input, output, session) {
       as.numeric(gsub(".*?([0-9]+).*", "\\1", input_reactive_ts$mer_data_long$qtr))
     
     # Take primepartner from most recent quarter in case it changed
+    # some facilities are present for 13+ quarters but the IP in charge changed during this period
     input_reactive_ts$mer_data_long <- input_reactive_ts$mer_data_long %>% arrange(desc(fiscal_year))
     input_reactive_ts$mer_data_long <- input_reactive_ts$mer_data_long %>%
       group_by(facility, indicator) %>%
       mutate(primepartner = primepartner[1])
 
-    # summarize by facility/indicator/fiscal_year/qtr
+    # summarize indicator value by facility/indicator/fiscal_year/qtr
     input_reactive_ts$mer_data_long <- input_reactive_ts$mer_data_long %>%
       group_by(psnu, primepartner, facility, indicator, fiscal_year, qtr) %>%
       summarize(value = sum(value, na.rm = TRUE), .groups = "drop")
-    
+
+    ## create a shell so that incase values are missing for particular time periods, we have places for them 
+    # in the shell and can impute with 0
     earliest_year <- min(input_reactive_ts$mer_data_long$fiscal_year)
     shell <-
-      expand.grid(fiscal_year = earliest_year:recent_year, qtr = 1:4) %>%
-      filter(!(fiscal_year >= recent_year &
+      expand.grid(fiscal_year = earliest_year:recent_year, qtr = 1:4) %>% # all years and quarters
+      filter(!(fiscal_year >= recent_year & # now filter out rows where the year-quarter is later than the one selected
                  qtr > as.numeric(
                    gsub(".*?([0-9]+).*", "\\1", recent_qtr)
                  ))) %>%
       arrange(desc(fiscal_year), desc(qtr)) %>%
-      # mutate(rownum = row_number()) %>% filter(rownum <= 12) %>% select(-rownum) %>%
       mutate(keep = paste0(fiscal_year, qtr))
-    
+
+    # take our long dataset and keep values from the timeperiods in the shell we just created
     input_reactive_ts$obs_to_keep <- input_reactive_ts$mer_data_long %>%
       mutate(yrqtr = paste0(fiscal_year, qtr)) %>%
       mutate(keep = ifelse(yrqtr %in% shell$keep, 1, 0)) %>%
@@ -1531,7 +1553,7 @@ server <- function(input, output, session) {
     
     # convert facility to character string
     input_reactive_ts$obs_to_keep$facility <- as.character(input_reactive_ts$obs_to_keep$facility)
-    
+
     input_reactive_ts$obs_to_keep
     
       cols_to_keep <-
@@ -1554,7 +1576,7 @@ server <- function(input, output, session) {
           "fundingagency"
         )
       
-      
+      # run some final checks - make sure all necessary columns are there
       if (sum(!cols_to_keep %in% names(input_reactive_ts$data_loaded)) > 0) {
         shinyalert(
           "Check the data file",
@@ -1564,7 +1586,8 @@ server <- function(input, output, session) {
           type = "error"
         )
       }
-      
+
+      # make sure we have enough time periods
       if (n_distinct(input_reactive_ts$obs_to_keep[, c("fiscal_year", "qtr")]) < 12) {
         shinyalert(
           "Check the data file",
@@ -1575,7 +1598,8 @@ server <- function(input, output, session) {
         shinyalert("Proceed", "Continue to run models.", type = "success")
       }
       
-      # input_reactive_ts$data_loaded <- NULL
+      # delete data from those intermediate tables to free up memory
+      # only keep obs_to_keep, which is what we'll feed to the model
       input_reactive_ts$mer_data <- NULL
       input_reactive_ts$mer_data_long <- NULL
       gc()
@@ -1583,6 +1607,7 @@ server <- function(input, output, session) {
     })
   })
 
+  # now that data is processed, enable the run model button
   observe({
     if(input$tsdatacheck == 0){
       disable("tsrun")
@@ -1591,10 +1616,15 @@ server <- function(input, output, session) {
       enable("tsrun")
     }
   })
-  
+
+  # initialize list to store outputs of TS model
   forout_reactive_ts <- reactiveValues()
-  
+
+  # execute code chunk when run model button is pressed
   observeEvent(input$tsrun, {
+
+    # runTimeSeries is defined in utils. returns a list of tables of results by ARIMA, STL, and ETS and 
+    # summary tables by indicator, facility, and IP
     tsoutputs <- runTimeSeries(
       dat = input_reactive_ts$obs_to_keep,
       recent_year = input$tsyear,
@@ -1603,7 +1633,8 @@ server <- function(input, output, session) {
       RETURN_ALL = TRUE,
       keys = keysts
     )
-    print("end")
+
+    # Retrieve model results and send tables back to UI for display
     output$ts2 = DT::renderDT(tsoutputs$ARIMA,
                               filter = "top",
                               options = list(scrollX = TRUE))
@@ -1629,7 +1660,8 @@ server <- function(input, output, session) {
     output$ts7 = DT::renderDT(tsoutputs$ip_scorecard,
                               filter = "top",
                               options = list(scrollX = TRUE))
-    
+
+    # add output tables to list to make available later for download
     forout_reactive_ts$ARIMA <- tsoutputs$ARIMA
     forout_reactive_ts$ETS <- tsoutputs$ETS
     forout_reactive_ts$STL <- tsoutputs$STL
@@ -1637,7 +1669,8 @@ server <- function(input, output, session) {
     forout_reactive_ts$FacilityScorecard <-
       tsoutputs$facility_scorecard
     forout_reactive_ts$IPScorecard <- tsoutputs$ip_scorecard
-    
+
+    # indicate to user that models runs are complete
     shinyalert("Proceed", "Completed Time series Models", type = "success")
     
   })
