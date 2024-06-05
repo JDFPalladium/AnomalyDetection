@@ -1674,7 +1674,11 @@ server <- function(input, output, session) {
     shinyalert("Proceed", "Completed Time series Models", type = "success")
     
   })
-  
+
+
+  # Download outputs -----------------
+
+  # Download summary recommender outputs when button is pressed
   output$download_rec_sum <- downloadHandler(
     filename = function() {
       "recommender_summary.xlsx"
@@ -1687,7 +1691,8 @@ server <- function(input, output, session) {
       # Create header style
       headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
       textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
-      
+
+      # Go through each table stored in list and if table exists, add it to the Excel workbook and format
       if(length(forout_reactive$scorecard)>0){
         addWorksheet(wb, 'Facility Scorecard', tabColour = "blue")
         writeData(wb, sheet = 'Facility Scorecard', forout_reactive$scorecard, startRow = 3)
@@ -1725,7 +1730,8 @@ server <- function(input, output, session) {
       
     }
   )
-  
+
+  # When user presses button to download all recommender outputs, prep summary and observation-level tables
   output$download_rec_all <- downloadHandler(
     filename = function() {
       "recommender_all.xlsx"
@@ -1812,7 +1818,8 @@ server <- function(input, output, session) {
       saveWorkbook(wb, file, overwrite = TRUE)
     }
   )
-  
+
+  # Create same functions for time series. first for when user wants to download summary tables only, then for all
   output$download_ts_sum <- downloadHandler(
     filename = function() {
       "timeseries_summary.xlsx"
