@@ -1527,8 +1527,7 @@ server <- function(input, output, session) {
       group_by(psnu, primepartner, facility, indicator, fiscal_year, qtr) %>%
       summarize(value = sum(value, na.rm = TRUE), .groups = "drop")
 
-    ## create a shell so that incase values are missing for particular time periods, we have places for them 
-    # in the shell and can impute with 0
+    ## create a shell so that we can get all valid year-quarter combinations for later filtering
     earliest_year <- min(input_reactive_ts$mer_data_long$fiscal_year)
     shell <-
       expand.grid(fiscal_year = earliest_year:recent_year, qtr = 1:4) %>% # all years and quarters
