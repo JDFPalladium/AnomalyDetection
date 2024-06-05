@@ -1,12 +1,14 @@
 #' sortOutputs
 #' 
-#' Sort outputs by outlier flag and then by Mahalanobis distance.
+#' Sort recommender model outputs by outlier flag and then by Mahalanobis distance.
 #' Order columns by keys, DATIM data, estimated values, normalized deviations, and then outlier flags
-#' Function will return all observatios or only anomalous observations based on user-set parameter of RETURN_ALL
 #'
 #' @param dat dataframe returned by runRecAnalysis function
 #' @param keys character vector defined above
 #' @param scenario_tmp character of scenario ran
+#' @param return_all logical, indicates to return anomalies only or all observations
+#' @param min_thresh numeric, minimum value to consider as important deviation from expected value
+#' @param fund character of funding agencies to include in output
 #'
 #' @return dataframe containing recommender outputs stacked for all sex disags
 #' @export
@@ -16,23 +18,22 @@ sortOutputs <- function(dat,keys,scenario_tmp, return_all, min_thresh, fund) {
   
   # remove funding scenario from keys
   keys <- keys[!keys == "fundingagency"]
-  
-  # order columns by keys, DATIM values, estimates (prepended with "E_"),
-  # normalize deviations (prepended with "D_"), Mahalanobis distance, and outlier flag
-  # if(fund){
-  #   dat <- dat %>% filter(fundingagency == "USAID") 
-  # }
 
+  # filter model outputs for funding agencies users are interested in
   dat <- dat[dat$fundingagency %in% fund, ]
-  
+
+  # remove fundingagency variable which is no longer needed
   dat <- dat %>% select(-fundingagency)
 
+  # order columns by keys, DATIM values, estimates (prepended with "E_"),
+  # normalize deviations (prepended with "D_"), Mahalanobis distance, and outlier flag
   site_out_total <- dat %>%
     select(names(dat)[!grepl("^E_|^D_|^MD|outlier_sp", names(dat))],
            names(dat)[grepl("^E_", names(dat))],
            names(dat)[grepl("^D_", names(dat))],
            names(dat)[grepl("^MD", names(dat))],
            names(dat)[grepl("outlier_sp", names(dat))])
+  
   # Sort by outlier flag, and then by Mahalanobis distance
   site_out_total <- site_out_total %>% 
     arrange(desc(outlier_sp), desc(MD)) %>%
@@ -58,7 +59,7 @@ sortOutputs <- function(dat,keys,scenario_tmp, return_all, min_thresh, fund) {
       if(length(cols_to_keep)<2){next}
       # Get the indicator with the maximum normalized deviation
       site_out_total[m, "Indicator"] <- colnames(dat_tmp[, cols_to_keep])[which.max(dat_tmp[, cols_to_keep])]
-      # For low values, set corresponding deviations to zero, so they are not colored as red later
+      # For values below min_thresh, set corresponding deviations to zero, so they are not colored as red later
       site_out_total[m, (n_keys+1+n_columns*2):(n_keys+n_columns*3)] <- ifelse(
         site_out_total[m, (n_keys+1):(n_keys+n_columns)] <= min_thresh,
         0,
@@ -71,7 +72,7 @@ sortOutputs <- function(dat,keys,scenario_tmp, return_all, min_thresh, fund) {
 
   }
   
-  # Concatenate reported values with estimates
+  # Concatenate reported values with estimates for easier display in app
   for(p in 1:n_columns){
     site_out_total[, n_keys+p] <- paste0(site_out_total[, n_keys+p],
                                          " (",
