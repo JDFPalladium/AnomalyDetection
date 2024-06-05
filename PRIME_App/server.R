@@ -1,9 +1,11 @@
+#### server.R, intakes items from ui.R, performs calculations, returns outputs to UI ####
 
 server <- function(input, output, session) {
 
 
 #### App Landing Page ---------------  
-  
+
+  # This loads as application is open - login popup
   observeEvent("",{
     showModal(modalDialog(
       id = "passwordModal",
@@ -14,9 +16,11 @@ server <- function(input, output, session) {
     )
     )
   })
-  
+
+  # Intiate reactiveValues, like a list, to store values to be retrieved about user from Datim database
   user <- reactiveValues(type = NULL)
-  
+
+  # Code triggered when user presses Submit button on popup above
   observeEvent(input$submitBtn, {
     
     # Check if entered username and password match
@@ -29,15 +33,18 @@ server <- function(input, output, session) {
         # store data so call is made only once
         user$type <- datimutils::getMyUserType()
 
+      # user has a value "type" - check if this type is in one of approved user groups, defined in global.R
         if(user$type %in% c(USG_USERS, PARTNER_USERS)){
-          
+
+          # If user is in approved user group, remove popup and enable access to main app
           removeModal()
+          # First step with main app, show informational popup
           showModal(modalDialog(includeHTML("intro_text.html"),
                                 easyClose = TRUE))
 
         }
         },
-        # This function throws an error if the login is not successful
+        # Throw an error if the login is not successful / user not found or not in approved user group
         error = function(e) {
           showNotification("Incorrect username or password. Please try again.", type = "warning")
           flog.info(paste0("User ", input$username, " login failed."), name = "datapack")
@@ -46,17 +53,12 @@ server <- function(input, output, session) {
 
   })
   
-  # observeEvent("", {
-  #   showModal(modalDialog(includeHTML("intro_text.html"),
-  #                         # footer = modalButton("Login")))
-  #                         easyClose = TRUE))
-  # })
-  
-  # observeEvent(input$intro, {
-  #   removeModal()
-  # })
-  
-  #### Recommender IntroJS ------
+  # User Instructions section ------
+  # Using introjs package
+  # First set up a data.frame that contains three columns - element, intro, position
+  # Each element corresponds to an element defined in ui.R. It is that UI object that will be highlighted
+  # when instructions are triggered. The text that will be displayed is in the intro column.
+  # Position indicated where relative to the UI item the instructions should appear.
   steps <- reactive(data.frame(
     element = c(
       ".main-header",
@@ -80,6 +82,8 @@ server <- function(input, output, session) {
     ),
     position = c("right", "right", "right", "right", "right", "bottom", "left")
   ))
+
+  # Code triggered when Recommender Instructions button is pressed, which has an ID "help" defined in ui.r
   observeEvent(input$help,
                introjs(
                  session,
@@ -91,7 +95,8 @@ server <- function(input, output, session) {
                  )
                ))
   
-  #### Time Series IntroJS
+  # Time Series Instructions ----
+  # Set up instructions for time series
   steps2 <- reactive(data.frame(
     element = c(
       ".main-header",
@@ -118,6 +123,8 @@ server <- function(input, output, session) {
                  "right", "right", "right",
                  "bottom", "left")
   ))
+
+  # Trigger instructions walkthrough when Time Series Instructions button is pressed
   observeEvent(input$help2,
                introjs(
                  session,
@@ -128,7 +135,10 @@ server <- function(input, output, session) {
                    "skipLabel" = "Skip"
                  )
                ))
-  
+
+  # Global UI Updates ----
+
+  # Update title of application at top based on value user selects from dropdown with ID "type"
   output$title <- renderText({
     if (input$type == "Recommender") {
       paste("Recommender Anomaly Detetction")
@@ -148,88 +158,116 @@ server <- function(input, output, session) {
   })
   
   # Recommender Pipeline -------------------------------
-  
+
+  # Initiate list to hold intermediate dataframes needed to run recommender analysis
   input_reactive <- reactiveValues()
-  
+
+  # When data upload button is pressed, re-initialize list to clear out data from previously selected OU
   observeEvent(input$rec_upload, {
     input_reactive <- reactiveValues()
   })
-  
+
+  # When upload data button is selected, trigger following code
   observeEvent(input$rec_upload, {
-    
+
+    # Provide progress updates to user
     withProgress(message = 'Loading Data', value = 0.5, {
 
+    # Connect to S3 buckets and get table names
     my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"))
 
+    # Select table name that contains name of OU, which is input$country_selected,
+    # contains "Site" as opposed to aggregate data, and "Recent" as opposed to historical
+    # my_data_recent is then the table name to extract
     my_data_recent <- my_items[grepl(input$country_selected, my_items$file_names) &
                                  grepl("Site", my_items$file_names) &
                                  grepl("Recent", my_items$file_names),]$path_names
 
+    # Extract desired table and store in data_recent
     data_recent <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
                                         trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
                                         bucket = Sys.getenv("S3_READ"),
                                         object = my_data_recent)
-  
+
+    # Add data to reactive list so that it persists beyond execution of this code chunk
     input_reactive$data_loaded <- data_recent
-    
+
+    # Deal with some inconsistency in column names. 
+    # Sometimes, prime_partner_name or primepartner will appear - change all to primepartner
     if("prime_partner_name" %in% names(input_reactive$data_loaded)){
       input_reactive$data_loaded$primepartner <- input_reactive$data_loaded$prime_partner_name
     }
+    # Sometimes, funding_agency or fundingagency will appear - change all to fundingagency
     if("funding_agency" %in% names(input_reactive$data_loaded)){
       input_reactive$data_loaded$fundingagency <- input_reactive$data_loaded$funding_agency
     }
+    # Sometimes, countryname or country will appear - change all to country
     if("countryname" %in% names(input_reactive$data_loaded)){
       input_reactive$data_loaded$country <- input_reactive$data_loaded$countryname
     }
-    print(table(input_reactive$data_loaded$country))
+
+    # If a region was selected, filter for the country or countries selected
     if (input_reactive$data_loaded$operatingunit[1] == "Asia Region") {
       input_reactive$data_loaded <- input_reactive$data_loaded %>% filter(country %in% input$asiafilter)
     }
     if (input_reactive$data_loaded$operatingunit[1] == "West Africa Region") {
       input_reactive$data_loaded <- input_reactive$data_loaded %>% filter(country %in% input$westafricafilter)
     }
-    print("e")
     if (input_reactive$data_loaded$operatingunit[1] == "Western Hemisphere Region") {
       input_reactive$data_loaded <- input_reactive$data_loaded %>% filter(country %in% input$westernhemishpherefilter)
     }
-    print(nrow(input_reactive$data_loaded))
+
+    # Update the year range for user selection based on years that appear in dataset
     updateNumericInput(session,
                        "year",
                        value = max(input_reactive$data_loaded$fiscal_year),
                        min = min(input_reactive$data_loaded$fiscal_year),
                        max = max(input_reactive$data_loaded$fiscal_year))
-    
+
+    # Update funder options in dropdown based on funding agencies that appear in dataset
     updatePickerInput(session,
                        "recfunder",
                        choices = unique(input_reactive$data_loaded$fundingagency),
                       selected = unique(input_reactive$data_loaded$fundingagency),
                       options = list(`actions-box` = TRUE))
-    
+
+    # Update default quarter displayed based on most recent quarter with data in dataset
+    # Because quarters are wide, this is not as straightforward as with year, so we must check
+    # for presence of values in those quarters.
+    # Quarters can have values present that are calculated based on data from previous quarters. So,
+    # we cannot select the most recent quarter with any values present. Instead, we check for the most recent
+    # quarter where at least 50% of values are present.
+
+    # First, take quarters 2, 3, and 4- if the year is present, then quarter 1 will have values and will be our
+    # default 
     most_recent_quarter <- input_reactive$data_loaded %>%
       filter(fiscal_year == max(input_reactive$data_loaded$fiscal_year)) %>%
       select(qtr2, qtr3, qtr4)
-    
+
+    # If most values in quarter 4 are present (not NA), then update displayed quarter to qtr4
     if((sum(is.na(most_recent_quarter$qtr4))/nrow(most_recent_quarter))<.5){
       
       updateSelectInput(session,
                         "quarter",
                         choices = c('qtr1', 'qtr2', 'qtr3', 'qtr4'),
                         selected = 'qtr4')
-      
+
+    # If most values in quarter 4 are NA, then check for quarter 3 and update displayed quarter accordingly
     } else if((sum(is.na(most_recent_quarter$qtr3))/nrow(most_recent_quarter))<.5){
       
       updateSelectInput(session,
                         "quarter",
                         choices = c('qtr1', 'qtr2', 'qtr3', 'qtr4'),
                         selected = 'qtr3')
-      
+    # If most values in quarter 3 are NA, then check for quarter 2 and update displayed quarter accordingly
     }  else if((sum(is.na(most_recent_quarter$qtr2))/nrow(most_recent_quarter))<.5){
       
       updateSelectInput(session,
                         "quarter",
                         choices = c('qtr1', 'qtr2', 'qtr3', 'qtr4'),
                         selected = 'qtr2')
-      
+
+    # If most values in quarter 2 are NA, then display quarter 1
     } else {
       
       updateSelectInput(session,
@@ -238,7 +276,8 @@ server <- function(input, output, session) {
                         selected = 'qtr1')
       
     }
-    
+
+    # Create popup for user to indicate that upload process is complete
     shinyalert("Proceed",
                "Select Year/Quarter for Analysis and Run Data Checks.",
                type="success")
