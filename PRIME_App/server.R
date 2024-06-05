@@ -156,6 +156,133 @@ server <- function(input, output, session) {
       paste("Time Series Anomaly Detection")
     }
   })
+
+    # Toogling UI output ----
+  # Some global parameters that swaps what UI output objects appear based whether Recommender or TS is selected
+  #RECOMMENDER DATA CHECK
+  output$rec_data <- reactive({
+    input$type == 'Recommender'
+  })
+  
+  outputOptions(output, 'rec_data', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER OBSERVATION Each observation compared against all observations
+  output$rec_sum <- reactive({
+    input$type == 'Recommender'
+  })
+  
+  outputOptions(output, 'rec_sum', suspendWhenHidden = FALSE)
+  
+  output$rec1 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec1', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER SEX
+  output$rec2 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec2', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER AGE
+  output$rec3 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec3', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER FACILITY
+  output$rec4 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec4', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER PSNU
+  output$rec5 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec5', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER Disag Summary
+  output$rec6 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec6', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER Facility Summary
+  output$rec7 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec7', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER Facility Summary
+  output$rec8 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec8', suspendWhenHidden = FALSE)
+  
+  #RECOMMENDER IP Summary
+  output$rec9 <- reactive({
+    (input$type == 'Recommender')
+  })
+  
+  outputOptions(output, 'rec9', suspendWhenHidden = FALSE)
+  
+  #Time Series
+  output$ts1 <- reactive({
+    input$type == 'Time Series'
+  })
+  
+  outputOptions(output, 'ts1', suspendWhenHidden = FALSE)
+  
+  output$ts2 <- reactive({
+    input$type == 'Time Series'
+  })
+  
+  outputOptions(output, 'ts2', suspendWhenHidden = FALSE)
+  
+  output$ts3 <- reactive({
+    input$type == 'Time Series'
+  })
+  
+  outputOptions(output, 'ts3', suspendWhenHidden = FALSE)
+  
+  output$ts4 <- reactive({
+    input$type == 'Time Series'
+  })
+  
+  outputOptions(output, 'ts4', suspendWhenHidden = FALSE)
+  
+  output$ts5 <- reactive({
+    input$type == 'Time Series'
+  })
+  
+  outputOptions(output, 'ts5', suspendWhenHidden = FALSE)
+  
+  output$ts6 <- reactive({
+    input$type == 'Time Series'
+  })
+  
+  outputOptions(output, 'ts6', suspendWhenHidden = FALSE)
+  
+  output$ts7 <- reactive({
+    input$type == 'Time Series'
+  })
+  
+  outputOptions(output, 'ts7', suspendWhenHidden = FALSE)
+  
+  output$ts8 <- reactive({
+    input$type == 'Time Series'
+  })
+  
+  outputOptions(output, 'ts8', suspendWhenHidden = FALSE)
   
   # Recommender Pipeline -------------------------------
 
@@ -1046,142 +1173,18 @@ server <- function(input, output, session) {
     })
   })
 
-  # Toogling UI output ----
-  # Some global parameters that swaps what UI output objects appear based whether Recommender or TS is selected
-  #RECOMMENDER DATA CHECK
-  output$rec_data <- reactive({
-    input$type == 'Recommender'
-  })
-  
-  outputOptions(output, 'rec_data', suspendWhenHidden = FALSE)
-  
-  #RECOMMENDER OBSERVATION Each observation compared against all observations
-  output$rec_sum <- reactive({
-    input$type == 'Recommender'
-  })
-  
-  outputOptions(output, 'rec_sum', suspendWhenHidden = FALSE)
-  
-  output$rec1 <- reactive({
-    (input$type == 'Recommender')
-  })
-  
-  outputOptions(output, 'rec1', suspendWhenHidden = FALSE)
-  
-  #RECOMMENDER SEX
-  output$rec2 <- reactive({
-    (input$type == 'Recommender')
-  })
-  
-  outputOptions(output, 'rec2', suspendWhenHidden = FALSE)
-  
-  #RECOMMENDER AGE
-  output$rec3 <- reactive({
-    (input$type == 'Recommender')
-  })
-  
-  outputOptions(output, 'rec3', suspendWhenHidden = FALSE)
-  
-  #RECOMMENDER FACILITY
-  output$rec4 <- reactive({
-    (input$type == 'Recommender')
-  })
-  
-  outputOptions(output, 'rec4', suspendWhenHidden = FALSE)
-  
-  #RECOMMENDER PSNU
-  output$rec5 <- reactive({
-    (input$type == 'Recommender')
-  })
-  
-  outputOptions(output, 'rec5', suspendWhenHidden = FALSE)
-  
-  #RECOMMENDER Disag Summary
-  output$rec6 <- reactive({
-    (input$type == 'Recommender')
-  })
-  
-  outputOptions(output, 'rec6', suspendWhenHidden = FALSE)
-  
-  #RECOMMENDER Facility Summary
-  output$rec7 <- reactive({
-    (input$type == 'Recommender')
-  })
-  
-  outputOptions(output, 'rec7', suspendWhenHidden = FALSE)
-  
-  #RECOMMENDER Facility Summary
-  output$rec8 <- reactive({
-    (input$type == 'Recommender')
-  })
-  
-  outputOptions(output, 'rec8', suspendWhenHidden = FALSE)
-  
-  #RECOMMENDER IP Summary
-  output$rec9 <- reactive({
-    (input$type == 'Recommender')
-  })
-  
-  outputOptions(output, 'rec9', suspendWhenHidden = FALSE)
-  
-  #Time Series
-  output$ts1 <- reactive({
-    input$type == 'Time Series'
-  })
-  
-  outputOptions(output, 'ts1', suspendWhenHidden = FALSE)
-  
-  output$ts2 <- reactive({
-    input$type == 'Time Series'
-  })
-  
-  outputOptions(output, 'ts2', suspendWhenHidden = FALSE)
-  
-  output$ts3 <- reactive({
-    input$type == 'Time Series'
-  })
-  
-  outputOptions(output, 'ts3', suspendWhenHidden = FALSE)
-  
-  output$ts4 <- reactive({
-    input$type == 'Time Series'
-  })
-  
-  outputOptions(output, 'ts4', suspendWhenHidden = FALSE)
-  
-  output$ts5 <- reactive({
-    input$type == 'Time Series'
-  })
-  
-  outputOptions(output, 'ts5', suspendWhenHidden = FALSE)
-  
-  output$ts6 <- reactive({
-    input$type == 'Time Series'
-  })
-  
-  outputOptions(output, 'ts6', suspendWhenHidden = FALSE)
-  
-  output$ts7 <- reactive({
-    input$type == 'Time Series'
-  })
-  
-  outputOptions(output, 'ts7', suspendWhenHidden = FALSE)
-  
-  output$ts8 <- reactive({
-    input$type == 'Time Series'
-  })
-  
-  outputOptions(output, 'ts8', suspendWhenHidden = FALSE)
-
-
 
   # Time Series ----------------------
+
+  # initialize list to store tables
   input_reactive_ts <- reactiveValues()
-  
+
+  # any time new data is uploaded, re-initialize list to remove what's there
   observeEvent(input$ts_upload, {
     input_reactive_ts <- reactiveValues()
   })
-  
+
+  # if no indicators are selected, then there's nothing to upload, so grey out upload button
   observe({
     if(is.null(input$ts_vars)){
       disable("ts_upload")
@@ -1190,23 +1193,30 @@ server <- function(input, output, session) {
       enable("ts_upload")
     }
   })
-  
+
+  # code chunk executed when TS data upload button is pressed
   observeEvent(input$ts_upload, {
+
+    # for time series, we want to pull in historical data, so we do two pulls
+    # first, we'll retreive data from the table that contains the string "Recent"
+    # then, we'll retrieve data from the table that contains the string "Historical"
     
     withProgress(message = 'Loading Recent Data', value = 0.3, {
-      
+
+      # steps to retrieve data from S3 bucket are same as above
       my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"))
 
       my_data_recent <- my_items[grepl(input$country_selected_ts, my_items$file_names) &
                                    grepl("Site", my_items$file_names) &
                                    grepl("Recent", my_items$file_names),]$path_names
-      print(my_data_recent)
+
       data_recent <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
                                           trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
                                           bucket = Sys.getenv("S3_READ"),
                                           object = my_data_recent)
-      print(dim(data_recent))
-      
+
+      # Synchronizing column names as before - do this for each table separately before stacking, otherwise
+      # the vertical stacking may not work correctly
       if("prime_partner_name" %in% names(data_recent)){
         data_recent$primepartner <- data_recent$prime_partner_name
       }
@@ -1218,7 +1228,8 @@ server <- function(input, output, session) {
       }
       
     })
-    
+
+    # now, repeat with earlier dataset
     withProgress(message = 'Loading Historical Data', value = 0.7, {
       
       my_data_historical <- my_items[grepl(input$country_selected_ts, my_items$file_names) &
@@ -1229,7 +1240,6 @@ server <- function(input, output, session) {
                                           trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
                                           bucket = Sys.getenv("S3_READ"),
                                           object = my_data_historical)
-      print(dim(data_historical))
       
       if("prime_partner_name" %in% names(data_historical)){
         data_historical$primepartner <- data_historical$prime_partner_name
@@ -1240,12 +1250,14 @@ server <- function(input, output, session) {
       if("countryname" %in% names(data_historical)){
         data_historical$country <- data_historical$countryname
       }
-      
+
+      # Combine the two datasets
       data_all <- bind_rows(data_recent, data_historical)
       
-      # input_reactive_ts$data_all <- data_all # keep this for second runs
+      # add data to list so it persists
       input_reactive_ts$data_loaded <- data_all
-      
+
+      # If region is selected, filter for country/countries
       if (input_reactive_ts$data_loaded$operatingunit[1] == "Asia Region") {
         input_reactive_ts$data_loaded <- input_reactive_ts$data_loaded %>% filter(country == input$asiafilter_ts)
       }
@@ -1258,15 +1270,11 @@ server <- function(input, output, session) {
         input_reactive_ts$data_loaded <- input_reactive_ts$data_loaded %>% filter(country == input$westernhemishpherefilter_ts)
       }
       
-      # input_reactive_ts$data_loaded <- input_reactive_ts$data_loaded[input_reactive_ts$data_loaded$indicator %in% input$ts_vars, ]
-      
-      print(dim(input_reactive_ts$data_loaded))
-      
-      # Logic to calculate what years and quarters are valid
-      # Get unique years and quarters, and then it's rows 13 and on
-      
+      ## Logic to calculate what years and quarters are valid
+      # For time series, we need to have at least 12 previous quarters of data
+      # Get unique years and quarters, arrange in reverse chronological order
       yrmt_check <- input_reactive_ts$data_loaded %>%
-        filter(indicator %in% input$ts_vars) %>%
+        filter(indicator %in% input$ts_vars) %>% # filter for selected indicators
         select(fiscal_year, qtr1, qtr2, qtr3, qtr4) %>%
         pivot_longer(cols = !fiscal_year,
                      names_to = "qtr",
@@ -1276,42 +1284,49 @@ server <- function(input, output, session) {
         group_by(fiscal_year, qtr) %>%
         summarize(count = n()) %>%
         arrange(desc(fiscal_year), desc(qtr)) 
-      
+
+      # keep rows that are not in the bottom twelve - this will leave any year-quarter with at least 12 prior observations
       yrmt_keep <- yrmt_check[1:(nrow(yrmt_check)-12), ]
-      
+
+      # now, update year selection to year-quarter combinations that have are valid
       updateNumericInput(session,
                          "tsyear",
                          value = max(yrmt_keep$fiscal_year),
                          min = min(yrmt_keep$fiscal_year),
                          max = max(yrmt_keep$fiscal_year))
       
-      # Reactive function to update selectInput choices based on numericInput value
+      # then, update quarter options that are valid for that fiscal year
+      # create a reactive value that will return valid quarter options for the year selected
       updateSelectInputChoices <- reactive({
+        
         numeric_value <- input$tsyear
-        print(input$tsyear)
-        # Define your logic to generate choices based on the numeric value
+        
+        # If year selected is most recent year, then get unique quarters for that year from table of valid year-quarters
         choices <- if(input$tsyear == max(yrmt_keep$fiscal_year)){
           as.character(unique(yrmt_keep$qtr[yrmt_keep$fiscal_year==max(yrmt_keep$fiscal_year)]))
+        # If year selected is earliest year, get unique valid quarters from that year
         } else if(input$tsyear == min(yrmt_keep$fiscal_year)){
           as.character(unique(yrmt_keep$qtr[yrmt_keep$fiscal_year==min(yrmt_keep$fiscal_year)])) 
+        # If selected year is in the middle, then all four quarters are valid options
         } else {c('qtr1', 'qtr2', 'qtr3', 'qtr4')}
         
         return(choices)
       })
       
-      # Update selectInput choices whenever the numericInput changes
+      # Update quarter options whenever the numericInput changes
       observe({
         choices <- updateSelectInputChoices()
         updateSelectInput(session, "tsquarter", choices = choices)
       })
-      
+
+      # update dropdown for funding agency options based on dataset loaded
       updatePickerInput(session,
                         "tsfunder",
                         choices = unique(input_reactive_ts$data_loaded$fundingagency),
                         selected = unique(input_reactive_ts$data_loaded$fundingagency),
                         options = list(`actions-box` = TRUE))
       
-      
+      # indicate to user that data is uploaded and to continue with year and quarter selection
       shinyalert("Proceed",
                  "Select Year/Quarter for Analysis and Run Data Checks.",
                  type="success")
@@ -1320,12 +1335,18 @@ server <- function(input, output, session) {
   })
   
   
-  #### Time Series DATA CHECK FUNCTION####
+  # Time Series data processing ----
+
+  # generate user prompts to avoid erros. same as with recommender, except we also want to remind user to
+  # re-upload data when they change indicators selected
+      
+  # As with recommender, initailize counters to generate helpful user prompts to avoid errors
   values$num_country_selections_ts <- 0
   values$num_year_selections_ts <- 0
   values$num_quarter_selections_ts <- 0
   values$num_indicator_selections_ts <- 0
-  
+
+  # when country selection changes after data is uploaded, remind user to re-upload
   observeEvent(input$country_selected_ts, {
     values$num_country_selections_ts <- values$num_country_selections_ts + 1
     if(values$num_country_selections_ts >= 2 & input$ts_upload >= 1){
@@ -1334,13 +1355,16 @@ server <- function(input, output, session) {
                  type = "warning")
     }
   })
-  
+
+  # when new data is uploaded, re-set counters for year, quarter, and indicator selections
   observeEvent(input$ts_upload, {
     values$num_year_selections_ts <- 0
     values$num_quarter_selections_ts <- 0
     values$num_indicator_selections_ts <- 0
   })
-  
+
+  # when year selected changes after data checks button was pressed, increment counter
+  # and remind users to rerun data checks buttons (which actually preps data for modeling)
   observeEvent(input$tsyear, {
     values$num_year_selections_ts <- values$num_year_selections_ts + 1
     if(values$num_year_selections_ts >= 2 & input$tsdatacheck >= 1){
@@ -1349,7 +1373,9 @@ server <- function(input, output, session) {
                  type = "warning")
     }
   })
-  
+
+  # when quarter selected changes after data checks button was pressed, increment counter
+  # and remind users to rerun data checks buttons (which actually preps data for modeling)
   observeEvent(input$tsquarter, {
     values$num_quarter_selections_ts <- values$num_quarter_selections_ts + 1
     if(values$num_quarter_selections_ts >= 2 & input$tsdatacheck >= 1){
@@ -1358,7 +1384,9 @@ server <- function(input, output, session) {
                  type = "warning")
     }
   })
-  
+
+  # when indicators selected changes after data checks button was pressed, increment counter
+  # and remind users to rerun data checks buttons (which actually preps data for modeling)
   observeEvent(input$ts_vars, {
     values$num_indicator_selections_ts <- values$num_indicator_selections_ts + 1
     if(values$num_indicator_selections_ts >= 1 & input$tsdatacheck >= 1){
@@ -1368,7 +1396,7 @@ server <- function(input, output, session) {
     }
   })
   
-  
+  # only once data is uploaded to we enable the data check button. 
   observe({
     if(input$ts_upload == 0){
       disable("tsdatacheck")
@@ -1377,7 +1405,8 @@ server <- function(input, output, session) {
       enable("tsdatacheck")
     }
   })
-  
+
+  ## code that executes when data check button is pressed
   observeEvent(input$tsdatacheck, {
     
     withProgress(message = 'Running Checks', value = 0.5, {
