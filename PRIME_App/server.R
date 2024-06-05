@@ -285,25 +285,43 @@ server <- function(input, output, session) {
     })
   })
 
+
+  # Recommender - Information Prompts for Users ----
+
+  # Three kinds of prompts are included:
+  # 1. If user has already uploaded data and then selects different OU, they must reupload data
+  # 2. If user has run data checks and then changes year selected, they must rerun data checks
+  # 3. If user has run data checks and then changes quarter selected, they must rerun data checks
+
+  # Intitailize list of values to keep track of user selections to inform informational prompts to avoid user error
   values <- reactiveValues()
+  
+  # Counter of country selections, year selections, and quarter selections
   values$num_country_selections <- 0
   values$num_year_selections <- 0
   values$num_quarter_selections <- 0
-  
+
+  # Prompt to reupload data when country selection changes. Code triggered when value of country selected changes
   observeEvent(input$country_selected, {
+    # Increment counter
     values$num_country_selections <- values$num_country_selections + 1
+    # If data is uploaded and country selection changes, then inform user data must be reuploaded to pull
+    # in data for newly selected country
     if(values$num_country_selections >= 2 & input$rec_upload >= 1){
       shinyalert("Reminder",
                  "Remember to reload data and rerun data checks after changing the country selected!",
                  type = "warning")
     }
   })
-  
+
+  # When data is uploaded, reset year and quarter selection counters as prompts are relevant for a given dataset.
   observeEvent(input$rec_upload, {
     values$num_year_selections <- 0
     values$num_quarter_selections <- 0
   })
-  
+
+  # When year selected changes, increment counter. If run data check has already been pressed, then prompt user
+  # to rerun data checks. Otherwise, previously selected year will be used.
   observeEvent(input$year, {
     values$num_year_selections <- values$num_year_selections + 1
     if(values$num_year_selections >= 2 & input$recdatacheck >= 1){
@@ -312,7 +330,9 @@ server <- function(input, output, session) {
                  type = "warning")
     }
   })
-  
+
+  # When quarter selected changes, increment counter. If run data check has already been pressed, then prompt user
+  # to rerun data checks. Otherwise, previously selected quarter will be used.
   observeEvent(input$quarter, {
     values$num_quarter_selections <- values$num_quarter_selections + 1
     if(values$num_quarter_selections >= 3 & input$recdatacheck >= 1){
@@ -321,7 +341,12 @@ server <- function(input, output, session) {
                  type = "warning")
     }
   })
-  
+
+  # We also disable buttons that cannot be run, to avoid user error
+  # For example, data checks cannot be run until data is uploaded.
+  # When rec_upload is 0, meaning data has not been uploaded yet, then datacheck button is disabled.
+  # Once data is uploaded, button is enabled. 
+  # Same logic applies later with data checks and run model button.
   observe({
     if(input$rec_upload == 0){
       disable("recdatacheck")
@@ -330,11 +355,16 @@ server <- function(input, output, session) {
       enable("recdatacheck")
     }
   })
-  
+
+  # Recommender - Data Checks ------------
+
+  # This code processes observations from the year and quarter selected and is triggered when the data check button is pressed
   observeEvent(input$recdatacheck, {
-    
+
+    # Send progress updates to users
     withProgress(message = 'Beginning Checks', value = 0.3, {
-      
+
+      # Create a copy of the uploaded dataset for processing
       input_reactive$data_recent <- input_reactive$data_loaded
     
       incProgress(.3, detail = paste("Processing Data"))
@@ -376,6 +406,8 @@ server <- function(input, output, session) {
     input_reactive$data_recent$tg <-
       ifelse(grepl("TG", input_reactive$data_recent$otherdisaggregate_sub), "Transgender", "")
     input_reactive$data_recent$sex2 <- paste(input_reactive$data_recent$sex, input_reactive$data_recent$tg, sep = "")
+    
+    # keep only necessary columns
     cols_to_keep <-
       c(
         "sitename",
@@ -392,9 +424,12 @@ server <- function(input, output, session) {
         input$quarter
       )
     input_reactive$data_recent <- input_reactive$data_recent[, cols_to_keep]
-    print(names(input_reactive$data_recent))
+
+    # rename sex2 back to original
     input_reactive$data_recent <- input_reactive$data_recent %>% dplyr::rename(sex = sex2)
-    
+
+    # Now, create a copy of data_recent to create a table that will be used for modeling with all disaggregates
+    # (later, we'll take data_recent and process a table for facility-level analysis)
     input_reactive$dat_disag_out1 <- input_reactive$data_recent
     
     # for disaggregate output - create a column for the key population disaggregate
@@ -421,12 +456,13 @@ server <- function(input, output, session) {
                        primepartner,
                        fundingagency) %>%
       summarise(qtr_sum = sum(qtr, na.rm = TRUE))
-    print(names(input_reactive$dat_disag_out1))
+
     # for disaggregate output - pivot wider to get MER indicators in wide format
     input_reactive$dat_disag_out <- input_reactive$dat_disag_out1 %>%
       pivot_wider(names_from = "indicator", values_from = "qtr_sum") %>%
       as.data.frame()
 
+    # Now, we'll copy data_recent and create dat_facility_out to be used when modeling facility level data
     input_reactive$dat_facility_out <- input_reactive$data_recent
     
     # facility level file - filter for just the quarter of interest
@@ -444,10 +480,11 @@ server <- function(input, output, session) {
       pivot_wider(names_from = "indicator", values_from = "qtr_sum") %>%
       as.data.frame()
     
-    # Run checks ---------------
-    
+    # Give progress update to user
     incProgress(.3, detail = paste("Checking Names and Dimensions"))
-    
+
+    # Run checks
+      
     # Check to confirm if fiscal year selected by user for analysis exists in the dataset
     if(!input$year %in% unique(input_reactive$data_recent$fiscal_year)){
       shinyalert("Check the data file", "Please confirm the fiscal year selected is included in the file uploaded.", type="error")
@@ -490,15 +527,19 @@ server <- function(input, output, session) {
       shinyalert("Check the data file", "There are fewer than three indicators present and/or fewer than 100 observations.", type="error")
       } else
     shinyalert("Proceed", "Continue to Run Models", type="success")
-        
-    # input_reactive$data_loaded <- NULL
+
+    
+    # Set data_recent and data_disag_out1 to NULL since we no longer need these intermediary tables
+    # We retain data_loaded, so that we can rerun this process should the user change the year or quarter
+    # We retain dat_disag_out and dat_facility_out which we'll feed to the modeling code
     input_reactive$data_recent <- NULL
     input_reactive$data_disag_out1 <- NULL
     gc()
     
   })
   })
-  
+
+  # After data checks are run, enable Run Model button
   observe({
     if(input$recdatacheck == 0){
       disable("recrun")
@@ -508,43 +549,53 @@ server <- function(input, output, session) {
     }
   })
   
-  #### Run Rec Model ####
-  
+  # Run Recommender Model ----
+
+  # Initialize list to store outputs of each model run and summary tables
   forout_reactive <- reactiveValues()
-  
+
+  # Whenever model is run (e.g. for a second time), re-initialize list to clear out prior results
   observeEvent(input$recrun, {
     forout_reactive <- reactiveValues()
   })
-  
+
+  # Code triggered when Run Model button is pressed
   observeEvent(input$recrun, {
-    
+
+    # Initialize objects to store results
     all_outputs <- NULL
     site_sex_outliers <- NULL
     site_age_outliers <- NULL
     facility_outputs <- NULL
-    
+
+    # Provide users with progress updates, indicating which model type is being run
     withProgress(message = 'Running Models', value = 0, {
-      # Scenario can take on values set by user including "all", "sex", and "age"
-      # if (input$obs) {
+      # Print progress update
       incProgress(.2, detail = paste("Running Model with All Disaggregrates"))
-      
+
+      # Additional check - if there are not enough values compared to indicators, there is not enough data to run analysis
       if(nrow(input_reactive$dat_disag_out)/ncol(input_reactive$dat_disag_out) < 3){
         shinyalert(title = "Warning",
                    text = "Insufficient Data to Run Analysis with All Disaggregates",
                    type = "warning")
       }
-      
+
+      # If there is enough data, proceed
       if(nrow(input_reactive$dat_disag_out)/ncol(input_reactive$dat_disag_out) > 3){
 
-        # Apply the runRecAnalysis function on entire dataset disaggregated by sex and age
+        # Apply the runRecAnalysis function on entire dataset, creating a single set of global parameters
+        # In a tryCatch because code assumes outliers will be found. If none are, then print error message
         all_outputs <- tryCatch({
-          runRecAnalysis(dat = input_reactive$dat_disag_out,
-                         keys = keys_disag)
+          # runRecAnalysis is defined in utils.R
+          runRecAnalysis(dat = input_reactive$dat_disag_out, 
+                         keys = keys_disag) 
         }, error = function(cond){
           message("No Outliers Found with All Disags")
           #message(cond)
         })
-        # Sort outputs by anomalous distance
+        
+        # Sort outputs by distance metric - SortOutputs function defined in utils.R
+        # Again, in tryCatch, in case no outliers were found
         all_outputs <- tryCatch({
           sortOutputs(
             all_outputs,
@@ -558,6 +609,9 @@ server <- function(input, output, session) {
           message("No Outliers Found with All Disags")
           #message(cond)
         })
+
+        # If outliers were found, then all_outputs will exist
+        # Generate table that displays observation-level results and return to UI as output$rec1
         if(exists("all_outputs")){
           output$rec1 = DT::renderDT(
             datatable(
