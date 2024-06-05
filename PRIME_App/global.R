@@ -28,6 +28,7 @@ library(aws.s3)
 library(pdaprules)
 library(readr)
 library(datimutils)
+library(paws)
 
 #Global Settings
 source("utils.R")
