@@ -627,6 +627,7 @@ server <- function(input, output, session) {
                                )))
                              )))
             ) %>%
+            # this is the color coding
               formatStyle(
                 7:(6 + length(grep(
                   "^D_", colnames(all_outputs)
@@ -647,14 +648,15 @@ server <- function(input, output, session) {
                 )
               )
           )
+          # store this table as well for download
           forout_reactive$all_outputs <- all_outputs 
         }
       }
-      # }
-      
-      # if (input$sex) {
+
+      # Update progress for user to indicate next set of models are being run
       incProgress(.2, detail = paste("Running Model with Sex Disaggregrates"))
-      
+
+      ## Run models generating patterns by sex
       dat <- input_reactive$dat_disag_out
       
       # Confirm sex is a string and not a factor
@@ -665,15 +667,20 @@ server <- function(input, output, session) {
       
       # Split dataset by sex and run Recommender analysis on each subset
       site_split <- split(dat, dat$sex)
+
+      # Initiate list to store results for each sex
       site_out <- list()
       for (j in 1:length(site_split)) {
-        
+
+        # Same check as before - make sure there are at least 3X columns as observations
+        # Otherwise throw warning to user and don't proceed with analysis
         if(nrow(site_split[[j]])/ncol(site_split[[j]]) < 3){
           shinyalert(title = "Warning",
                      text = paste("Insufficient Data to Run Analysis for Sex Subgroup"),
                      type = "warning")
         }
-        
+
+        # If there is sufficent data, then proceed
         if(nrow(site_split[[j]])/ncol(site_split[[j]]) > 3){
           site_out[[j]] <- tryCatch({
             runRecAnalysis(site_split[[j]],
@@ -684,9 +691,11 @@ server <- function(input, output, session) {
           })
         }
       }
-      # stack the outputs
-      site_sex_outliers <- do.call(plyr::rbind.fill, site_out)
       
+      # stack the outputs for male and female
+      site_sex_outliers <- do.call(plyr::rbind.fill, site_out)
+
+      # Sort outputs as before
       site_sex_outliers <- tryCatch({
         sortOutputs(
           site_sex_outliers,
@@ -700,6 +709,8 @@ server <- function(input, output, session) {
         message("No Outliers Found for Sex Disag")
         #message(cond)
       })
+
+      # If outliers are found, create output table to send back to UI and store table for download
       if (exists("site_sex_outliers")) {
         output$rec2 = DT::renderDT(
           datatable(
@@ -745,11 +756,12 @@ server <- function(input, output, session) {
                    "Completed Sex Disag. No outliers found.",
                    type = "success")
       }
-      # }
       
-      # if (input$age) {
+      # Update progress for users
       incProgress(.2, detail = paste("Running Model with Age Disaggregrates"))
-      
+
+      ## Run model with age disaggregates
+      # Filter for observations with relevant age categories
       dat <- input_reactive$dat_disag_out %>%
         filter(ageasentered %in% c("01-04", "05-09", "10-14", "15-19", "20-24",
                                    "25-29", "30-34", "35-39", "40-44", "45-49",
@@ -799,8 +811,6 @@ server <- function(input, output, session) {
           }
         }
         
-        # site_out <- site_out[sapply(site_out, length) != 0]
-        
         # stack the outputs and drop the age group variable so that outputs from all runs can be appropriately stacked
         site_age_outliers <-
           do.call(plyr::rbind.fill, site_out) %>% select(-agegroup)
@@ -819,7 +829,8 @@ server <- function(input, output, session) {
           message("No Outliers Found for Disag for Age Group:")
           # message(cond)
         })
-        
+
+        # If outliers are found, create table to send back to UI
         if (exists("site_age_outliers")) {
           output$rec3 = DT::renderDT(
             datatable(
@@ -865,11 +876,11 @@ server <- function(input, output, session) {
                      type = "success")
         }
       }
-      # }
       
-      # if (input$facility) {
+      # update progress for users
       incProgress(.2, detail = paste("Running Model at Facility Level"))
-      
+
+      # Fun facility-level analysis
       if(nrow(input_reactive$dat_facility_out)/ncol(input_reactive$dat_facility_out) < 3){
         shinyalert(title = "Warning",
                    text = "Insufficient Data to Run Analysis at Facility Level",
@@ -945,15 +956,18 @@ server <- function(input, output, session) {
         }
         
       }
-      # }
-      
+
+      ## Now that all model runs are complete, create summary tables
+      # First, combine output tables in a list and keep only those that are non-null, meaning they have results
       disags_list <-
         list(all_outputs, site_sex_outliers, site_age_outliers)
       disags_list <- disags_list[lengths(disags_list) != 0]
       
       facility_list <- list(facility_outputs)
       facility_list <- facility_list[lengths(facility_list) != 0]
-      
+
+      # If there are any results, then create a summary table
+      # createSummaryTab is defined in utils.R
       if (length(disags_list) > 0) {
         incProgress(.2, detail = paste("Creating Summary Disaggregate Tab"))
         disags_summary <-
@@ -963,6 +977,7 @@ server <- function(input, output, session) {
           filter = "top",
           options = list(scrollX = TRUE)
         )
+        # Add summary table to list for later download
         forout_reactive$disags_summary <- disags_summary$summary
       }
       
@@ -991,7 +1006,8 @@ server <- function(input, output, session) {
       
       # Combine lists into dataframe
       dat_tmp <- rbindlist(dat_tmp)
-      # Generate scorecard
+      
+      # Generate scorecard - createScoreCard defined in utils
       incProgress(.2, detail = paste("Creating Scorecard"))
       scorecard <- createScoreCard(scorecard_in = dat_tmp)
       output$rec8 = DT::renderDT(scorecard,
@@ -999,12 +1015,13 @@ server <- function(input, output, session) {
                                  options = list(scrollX = TRUE))
       forout_reactive$scorecard <- scorecard
       
-      # Create IP scorecard sheet
+      # Create IP scorecard sheet - summarize number of outliers by indicator by partner
       cover_ip <- dat_tmp %>%
         group_by(primepartner, Indicator) %>%
         summarize(Outliers = n(), .groups = "drop") %>% 
         mutate(primepartner = as.character(primepartner))
-      
+
+      # Then, for each IP, get the five most commonly flagged indicators
       ips <- unique(cover_ip$primepartner)
       ip_cover <- data.frame()
       for(i in 1:length(ips)){
@@ -1016,16 +1033,21 @@ server <- function(input, output, session) {
         ip_cover[1:(min(length(dat_tmp$Indicator), 5)), i] <- dat_tmp$Indicator
         names(ip_cover)[i] <- ips[i]
       }
-      
+
+      # Return IP scorecard to UI
       output$rec9 = DT::renderDT(ip_cover)
-      
+
+      # and store IP scorecard for later download
       forout_reactive$ipcover <- ip_cover
-      
+
+      # notify user that model runs are complete
       shinyalert("Proceed", "Completed Recommender Models", type = "success")
       
     })
   })
-  
+
+  # Toogling UI output ----
+  # Some global parameters that swaps what UI output objects appear based whether Recommender or TS is selected
   #RECOMMENDER DATA CHECK
   output$rec_data <- reactive({
     input$type == 'Recommender'
@@ -1150,7 +1172,10 @@ server <- function(input, output, session) {
   })
   
   outputOptions(output, 'ts8', suspendWhenHidden = FALSE)
-  
+
+
+
+  # Time Series ----------------------
   input_reactive_ts <- reactiveValues()
   
   observeEvent(input$ts_upload, {
