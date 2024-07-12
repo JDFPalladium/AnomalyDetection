@@ -1,50 +1,290 @@
+# connect to s3
+tryCatch({
+  pdaprules::s3_connect()
+},
+error = function(e) {
+  print(e)
+})
+
+# test connection
+my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"))
+sample_file <- my_items[10,2]
+data_recent <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
+                                    trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
+                                    bucket = Sys.getenv("S3_READ"),
+                                    object = sample_file)
+
+print(head(data_recent))
+
+
+################ OAuth Client information #####################################
+if (interactive()) {
+  # testing url
+  options(shiny.port = 3123)
+  APP_URL <- "http://127.0.0.1:3123/"# This will be your local host path
+} else {
+  # deployed URL
+  APP_URL <- Sys.getenv("APP_URL") #This will be your shiny server path
+}
+
+{
+  
+  oauth_app <- httr::oauth_app(Sys.getenv("OAUTH_APPNAME"),
+                               key = Sys.getenv("OAUTH_KEYNAME"),        # dhis2 = Client ID
+                               secret = Sys.getenv("OAUTH_SECRET"), #dhis2 = Client Secret
+                               redirect_uri = APP_URL
+  )
+  
+  oauth_api <- httr::oauth_endpoint(base_url = paste0(Sys.getenv("BASE_URL"),"uaa/oauth"),
+                                    request=NULL,# Documentation says to leave this NULL for OAuth2
+                                    authorize = "authorize",
+                                    access="token"
+  )
+  
+  oauth_scope <- "ALL"
+}
+
+has_auth_code <- function(params) {
+  
+  return(!is.null(params$code))
+}
+
 
 server <- function(input, output, session) {
 
-
-#### App Landing Page ---------------  
-  
-  observeEvent("",{
-    showModal(modalDialog(
-      id = "passwordModal",
-      title = "Login",
-      textInput("username", "Username"),
-      passwordInput("password", "Password"),
-      footer = actionButton("submitBtn", "Submit", class = "btn-primary")
-    )
-    )
-  })
-  
+  user_input  <-  reactiveValues(authenticated = FALSE,
+                                 status = "",
+                                 d2_session = NULL,
+                                 memo_authorized = FALSE,
+                                 #modal = TRUE
+                                 )
+  # User and mechanisms reactive value pulled only once ----
   user <- reactiveValues(type = NULL)
+  mechanisms <- reactiveValues(my_cat_ops = NULL)
+  userGroups <- reactiveValues(streams = NULL)
   
-  observeEvent(input$submitBtn, {
-    
-    # Check if entered username and password match
-    tryCatch({
-        datimutils::loginToDATIM(base_url = "https://test.datim.org/",
-                                 username = input$username,
-                                 password = input$password
+  
+  
+  #### App Landing Page ---------------  
+  
+  output$password_modal_ui <- renderUI({
+    if (!user_input$authenticated) {
+      showModal(
+        modalDialog(
+          id = "passwordModal",
+          title = "Please Login",
+          footer = actionButton("login_button_oauth", "Log in with DATIM")
         )
-
-        # store data so call is made only once
-        user$type <- datimutils::getMyUserType()
-
-        if(user$type %in% c(USG_USERS, PARTNER_USERS)){
-          
-          removeModal()
-          showModal(modalDialog(includeHTML("intro_text.html"),
-                                easyClose = TRUE))
-
-        }
-        },
-        # This function throws an error if the login is not successful
-        error = function(e) {
-          showNotification("Incorrect username or password. Please try again.", type = "warning")
-          flog.info(paste0("User ", input$username, " login failed."), name = "datapack")
-        }
-    )
-
+      )
+    }
   })
+  
+  # observeEvent("",{
+  #   showModal(modalDialog(
+  #     id = "passwordModal",
+  #     title = "Login",
+  #     textInput("username", "Username"),
+  #     passwordInput("password", "Password"),
+  #     footer = actionButton("submitBtn", "Submit", class = "btn-primary")
+  #   )
+  #   )
+  # })
+  # 
+  
+  # observeEvent(user_input$modal, {
+  #   
+  #   print(
+  #     paste0(
+  #       "your modal value is: ",
+  #       user_input$modal
+  #     )
+  #   )
+  #   
+  #   if (user_input$modal) {
+  #     showModal(
+  #       modalDialog(
+  #       id = "passwordModal",
+  #       title = "Login",
+  #       # textInput("username", "Username"),
+  #       # passwordInput("password", "Password"),
+  #       footer = actionButton("login_button_oauth", "Log in with DATIM")
+  #       )
+  #     )
+  #   }
+  # })
+  
+  #UI that will display when redirected to OAuth login agent
+  output$ui_redirect <- renderUI({
+    #print(input$login_button_oauth) useful for debugging
+    if (!is.null(input$login_button_oauth)) { # nolint
+      if (input$login_button_oauth > 0) { # nolint
+        url <- httr::oauth2.0_authorize_url(oauth_api, oauth_app, scope = oauth_scope)
+        redirect <- sprintf("location.replace(\"%s\");", url)
+        tags$script(HTML(redirect))
+      } else NULL
+    } else NULL
+  })
+  
+  # # is the user authenticated?
+  # output$ui <- renderUI({
+  #   if(user_input$authenticated == FALSE) {
+  #     uiOutput("uiLogin")
+  #   } else {
+  #     uiOutput("authenticated")
+  #   }
+  # })
+  
+  
+  observeEvent(input$submitBtn > 0, {
+    
+    print("submitting to modal...")
+    #print(session$clientData$url_search)
+    
+    #Grabs the code from the url
+    params <- parseQueryString(session$clientData$url_search)
+    #Wait until the auth code actually exists
+    req(has_auth_code(params))
+    
+    #Manually create a token
+    token <- httr::oauth2.0_token(
+      app = oauth_app,
+      endpoint = oauth_api,
+      scope = oauth_scope,
+      use_basic_auth = TRUE,
+      oob_value = APP_URL,
+      cache = FALSE,
+      credentials = httr::oauth2.0_access_token(endpoint = oauth_api,
+                                                app = oauth_app,
+                                                code = params$code,
+                                                use_basic_auth = TRUE)
+    )
+    
+    #print("here is your token...")
+    #print(token)
+    
+    loginAttempt <- tryCatch({
+      print("attempting to login")
+      user_input$uuid <- uuid::UUIDgenerate()
+      datimutils::loginToDATIMOAuth(base_url =  Sys.getenv("BASE_URL"),
+                                    token = token,
+                                    app = oauth_app,
+                                    api = oauth_api,
+                                    redirect_uri = APP_URL,
+                                    scope = oauth_scope,
+                                    d2_session_envir = parent.env(environment())
+      )
+      
+      # we remove the login modal as we continue to validate access
+      removeModal()
+      showModal(
+        modalDialog(
+          id = "transitionModal",
+          title = "One moment while we validate credentials ...",
+          footer = NULL
+        )
+      )
+      
+      # DISALLOW USER ACCESS TO THE APP-----
+      
+      # store data so call is made only once
+      userGroups$streams <-  datimutils::getMyStreams()
+      user$type <- datimutils::getMyUserType()
+      mechanisms$my_cat_ops <- datimutils::listMechs()
+      
+      # if a user is not to be allowed deny them entry
+      if (!user$type %in% c(USG_USERS, PARTNER_USERS)) {
+        
+        # alert the user they cannot access the app
+        sendSweetAlert(
+          session,
+          title = "YOU CANNOT LOG IN",
+          text = "You are not authorized to use this application",
+          type = "error"
+        )
+        
+        # log them out
+        Sys.sleep(3)
+        flog.info(paste0("User ", user_input$d2_session$me$userCredentials$username, " logged out."))
+        user_input$authenticated  <-  FALSE
+        user_input$user_name <- ""
+        user_input$authorized  <-  FALSE
+        user_input$d2_session  <-  NULL
+        d2_default_session <- NULL
+        gc()
+        session$reload()
+        
+      }
+    },
+    # This function throws an error if the login is not successful
+    error = function(e) {
+      flog.info(paste0("User ", input$user_name, " login failed. ", e$message), name = "usgpartners")
+    }
+    )
+    
+    if (exists("d2_default_session")) {
+      
+      removeModal()
+      user_input$authenticated  <-  TRUE
+      user_input$d2_session  <-  d2_default_session$clone()
+      d2_default_session <- NULL
+      
+      #Need to check the user is a member of the PRIME Data Systems Group, COP Memo group, or a super user
+      user_input$memo_authorized <-
+        grepl("VDEqY8YeCEk|ezh8nmc4JbX", user_input$d2_session$me$userGroups) |
+        grepl(
+          "jtzbVV4ZmdP",
+          user_input$d2_session$me$userCredentials$userRoles
+        )
+      flog.info(
+        paste0(
+          "User ",
+          user_input$d2_session$me$userCredentials$username,
+          " logged in."
+        ),
+        name = "usgpartners"
+      )
+      
+      flog.info(
+        paste0(
+          "User ",
+          user_input$d2_session$me$userCredentials$username,
+          " logged in."
+        ),
+        name = "usgpartners"
+      )
+    }
+    
+  })
+  
+  
+    # observeEvent(input$submitBtn, {
+  #   
+  #   # Check if entered username and password match
+  #   tryCatch({
+  #       datimutils::loginToDATIM(base_url = Sys.getenv("BASE_URL"),
+  #                                username = input$username,
+  #                                password = input$password
+  #       )
+  # 
+  #       # store data so call is made only once
+  #       user$type <- datimutils::getMyUserType()
+  # 
+  #       if(user$type %in% c(USG_USERS, PARTNER_USERS)){
+  #         
+  #         removeModal()
+  #         showModal(modalDialog(includeHTML("intro_text.html"),
+  #                               easyClose = TRUE))
+  # 
+  #       }
+  #       },
+  #       # This function throws an error if the login is not successful
+  #       error = function(e) {
+  #         showNotification("Incorrect username or password. Please try again.", type = "warning")
+  #         flog.info(paste0("User ", input$username, " login failed."), name = "datapack")
+  #       }
+  #   )
+  # 
+  # })
   
   # observeEvent("", {
   #   showModal(modalDialog(includeHTML("intro_text.html"),
@@ -164,6 +404,8 @@ server <- function(input, output, session) {
     my_data_recent <- my_items[grepl(input$country_selected, my_items$file_names) &
                                  grepl("Site", my_items$file_names) &
                                  grepl("Recent", my_items$file_names),]$path_names
+    
+    print(my_data_recent)
 
     data_recent <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
                                         trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
