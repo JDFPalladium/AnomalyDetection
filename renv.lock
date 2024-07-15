@@ -178,6 +178,28 @@
       ],
       "Hash": "4f57884290cc75ab22f4af9e9d4ca862"
     },
+    "arrow": {
+      "Package": "arrow",
+      "Version": "16.1.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "R6",
+        "assertthat",
+        "bit64",
+        "cpp11",
+        "glue",
+        "methods",
+        "purrr",
+        "rlang",
+        "stats",
+        "tidyselect",
+        "utils",
+        "vctrs"
+      ],
+      "Hash": "d9cb18a8fc53895548150650cadde3a6"
+    },
     "askpass": {
       "Package": "askpass",
       "Version": "1.1",
@@ -1712,15 +1734,15 @@
     },
     "pdaprules": {
       "Package": "pdaprules",
-      "Version": "0.1.0",
+      "Version": "0.1.2",
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
       "RemoteRepo": "pdaprules",
       "RemoteUsername": "pepfar-datim",
-      "RemoteRef": "APD-3273",
-      "RemoteSha": "974080d43656981307a94ce0320c6d778d3075d9",
-      "Hash": "5715ce9deb62ace3230eadc066eed872"
+      "RemoteRef": "main",
+      "RemoteSha": "35431a424a3e982ea05204d1f4153ca0d310bdd6",
+      "Hash": "8413d6838b91b5ad7983b4d80e1d1a59"
     },
     "pillar": {
       "Package": "pillar",
