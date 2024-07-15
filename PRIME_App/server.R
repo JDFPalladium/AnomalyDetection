@@ -1,3 +1,21 @@
+# add read parquet
+read_parquet <- function(my_file) {
+  print(paste0("reading parquet file: ", my_file))
+  parquet_data <- aws.s3::s3read_using(FUN = arrow::read_parquet, 
+                       escape_double = FALSE,
+                       trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
+                       bucket = Sys.getenv("S3_READ"),
+                       object = my_file)
+  
+  # Post-process parquet data to replace empty quotes with NA in specific columns
+  replace_empty_with_na <- function(x) {
+    ifelse(x == "", NA, x)
+  }
+  
+  parquet_data <- parquet_data %>%
+    mutate(across(c(qtr1, qtr2, qtr3, qtr4), replace_empty_with_na))
+}
+
 # connect to s3
 tryCatch({
   pdaprules::s3_connect()
@@ -7,14 +25,14 @@ error = function(e) {
 })
 
 # test connection
-my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"))
-sample_file <- my_items[10,2]
-data_recent <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
-                                    trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
-                                    bucket = Sys.getenv("S3_READ"),
-                                    object = sample_file)
+# my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"), filter_parquet = TRUE)
+# sample_file <- my_items[10,2]
+# data_recent <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
+#                                     trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
+#                                     bucket = Sys.getenv("S3_READ"),
+#                                     object = sample_file)
+#data_recent <- read_parquet(sample_file)
 
-print(head(data_recent))
 
 
 ################ OAuth Client information #####################################
@@ -399,18 +417,19 @@ server <- function(input, output, session) {
     
     withProgress(message = 'Loading Data', value = 0.5, {
 
-    my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"))
+    my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"), filter_parquet = TRUE)
 
     my_data_recent <- my_items[grepl(input$country_selected, my_items$file_names) &
                                  grepl("Site", my_items$file_names) &
                                  grepl("Recent", my_items$file_names),]$path_names
     
-    print(my_data_recent)
+    print(paste0("recommender uploading: ", my_data_recent))
 
-    data_recent <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
-                                        trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
-                                        bucket = Sys.getenv("S3_READ"),
-                                        object = my_data_recent)
+    # data_recent <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
+    #                                     trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()),
+    #                                     bucket = Sys.getenv("S3_READ"),
+    #                                     object = my_data_recent)
+    data_recent <- read_parquet(my_data_recent)
   
     input_reactive$data_loaded <- data_recent
     
@@ -542,7 +561,6 @@ server <- function(input, output, session) {
     
       incProgress(.3, detail = paste("Processing Data"))
       
-    
     # Confirm they are strings and not factors
     input_reactive$data_recent$sitename <- as.character(input_reactive$data_recent$sitename)
     input_reactive$data_recent$psnu <- as.character(input_reactive$data_recent$psnu)
@@ -558,6 +576,7 @@ server <- function(input, output, session) {
     input_reactive$data_recent$qtr2 <- as.numeric(input_reactive$data_recent$qtr2)
     input_reactive$data_recent$qtr3 <- as.numeric(input_reactive$data_recent$qtr3)
     input_reactive$data_recent$qtr4 <- as.numeric(input_reactive$data_recent$qtr4)
+    print(names(input_reactive$data_recent))
     
     
     # filter to the fiscal year entered by the user
@@ -595,7 +614,6 @@ server <- function(input, output, session) {
         input$quarter
       )
     input_reactive$data_recent <- input_reactive$data_recent[, cols_to_keep]
-    print(names(input_reactive$data_recent))
     input_reactive$data_recent <- input_reactive$data_recent %>% dplyr::rename(sex = sex2)
     
     input_reactive$dat_disag_out1 <- input_reactive$data_recent
@@ -624,7 +642,7 @@ server <- function(input, output, session) {
                        primepartner,
                        fundingagency) %>%
       summarise(qtr_sum = sum(qtr, na.rm = TRUE))
-    print(names(input_reactive$dat_disag_out1))
+
     # for disaggregate output - pivot wider to get MER indicators in wide format
     input_reactive$dat_disag_out <- input_reactive$dat_disag_out1 %>%
       pivot_wider(names_from = "indicator", values_from = "qtr_sum") %>%
@@ -648,7 +666,6 @@ server <- function(input, output, session) {
       as.data.frame()
     
     # Run checks ---------------
-    
     incProgress(.3, detail = paste("Checking Names and Dimensions"))
     
     # Check to confirm if fiscal year selected by user for analysis exists in the dataset
@@ -720,7 +737,7 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$recrun, {
-    
+    gc()
     all_outputs <- NULL
     site_sex_outliers <- NULL
     site_age_outliers <- NULL
@@ -1319,16 +1336,17 @@ server <- function(input, output, session) {
     
     withProgress(message = 'Loading Recent Data', value = 0.3, {
       
-      my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"))
+      my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"), filter_parquet = TRUE)
 
       my_data_recent <- my_items[grepl(input$country_selected_ts, my_items$file_names) &
                                    grepl("Site", my_items$file_names) &
                                    grepl("Recent", my_items$file_names),]$path_names
-      print(my_data_recent)
-      data_recent <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
-                                          trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
-                                          bucket = Sys.getenv("S3_READ"),
-                                          object = my_data_recent)
+      print(paste0("upload: ", my_data_recent))
+      # data_recent <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
+      #                                     trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()),
+      #                                     bucket = Sys.getenv("S3_READ"),
+      #                                     object = my_data_recent)
+      data_recent <- read_parquet(my_data_recent)
       print(dim(data_recent))
       
       if("prime_partner_name" %in% names(data_recent)){
@@ -1348,11 +1366,12 @@ server <- function(input, output, session) {
       my_data_historical <- my_items[grepl(input$country_selected_ts, my_items$file_names) &
                                    grepl("Site", my_items$file_names) &
                                    grepl("Historic", my_items$file_names),]$path_names
-      
-      data_historical <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
-                                          trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
-                                          bucket = Sys.getenv("S3_READ"),
-                                          object = my_data_historical)
+      print(paste0("historical: ", my_data_historical))
+      # data_historical <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
+      #                                     trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()),
+      #                                     bucket = Sys.getenv("S3_READ"),
+      #                                     object = my_data_historical)
+      data_historical <- read_parquet(my_data_historical)
       print(dim(data_historical))
       
       if("prime_partner_name" %in% names(data_historical)){

@@ -361,6 +361,46 @@
         "Built": "R 4.1.0; ; 2021-05-19 01:07:29 UTC; unix"
       }
     },
+    "arrow": {
+      "Source": "CRAN",
+      "Repository": "https://rstudio-package.testing.ap.datim.org/prod/latest",
+      "description": {
+        "Package": "arrow",
+        "Title": "Integration to 'Apache' 'Arrow'",
+        "Version": "16.1.0",
+        "Authors@R": "c(\n    person(\"Neal\", \"Richardson\", email = \"neal.p.richardson@gmail.com\", role = c(\"aut\")),\n    person(\"Ian\", \"Cook\", email = \"ianmcook@gmail.com\", role = c(\"aut\")),\n    person(\"Nic\", \"Crane\", email = \"thisisnic@gmail.com\", role = c(\"aut\")),\n    person(\"Dewey\", \"Dunnington\", role = c(\"aut\"), email = \"dewey@fishandwhistle.net\", comment = c(ORCID = \"0000-0002-9415-4582\")),\n    person(\"Romain\", \"Fran\\u00e7ois\", role = c(\"aut\"), comment = c(ORCID = \"0000-0002-2444-4226\")),\n    person(\"Jonathan\", \"Keane\", email = \"jkeane@gmail.com\", role = c(\"aut\", \"cre\")),\n    person(\"Drago\\u0219\", \"Moldovan-Gr\\u00fcnfeld\", email = \"dragos.mold@gmail.com\", role = c(\"aut\")),\n    person(\"Jeroen\", \"Ooms\", email = \"jeroen@berkeley.edu\", role = c(\"aut\")),\n    person(\"Jacob\", \"Wujciak-Jens\", email = \"jacob@wujciak.de\", role = c(\"aut\")),\n    person(\"Javier\", \"Luraschi\", email = \"javier@rstudio.com\", role = c(\"ctb\")),\n    person(\"Karl\", \"Dunkle Werner\", email = \"karldw@users.noreply.github.com\", role = c(\"ctb\"), comment = c(ORCID = \"0000-0003-0523-7309\")),\n    person(\"Jeffrey\", \"Wong\", email = \"jeffreyw@netflix.com\", role = c(\"ctb\")),\n    person(\"Apache Arrow\", email = \"dev@arrow.apache.org\", role = c(\"aut\", \"cph\"))\n  )",
+        "Description": "'Apache' 'Arrow' <https://arrow.apache.org/> is a cross-language\n    development platform for in-memory data. It specifies a standardized\n    language-independent columnar memory format for flat and hierarchical data,\n    organized for efficient analytic operations on modern hardware. This\n    package provides an interface to the 'Arrow C++' library.",
+        "Depends": "R (>= 4.0)",
+        "License": "Apache License (>= 2.0)",
+        "URL": "https://github.com/apache/arrow/, https://arrow.apache.org/docs/r/",
+        "BugReports": "https://github.com/apache/arrow/issues",
+        "Encoding": "UTF-8",
+        "Language": "en-US",
+        "SystemRequirements": "C++17; for AWS S3 support on Linux, libcurl and\nopenssl (optional); cmake >= 3.16 (build-time only, and only\nfor full source build)",
+        "Biarch": "true",
+        "Imports": "assertthat, bit64 (>= 0.9-7), glue, methods, purrr, R6, rlang\n(>= 1.0.0), stats, tidyselect (>= 1.0.0), utils, vctrs",
+        "RoxygenNote": "7.3.1",
+        "Config/testthat/edition": "3",
+        "Config/build/bootstrap": "TRUE",
+        "Suggests": "blob, curl, cli, DBI, dbplyr, decor, distro, dplyr, duckdb\n(>= 0.2.8), hms, jsonlite, knitr, lubridate, pillar, pkgload,\nreticulate, rmarkdown, stringi, stringr, sys, testthat (>=\n3.1.0), tibble, tzdb, withr",
+        "LinkingTo": "cpp11 (>= 0.4.2)",
+        "Collate": "'arrowExports.R' 'enums.R' 'arrow-object.R' 'type.R'\n'array-data.R' 'arrow-datum.R' 'array.R' 'arrow-info.R'\n'arrow-package.R' 'arrow-tabular.R' 'buffer.R'\n'chunked-array.R' 'io.R' 'compression.R' 'scalar.R' 'compute.R'\n'config.R' 'csv.R' 'dataset.R' 'dataset-factory.R'\n'dataset-format.R' 'dataset-partition.R' 'dataset-scan.R'\n'dataset-write.R' 'dictionary.R' 'dplyr-across.R'\n'dplyr-arrange.R' 'dplyr-by.R' 'dplyr-collect.R'\n'dplyr-count.R' 'dplyr-datetime-helpers.R' 'dplyr-distinct.R'\n'dplyr-eval.R' 'dplyr-filter.R' 'dplyr-funcs-augmented.R'\n'dplyr-funcs-conditional.R' 'dplyr-funcs-datetime.R'\n'dplyr-funcs-doc.R' 'dplyr-funcs-math.R' 'dplyr-funcs-simple.R'\n'dplyr-funcs-string.R' 'dplyr-funcs-type.R' 'expression.R'\n'dplyr-funcs.R' 'dplyr-glimpse.R' 'dplyr-group-by.R'\n'dplyr-join.R' 'dplyr-mutate.R' 'dplyr-select.R'\n'dplyr-slice.R' 'dplyr-summarize.R' 'dplyr-union.R'\n'record-batch.R' 'table.R' 'dplyr.R' 'duckdb.R' 'extension.R'\n'feather.R' 'field.R' 'filesystem.R' 'flight.R'\n'install-arrow.R' 'ipc-stream.R' 'json.R' 'memory-pool.R'\n'message.R' 'metadata.R' 'parquet.R' 'python.R'\n'query-engine.R' 'record-batch-reader.R'\n'record-batch-writer.R' 'reexports-bit64.R'\n'reexports-tidyselect.R' 'schema.R' 'udf.R' 'util.R'",
+        "NeedsCompilation": "yes",
+        "Packaged": "2024-05-25 18:02:01 UTC; nic",
+        "Author": "Neal Richardson [aut],\n  Ian Cook [aut],\n  Nic Crane [aut],\n  Dewey Dunnington [aut] (<https://orcid.org/0000-0002-9415-4582>),\n  Romain François [aut] (<https://orcid.org/0000-0002-2444-4226>),\n  Jonathan Keane [aut, cre],\n  Dragoș Moldovan-Grünfeld [aut],\n  Jeroen Ooms [aut],\n  Jacob Wujciak-Jens [aut],\n  Javier Luraschi [ctb],\n  Karl Dunkle Werner [ctb] (<https://orcid.org/0000-0003-0523-7309>),\n  Jeffrey Wong [ctb],\n  Apache Arrow [aut, cph]",
+        "Maintainer": "Jonathan Keane <jkeane@gmail.com>",
+        "Repository": "RSPM",
+        "Date/Publication": "2024-05-25 22:10:02 UTC",
+        "Built": "R 4.1.0; x86_64-pc-linux-gnu; 2024-05-26 04:04:15 UTC; unix",
+        "RemoteType": "standard",
+        "RemotePkgRef": "arrow",
+        "RemoteRef": "arrow",
+        "RemoteRepos": "https://rstudio-package.testing.ap.datim.org/prod/__linux__/focal/latest",
+        "RemoteReposName": "CRAN",
+        "RemotePkgPlatform": "source",
+        "RemoteSha": "16.1.0"
+      }
+    },
     "askpass": {
       "Source": "CRAN",
       "Repository": "https://rstudio-package.testing.ap.datim.org/prod/latest",
@@ -3519,11 +3559,11 @@
       "description": {
         "Package": "pdaprules",
         "Type": "Package",
-        "Title": "What the Package Does (Title Case)",
-        "Version": "0.1.0",
-        "Author": "Who wrote it",
+        "Title": "A package that provides documentation on working with PRIME\nsystems Posit Workbench and Posit Connect.",
+        "Version": "0.1.2",
+        "Author": "c(\n    person(\"Jordan\", \"Bales\", , \"jbales@baosystems.com\", role = \"ctb\")\n    person(\"Fausto\", \"Lopez\", , \"flopez@baosystems.com\", role = \"ctb\"),\n  )",
         "Maintainer": "The package maintainer <yourself@somewhere.net>",
-        "Description": "More about what it does (maybe more than one line)\n    Use four spaces when indenting paragraphs within the Description.",
+        "Description": "created to help provide documentation on working with PRIME systems\n    Posit Workbench and Posit Connect. We provide helpful functions for\n    connecting to S3 as well as deploying and working with shiny applications in\n    our connect environment.",
         "License": "What license is it under?",
         "Encoding": "UTF-8",
         "RoxygenNote": "7.3.1",
@@ -3533,15 +3573,15 @@
         "RemoteHost": "api.github.com",
         "RemoteRepo": "pdaprules",
         "RemoteUsername": "pepfar-datim",
-        "RemoteRef": "APD-3273",
-        "RemoteSha": "974080d43656981307a94ce0320c6d778d3075d9",
+        "RemoteRef": "main",
+        "RemoteSha": "35431a424a3e982ea05204d1f4153ca0d310bdd6",
         "GithubRepo": "pdaprules",
         "GithubUsername": "pepfar-datim",
-        "GithubRef": "APD-3273",
-        "GithubSHA1": "974080d43656981307a94ce0320c6d778d3075d9",
+        "GithubRef": "main",
+        "GithubSHA1": "35431a424a3e982ea05204d1f4153ca0d310bdd6",
         "NeedsCompilation": "no",
-        "Packaged": "2024-04-29 15:42:47 UTC; flopez@baosystems.com",
-        "Built": "R 4.1.1; ; 2024-04-29 15:42:49 UTC; unix"
+        "Packaged": "2024-07-15 15:51:49 UTC; LopezF3@state.gov",
+        "Built": "R 4.1.1; ; 2024-07-15 15:51:49 UTC; unix"
       }
     },
     "pillar": {
@@ -5534,7 +5574,7 @@
       "checksum": "06cc05677a2a03cb1bd0c7a8e5ceaca1"
     },
     "global.R": {
-      "checksum": "00c956da64701b7e514bfe31e8fbc855"
+      "checksum": "9584d7f1468ac72d66d270f6065e57e6"
     },
     "intro_text.html": {
       "checksum": "af96fcad5ad484926de78a9a96a497f6"
@@ -5543,13 +5583,13 @@
       "checksum": "8b5ed984671c3e73fb430a3b1e5d15a3"
     },
     "server.R": {
-      "checksum": "7a0a831af406209384b4b4b70af96291"
+      "checksum": "8f9a25c907c2de8237410736642937c1"
     },
     "TimeSeriesCoverSheet.xlsx": {
       "checksum": "597a912c0c3cb80fb95f9d5eef5f6685"
     },
     "ui.R": {
-      "checksum": "8d69ed37b1ee339ed0465ef26658b92e"
+      "checksum": "06b6030413bb697e80cd3e623730553c"
     },
     "USAID_logo.png": {
       "checksum": "00b4f6953126efebcfde93dad6771562"
