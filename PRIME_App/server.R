@@ -100,7 +100,7 @@ has_auth_code <- function(params) {
 
 server <- function(input, output, session) {
 
-  user_input  <-  reactiveValues(authenticated = TRUE,
+  user_input  <-  reactiveValues(authenticated = FALSE,
                                  status = "",
                                  d2_session = NULL,
                                  memo_authorized = FALSE,
