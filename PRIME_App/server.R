@@ -1,20 +1,50 @@
 # add read parquet
-read_parquet <- function(my_file) {
+# qtr columns are automatically read in
+read_parquet_file <- function(my_file, n_rows = Inf, columns_to_read = NULL) {
   print(paste0("reading parquet file: ", my_file))
-  parquet_data <- aws.s3::s3read_using(FUN = arrow::read_parquet, 
-                       escape_double = FALSE,
-                       trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
-                       bucket = Sys.getenv("S3_READ"),
-                       object = my_file)
+  
+  # Read the entire Parquet file
+  parquet_data <- aws.s3::s3read_using(
+    FUN = function(object) {
+      arrow::read_parquet(object)
+    },
+    bucket = Sys.getenv("S3_READ"),
+    object = my_file
+  )
+  
+  # Limit the number of rows if n_rows is specified
+  if (!is.infinite(n_rows) && n_rows > 0) {
+    parquet_data <- parquet_data[1:min(n_rows, nrow(parquet_data)), ]
+  }
+  
+  # Filter the columns after reading the entire file
+  # Automatically include any column that starts with "qtr"
+  qtr_columns <- grep("^qtr", colnames(parquet_data), value = TRUE)
+  if (!is.null(columns_to_read)) {
+    parquet_data <- parquet_data[, union(columns_to_read, qtr_columns), drop = FALSE]
+  }
   
   # Post-process parquet data to replace empty quotes with NA in specific columns
   replace_empty_with_na <- function(x) {
     ifelse(x == "", NA, x)
   }
   
-  parquet_data <- parquet_data %>%
-    mutate(across(c(qtr1, qtr2, qtr3, qtr4), replace_empty_with_na))
+  # Check if parquet_data is a data frame and if the required columns exist
+  if (inherits(parquet_data, "data.frame")) {
+    cols_to_check <- c("qtr1", "qtr2", "qtr3", "qtr4")
+    existing_cols <- cols_to_check[cols_to_check %in% colnames(parquet_data)]
+    
+    if (length(existing_cols) > 0) {
+      parquet_data <- parquet_data %>%
+        mutate(across(all_of(existing_cols), replace_empty_with_na))
+    }
+  }
+  
+  return(parquet_data)
 }
+
+
+
 
 # connect to s3
 tryCatch({
@@ -31,7 +61,7 @@ error = function(e) {
 #                                     trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
 #                                     bucket = Sys.getenv("S3_READ"),
 #                                     object = sample_file)
-#data_recent <- read_parquet(sample_file)
+#data_recent <- read_parquet_file(sample_file)
 
 
 
@@ -70,7 +100,7 @@ has_auth_code <- function(params) {
 
 server <- function(input, output, session) {
 
-  user_input  <-  reactiveValues(authenticated = FALSE,
+  user_input  <-  reactiveValues(authenticated = TRUE,
                                  status = "",
                                  d2_session = NULL,
                                  memo_authorized = FALSE,
@@ -415,6 +445,13 @@ server <- function(input, output, session) {
   
   observeEvent(input$rec_upload, {
     
+    cols_to_read <- c(
+      "facility", "indicator", "psnu", "operatingunit", "country",
+      "numeratordenom", "standardizeddisaggregate", "statushiv", "ageasentered",
+      "prime_partner_name", "fiscal_year", "funding_agency",
+      "sitename", "sex", "otherdisaggregate_sub"
+    )
+    
     withProgress(message = 'Loading Data', value = 0.5, {
 
     my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"), filter_parquet = TRUE)
@@ -425,24 +462,25 @@ server <- function(input, output, session) {
     
     print(paste0("recommender uploading: ", my_data_recent))
 
-    # data_recent <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
-    #                                     trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()),
-    #                                     bucket = Sys.getenv("S3_READ"),
-    #                                     object = my_data_recent)
-    data_recent <- read_parquet(my_data_recent)
-  
-    input_reactive$data_loaded <- data_recent
+    data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
     
-    if("prime_partner_name" %in% names(input_reactive$data_loaded)){
-      input_reactive$data_loaded$primepartner <- input_reactive$data_loaded$prime_partner_name
-    }
-    if("funding_agency" %in% names(input_reactive$data_loaded)){
-      input_reactive$data_loaded$fundingagency <- input_reactive$data_loaded$funding_agency
-    }
-    if("countryname" %in% names(input_reactive$data_loaded)){
-      input_reactive$data_loaded$country <- input_reactive$data_loaded$countryname
-    }
+    # Conditionally rename columns if they exist
+    column_renames <- c("prime_partner_name" = "primepartner",
+                        "funding_agency" = "fundingagency",
+                        "countryname" = "country")
+    
+    existing_columns <- intersect(names(data_recent), names(column_renames))
+    data_recent <- data_recent %>%
+      rename_at(vars(all_of(existing_columns)), ~ column_renames[existing_columns])
+    
+    
+    input_reactive$data_loaded <- data_recent
+    rm(data_recent)
+    gc()
+  
     print(table(input_reactive$data_loaded$country))
+    
+    
     if (input_reactive$data_loaded$operatingunit[1] == "Asia Region") {
       input_reactive$data_loaded <- input_reactive$data_loaded %>% filter(country %in% input$asiafilter)
     }
@@ -453,6 +491,8 @@ server <- function(input, output, session) {
     if (input_reactive$data_loaded$operatingunit[1] == "Western Hemisphere Region") {
       input_reactive$data_loaded <- input_reactive$data_loaded %>% filter(country %in% input$westernhemishpherefilter)
     }
+    
+    
     print(nrow(input_reactive$data_loaded))
     updateNumericInput(session,
                        "year",
@@ -562,34 +602,24 @@ server <- function(input, output, session) {
       incProgress(.3, detail = paste("Processing Data"))
       
     # Confirm they are strings and not factors
-    input_reactive$data_recent$sitename <- as.character(input_reactive$data_recent$sitename)
-    input_reactive$data_recent$psnu <- as.character(input_reactive$data_recent$psnu)
-    input_reactive$data_recent$facility <- as.character(input_reactive$data_recent$facility)
-    input_reactive$data_recent$indicator <- as.character(input_reactive$data_recent$indicator)
-    input_reactive$data_recent$ageasentered <- as.character(input_reactive$data_recent$ageasentered)
-    input_reactive$data_recent$sex <- as.character(input_reactive$data_recent$sex)
-    input_reactive$data_recent$primepartner <- as.character(input_reactive$data_recent$primepartner)
-    input_reactive$data_recent$standardizeddisaggregate <- as.character(input_reactive$data_recent$standardizeddisaggregate)
-    input_reactive$data_recent$numeratordenom <- as.character(input_reactive$data_recent$numeratordenom)
-    input_reactive$data_recent$otherdisaggregate_sub <- as.character(input_reactive$data_recent$otherdisaggregate_sub)
-    input_reactive$data_recent$qtr1 <- as.numeric(input_reactive$data_recent$qtr1)
-    input_reactive$data_recent$qtr2 <- as.numeric(input_reactive$data_recent$qtr2)
-    input_reactive$data_recent$qtr3 <- as.numeric(input_reactive$data_recent$qtr3)
-    input_reactive$data_recent$qtr4 <- as.numeric(input_reactive$data_recent$qtr4)
-    print(names(input_reactive$data_recent))
-    
+    input_reactive$data_recent <- input_reactive$data_recent %>%
+      mutate(across(c(sitename, psnu, facility, indicator, ageasentered, sex, primepartner, standardizeddisaggregate, numeratordenom, otherdisaggregate_sub), as.character)) %>%
+      mutate(across(c(qtr1, qtr2, qtr3, qtr4), as.numeric))
+      
+      # Trigger garbage collection to free up memory
+      gc()
+      print(names(input_reactive$data_recent))
     
     # filter to the fiscal year entered by the user
     input_reactive$data_recent <- input_reactive$data_recent %>% filter(fiscal_year == input$year)
     
     # remove the rows that report on Total Numerator or Total Denominator
-    input_reactive$data_recent <-
-      input_reactive$data_recent %>% filter(!standardizeddisaggregate %in% c("Total Numerator", "Total Denominator"))
-    input_reactive$data_recent <-
-      input_reactive$data_recent %>% filter(tolower(facility) != "data reported above facility level")
-    
     # remove rows that are aggregates of age groups (e.g. 15+ and 50+)
-    input_reactive$data_recent <- input_reactive$data_recent[-grep("\\+", input_reactive$data_recent$ageasentered),]
+    input_reactive$data_recent <- input_reactive$data_recent %>%
+      filter(fiscal_year == input$year,
+             !standardizeddisaggregate %in% c("Total Numerator", "Total Denominator"),
+             !tolower(facility) == "data reported above facility level",
+             !grepl("\\+", ageasentered))
     
     # label indicators with N and D for those for which both numerators and denominators are reported
     input_reactive$data_recent$indicator <- paste0(input_reactive$data_recent$indicator, "_", input_reactive$data_recent$numeratordenom)
@@ -597,7 +627,10 @@ server <- function(input, output, session) {
     # add transgender to the sex column
     input_reactive$data_recent$tg <-
       ifelse(grepl("TG", input_reactive$data_recent$otherdisaggregate_sub), "Transgender", "")
-    input_reactive$data_recent$sex2 <- paste(input_reactive$data_recent$sex, input_reactive$data_recent$tg, sep = "")
+    
+    #input_reactive$data_recent$sex2 <- paste(input_reactive$data_recent$sex, input_reactive$data_recent$tg, sep = "")
+    input_reactive$data_recent$sex2 <- paste0(input_reactive$data_recent$sex, input_reactive$data_recent$tg)
+    
     cols_to_keep <-
       c(
         "sitename",
@@ -616,53 +649,26 @@ server <- function(input, output, session) {
     input_reactive$data_recent <- input_reactive$data_recent[, cols_to_keep]
     input_reactive$data_recent <- input_reactive$data_recent %>% dplyr::rename(sex = sex2)
     
-    input_reactive$dat_disag_out1 <- input_reactive$data_recent
-    
-    # for disaggregate output - create a column for the key population disaggregate
-    input_reactive$dat_disag_out1$kp <- ifelse(grepl("KeyPop", input_reactive$dat_disag_out1$standardizeddisaggregate), "Yes", "No")
-    
-    # for disaggregate output - drop disaggregate and numeratordenom columns
-    cols_to_drop <- c("numeratordenom", "standardizeddisaggregate")
-    input_reactive$dat_disag_out1 <- input_reactive$dat_disag_out1[,!(names(input_reactive$dat_disag_out1) %in% cols_to_drop)]
-    
-    # for disaggregate output - we'll need the qtr variable - drop the 1/2/3/4 from quarter name
-    # so that we can reference the variable regardless of the quarter selected
-    names(input_reactive$dat_disag_out1) <- gsub("[0-9]", "", names(input_reactive$dat_disag_out1))
-    input_reactive$dat_disag_out1 <- input_reactive$dat_disag_out1 %>%
-      filter(!is.na(qtr))
-    
-    # group by facility, age, sex, and indicator, kp, and psnu, and then summarize qtr (before pivot)
-    input_reactive$dat_disag_out1 <-
-      input_reactive$dat_disag_out1 %>% group_by(facility,
-                       ageasentered,
-                       sex,
-                       indicator,
-                       kp,
-                       psnu,
-                       primepartner,
-                       fundingagency) %>%
+    input_reactive$dat_disag_out1 <- input_reactive$data_recent %>%
+      mutate(kp = ifelse(grepl("KeyPop", standardizeddisaggregate), "Yes", "No")) %>%
+      select(-numeratordenom, -standardizeddisaggregate) %>%
+      rename_with(~ gsub("[0-9]", "", .x), matches("[0-9]")) %>%
+      filter(!is.na(qtr)) %>%
+      group_by(facility, ageasentered, sex, indicator, kp, psnu, primepartner, fundingagency) %>%
       summarise(qtr_sum = sum(qtr, na.rm = TRUE))
+    
 
     # for disaggregate output - pivot wider to get MER indicators in wide format
     input_reactive$dat_disag_out <- input_reactive$dat_disag_out1 %>%
       pivot_wider(names_from = "indicator", values_from = "qtr_sum") %>%
       as.data.frame()
 
-    input_reactive$dat_facility_out <- input_reactive$data_recent
-    
-    # facility level file - filter for just the quarter of interest
-    names(input_reactive$dat_facility_out) <- gsub("[0-9]", "", names(input_reactive$dat_facility_out))
-    input_reactive$dat_facility_out <- input_reactive$dat_facility_out %>%
-      filter(!is.na(qtr))
-    
-    # facility level file - group by facility, psnu and indicator, and then summarize qtr 2 (before pivot)
-    input_reactive$dat_facility_out <- input_reactive$dat_facility_out %>%
+    input_reactive$dat_facility_out <- input_reactive$data_recent %>%
+      rename_with(~ gsub("[0-9]", "", .x), matches("[0-9]")) %>%
+      filter(!is.na(qtr)) %>%
       group_by(facility, indicator, psnu, primepartner, fundingagency) %>%
-      summarise(qtr_sum = sum(qtr, na.rm = TRUE))
-    
-    # facility level file - pivot wider to get indicators in wide format
-    input_reactive$dat_facility_out <- input_reactive$dat_facility_out %>%
-      pivot_wider(names_from = "indicator", values_from = "qtr_sum") %>%
+      summarise(qtr_sum = sum(qtr, na.rm = TRUE)) %>%
+      pivot_wider(names_from = indicator, values_from = qtr_sum) %>%
       as.data.frame()
     
     # Run checks ---------------
@@ -1334,6 +1340,13 @@ server <- function(input, output, session) {
   
   observeEvent(input$ts_upload, {
     
+    cols_to_read <- c(
+      "facility", "indicator", "psnu", "operatingunit", "country",
+      "numeratordenom", "standardizeddisaggregate", "statushiv", "ageasentered",
+      "prime_partner_name", "fiscal_year", "funding_agency"
+    )
+    
+    
     withProgress(message = 'Loading Recent Data', value = 0.3, {
       
       my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"), filter_parquet = TRUE)
@@ -1342,12 +1355,10 @@ server <- function(input, output, session) {
                                    grepl("Site", my_items$file_names) &
                                    grepl("Recent", my_items$file_names),]$path_names
       print(paste0("upload: ", my_data_recent))
-      # data_recent <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
-      #                                     trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()),
-      #                                     bucket = Sys.getenv("S3_READ"),
-      #                                     object = my_data_recent)
-      data_recent <- read_parquet(my_data_recent)
+
+      data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
       print(dim(data_recent))
+      print(names(data_recent))
       
       if("prime_partner_name" %in% names(data_recent)){
         data_recent$primepartner <- data_recent$prime_partner_name
@@ -1367,11 +1378,8 @@ server <- function(input, output, session) {
                                    grepl("Site", my_items$file_names) &
                                    grepl("Historic", my_items$file_names),]$path_names
       print(paste0("historical: ", my_data_historical))
-      # data_historical <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
-      #                                     trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()),
-      #                                     bucket = Sys.getenv("S3_READ"),
-      #                                     object = my_data_historical)
-      data_historical <- read_parquet(my_data_historical)
+
+      data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
       print(dim(data_historical))
       
       if("prime_partner_name" %in% names(data_historical)){
