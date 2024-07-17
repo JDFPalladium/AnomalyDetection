@@ -100,7 +100,7 @@ has_auth_code <- function(params) {
 
 server <- function(input, output, session) {
 
-  user_input  <-  reactiveValues(authenticated = FALSE,
+  user_input  <-  reactiveValues(authenticated = TRUE,
                                  status = "",
                                  d2_session = NULL,
                                  memo_authorized = FALSE,
@@ -798,26 +798,26 @@ server <- function(input, output, session) {
                                  all_outputs
                                )))
                              )))
-            ) %>%
-              formatStyle(
-                7:(6 + length(grep(
-                  "^D_", colnames(all_outputs)
-                ))),
-                grep("^D_", colnames(all_outputs)),
-                backgroundColor = styleInterval(
-                  as.numeric(quantile(
-                    all_outputs[, grep("^D_", colnames(all_outputs))],
-                    probs = c(.8, .9, 1),
-                    na.rm = T
-                  )),
-                  c(
-                    "rgb(255,255,255)",
-                    "rgb(255,170,170)",
-                    "rgb(255,80,80)",
-                    "rgb(255,0,0)"
-                  )
-                )
-              )
+            ) #%>%
+              # formatStyle(
+              #   7:(6 + length(grep(
+              #     "^D_", colnames(all_outputs)
+              #   ))),
+              #   grep("^D_", colnames(all_outputs)),
+              #   backgroundColor = styleInterval(
+              #     as.numeric(quantile(
+              #       all_outputs[, grep("^D_", colnames(all_outputs))],
+              #       probs = c(.8, .9, 1),
+              #       na.rm = T
+              #     )),
+              #     c(
+              #       "rgb(255,255,255)",
+              #       "rgb(255,170,170)",
+              #       "rgb(255,80,80)",
+              #       "rgb(255,0,0)"
+              #     )
+              #   )
+              # )
           )
           forout_reactive$all_outputs <- all_outputs 
         }
@@ -889,26 +889,26 @@ server <- function(input, output, session) {
                                ))
                              )
                            ))
-          ) %>%
-            formatStyle(
-              7:(6 + length(grep(
-                "^D_", colnames(site_sex_outliers)
-              ))),
-              grep("^D_", colnames(site_sex_outliers)),
-              backgroundColor = styleInterval(
-                as.numeric(quantile(
-                  site_sex_outliers[, grep("^D_", colnames(site_sex_outliers))],
-                  probs = c(.8, .9, 1),
-                  na.rm = T
-                )),
-                c(
-                  "rgb(255,255,255)",
-                  "rgb(255,170,170)",
-                  "rgb(255,80,80)",
-                  "rgb(255,0,0)"
-                )
-              )
-            )
+          ) #%>%
+            # formatStyle(
+            #   7:(6 + length(grep(
+            #     "^D_", colnames(site_sex_outliers)
+            #   ))),
+            #   grep("^D_", colnames(site_sex_outliers)),
+            #   backgroundColor = styleInterval(
+            #     as.numeric(quantile(
+            #       site_sex_outliers[, grep("^D_", colnames(site_sex_outliers))],
+            #       probs = c(.8, .9, 1),
+            #       na.rm = T
+            #     )),
+            #     c(
+            #       "rgb(255,255,255)",
+            #       "rgb(255,170,170)",
+            #       "rgb(255,80,80)",
+            #       "rgb(255,0,0)"
+            #     )
+            #   )
+            # )
         )
         
         forout_reactive$site_sex_outliers <- site_sex_outliers 
@@ -1009,26 +1009,26 @@ server <- function(input, output, session) {
                                  ))
                                )
                              ))
-            ) %>%
-              formatStyle(
-                7:(6 + length(grep(
-                  "^D_", colnames(site_age_outliers)
-                ))),
-                grep("^D_", colnames(site_age_outliers)),
-                backgroundColor = styleInterval(
-                  as.numeric(quantile(
-                    site_age_outliers[, grep("^D_", colnames(site_age_outliers))],
-                    probs = c(.8, .9, 1),
-                    na.rm = T
-                  )),
-                  c(
-                    "rgb(255,255,255)",
-                    "rgb(255,170,170)",
-                    "rgb(255,80,80)",
-                    "rgb(255,0,0)"
-                  )
-                )
-              )
+            ) #%>%
+              # formatStyle(
+              #   7:(6 + length(grep(
+              #     "^D_", colnames(site_age_outliers)
+              #   ))),
+              #   grep("^D_", colnames(site_age_outliers)),
+              #   backgroundColor = styleInterval(
+              #     as.numeric(quantile(
+              #       site_age_outliers[, grep("^D_", colnames(site_age_outliers))],
+              #       probs = c(.8, .9, 1),
+              #       na.rm = T
+              #     )),
+              #     c(
+              #       "rgb(255,255,255)",
+              #       "rgb(255,170,170)",
+              #       "rgb(255,80,80)",
+              #       "rgb(255,0,0)"
+              #     )
+              #   )
+              # )
           )
           forout_reactive$site_age_outliers <- site_age_outliers 
         } else {
@@ -1088,26 +1088,26 @@ server <- function(input, output, session) {
                                  ))
                                )
                              ))
-            ) %>%
-              formatStyle(
-                7:(6 + length(grep(
-                  "^D_", colnames(facility_outputs)
-                ))),
-                grep("^D_", colnames(facility_outputs)),
-                backgroundColor = styleInterval(
-                  as.numeric(quantile(
-                    facility_outputs[, grep("^D_", colnames(facility_outputs))],
-                    probs = c(.8, .9, 1),
-                    na.rm = T
-                  )),
-                  c(
-                    "rgb(255,255,255)",
-                    "rgb(255,170,170)",
-                    "rgb(255,80,80)",
-                    "rgb(255,0,0)"
-                  )
-                )
-              )
+            ) #%>%
+              # formatStyle(
+              #   7:(6 + length(grep(
+              #     "^D_", colnames(facility_outputs)
+              #   ))),
+              #   grep("^D_", colnames(facility_outputs)),
+              #   backgroundColor = styleInterval(
+              #     as.numeric(quantile(
+              #       facility_outputs[, grep("^D_", colnames(facility_outputs))],
+              #       probs = c(.8, .9, 1),
+              #       na.rm = T
+              #     )),
+              #     c(
+              #       "rgb(255,255,255)",
+              #       "rgb(255,170,170)",
+              #       "rgb(255,80,80)",
+              #       "rgb(255,0,0)"
+              #     )
+              #   )
+              # )
           )
           forout_reactive$facility_outputs <- facility_outputs 
         } else {
