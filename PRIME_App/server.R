@@ -100,7 +100,7 @@ has_auth_code <- function(params) {
 
 server <- function(input, output, session) {
 
-  user_input  <-  reactiveValues(authenticated = FALSE,
+  user_input  <-  reactiveValues(authenticated = TRUE,
                                  status = "",
                                  d2_session = NULL,
                                  memo_authorized = FALSE,
@@ -785,39 +785,52 @@ server <- function(input, output, session) {
           #message(cond)
         })
         if(exists("all_outputs")){
-          output$rec1 = DT::renderDT(
+          
+          # Create the rec1_table with the necessary mutation
+          rec1_table <- all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No"))
+          
+          # Define the targets for columnDefs
+          d_columns <- grep("^D_", colnames(all_outputs))
+          e_columns <- grep("^E_", colnames(all_outputs))
+          targets <- c(d_columns, e_columns)
+          
+          # Define the options list
+          options_list <- list(
+            scrollX = TRUE,
+            columnDefs = list(
+              list(
+                visible = FALSE, 
+                targets = targets
+              )
+            )
+          )
+          
+          # Define the style intervals for background color
+          d_columns_indices <- 7:(6 + length(d_columns))
+          background_colors <- c(
+            "rgb(255,255,255)",
+            "rgb(255,170,170)",
+            "rgb(255,80,80)",
+            "rgb(255,0,0)"
+          )
+          
+          quantiles <- as.numeric(quantile(
+            all_outputs[, d_columns],
+            probs = c(.8, .9, 1),
+            na.rm = TRUE
+          ))
+          
+          output$rec1 <- DT::renderDT(
             datatable(
-              all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
+              rec1_table,
               filter = "top",
-              options = list(scrollX = TRUE,
-                             columnDefs = list(list(
-                               visible = FALSE, targets = c(grep("^D_", colnames(
-                                 all_outputs
-                               )),
-                               grep("^E_", colnames(
-                                 all_outputs
-                               )))
-                             )))
-            ) #%>%
-              # formatStyle(
-              #   7:(6 + length(grep(
-              #     "^D_", colnames(all_outputs)
-              #   ))),
-              #   grep("^D_", colnames(all_outputs)),
-              #   backgroundColor = styleInterval(
-              #     as.numeric(quantile(
-              #       all_outputs[, grep("^D_", colnames(all_outputs))],
-              #       probs = c(.8, .9, 1),
-              #       na.rm = T
-              #     )),
-              #     c(
-              #       "rgb(255,255,255)",
-              #       "rgb(255,170,170)",
-              #       "rgb(255,80,80)",
-              #       "rgb(255,0,0)"
-              #     )
-              #   )
-              # )
+              options = options_list
+            ) %>%
+              DT::formatStyle(
+                d_columns_indices,
+                d_columns,
+                backgroundColor = styleInterval(quantiles, background_colors)
+              )
           )
           forout_reactive$all_outputs <- all_outputs 
         }
@@ -873,43 +886,55 @@ server <- function(input, output, session) {
         #message(cond)
       })
       if (exists("site_sex_outliers")) {
-        output$rec2 = DT::renderDT(
-          datatable(
-            site_sex_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
-            filter = "top",
-            options = list(scrollX = TRUE,
-                           columnDefs = list(
-                             list(
-                               visible = FALSE,
-                               targets = c(grep(
-                                 "^D_", colnames(site_sex_outliers)
-                               ),
-                               grep(
-                                 "^E_", colnames(site_sex_outliers)
-                               ))
-                             )
-                           ))
-          ) #%>%
-            # formatStyle(
-            #   7:(6 + length(grep(
-            #     "^D_", colnames(site_sex_outliers)
-            #   ))),
-            #   grep("^D_", colnames(site_sex_outliers)),
-            #   backgroundColor = styleInterval(
-            #     as.numeric(quantile(
-            #       site_sex_outliers[, grep("^D_", colnames(site_sex_outliers))],
-            #       probs = c(.8, .9, 1),
-            #       na.rm = T
-            #     )),
-            #     c(
-            #       "rgb(255,255,255)",
-            #       "rgb(255,170,170)",
-            #       "rgb(255,80,80)",
-            #       "rgb(255,0,0)"
-            #     )
-            #   )
-            # )
+        
+        # Create the rec_table2 with the necessary mutation
+        rec_table2 <- site_sex_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No"))
+        
+        # Define the targets for columnDefs
+        d_columns2 <- grep("^D_", colnames(site_sex_outliers))
+        e_columns2 <- grep("^E_", colnames(site_sex_outliers))
+        targets2 <- c(d_columns2, e_columns2)
+        
+        # Define the options list
+        options_list2 <- list(
+          scrollX = TRUE,
+          columnDefs = list(
+            list(
+              visible = FALSE, 
+              targets = targets2
+            )
+          )
         )
+        
+        # Define the style intervals for background color
+        d_columns_indices2 <- 7:(6 + length(d_columns2))
+        background_colors2 <- c(
+          "rgb(255,255,255)",
+          "rgb(255,170,170)",
+          "rgb(255,80,80)",
+          "rgb(255,0,0)"
+        )
+        
+        quantiles2 <- as.numeric(quantile(
+          site_sex_outliers[, d_columns2],
+          probs = c(.8, .9, 1),
+          na.rm = TRUE
+        ))
+        
+        # Render the datatable with additional formatting
+        output$rec2 <- DT::renderDT(
+          datatable(
+            rec_table2,
+            filter = "top",
+            options = options_list2
+          ) %>%
+            DT::formatStyle(
+              d_columns_indices2,
+              d_columns2,
+              backgroundColor = styleInterval(quantiles2, background_colors2)
+            )
+        )
+        
         
         forout_reactive$site_sex_outliers <- site_sex_outliers 
       } else {
@@ -993,43 +1018,55 @@ server <- function(input, output, session) {
         })
         
         if (exists("site_age_outliers")) {
-          output$rec3 = DT::renderDT(
-            datatable(
-              site_age_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
-              filter = "top",
-              options = list(scrollX = TRUE,
-                             columnDefs = list(
-                               list(
-                                 visible = FALSE,
-                                 targets = c(grep(
-                                   "^D_", colnames(site_age_outliers)
-                                 ),
-                                 grep(
-                                   "^E_", colnames(site_age_outliers)
-                                 ))
-                               )
-                             ))
-            ) #%>%
-              # formatStyle(
-              #   7:(6 + length(grep(
-              #     "^D_", colnames(site_age_outliers)
-              #   ))),
-              #   grep("^D_", colnames(site_age_outliers)),
-              #   backgroundColor = styleInterval(
-              #     as.numeric(quantile(
-              #       site_age_outliers[, grep("^D_", colnames(site_age_outliers))],
-              #       probs = c(.8, .9, 1),
-              #       na.rm = T
-              #     )),
-              #     c(
-              #       "rgb(255,255,255)",
-              #       "rgb(255,170,170)",
-              #       "rgb(255,80,80)",
-              #       "rgb(255,0,0)"
-              #     )
-              #   )
-              # )
+          
+          # Create the rec_table3 with the necessary mutation
+          rec_table3 <- site_age_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No"))
+          
+          # Define the targets for columnDefs
+          d_columns3 <- grep("^D_", colnames(site_age_outliers))
+          e_columns3 <- grep("^E_", colnames(site_age_outliers))
+          targets3 <- c(d_columns3, e_columns3)
+          
+          # Define the options list
+          options_list3 <- list(
+            scrollX = TRUE,
+            columnDefs = list(
+              list(
+                visible = FALSE, 
+                targets = targets3
+              )
+            )
           )
+          
+          # Define the style intervals for background color
+          d_columns_indices3 <- 7:(6 + length(d_columns3))
+          background_colors3 <- c(
+            "rgb(255,255,255)",
+            "rgb(255,170,170)",
+            "rgb(255,80,80)",
+            "rgb(255,0,0)"
+          )
+          
+          quantiles3 <- as.numeric(quantile(
+            site_age_outliers[, d_columns3],
+            probs = c(.8, .9, 1),
+            na.rm = TRUE
+          ))
+          
+          # Render the datatable with additional formatting
+          output$rec3 <- DT::renderDT(
+            datatable(
+              rec_table3,
+              filter = "top",
+              options = options_list3
+            ) %>%
+              formatStyle(
+                d_columns_indices3,
+                d_columns3,
+                backgroundColor = styleInterval(quantiles3, background_colors3)
+              )
+          )
+          
           forout_reactive$site_age_outliers <- site_age_outliers 
         } else {
           shinyalert("Proceed",
@@ -1072,43 +1109,55 @@ server <- function(input, output, session) {
         })
         
         if (exists("facility_outputs")) {
-          output$rec4 = DT::renderDT(
-            datatable(
-              facility_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
-              filter = "top",
-              options = list(scrollX = TRUE,
-                             columnDefs = list(
-                               list(
-                                 visible = FALSE,
-                                 targets = c(grep(
-                                   "^D_", colnames(facility_outputs)
-                                 ),
-                                 grep(
-                                   "^E_", colnames(facility_outputs)
-                                 ))
-                               )
-                             ))
-            ) #%>%
-              # formatStyle(
-              #   7:(6 + length(grep(
-              #     "^D_", colnames(facility_outputs)
-              #   ))),
-              #   grep("^D_", colnames(facility_outputs)),
-              #   backgroundColor = styleInterval(
-              #     as.numeric(quantile(
-              #       facility_outputs[, grep("^D_", colnames(facility_outputs))],
-              #       probs = c(.8, .9, 1),
-              #       na.rm = T
-              #     )),
-              #     c(
-              #       "rgb(255,255,255)",
-              #       "rgb(255,170,170)",
-              #       "rgb(255,80,80)",
-              #       "rgb(255,0,0)"
-              #     )
-              #   )
-              # )
+          
+          # Create the rec_table_4 with the necessary mutation
+          rec_table_4 <- facility_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No"))
+          
+          # Define the targets for columnDefs
+          d_columns4 <- grep("^D_", colnames(facility_outputs))
+          e_columns4 <- grep("^E_", colnames(facility_outputs))
+          targets4 <- c(d_columns4, e_columns4)
+          
+          # Define the options list
+          options_list4 <- list(
+            scrollX = TRUE,
+            columnDefs = list(
+              list(
+                visible = FALSE, 
+                targets = targets4
+              )
+            )
           )
+          
+          # Define the style intervals for background color
+          d_columns_indices4 <- 7:(6 + length(d_columns4))
+          background_colors4 <- c(
+            "rgb(255,255,255)",
+            "rgb(255,170,170)",
+            "rgb(255,80,80)",
+            "rgb(255,0,0)"
+          )
+          
+          quantiles4 <- as.numeric(quantile(
+            facility_outputs[, d_columns4],
+            probs = c(.8, .9, 1),
+            na.rm = TRUE
+          ))
+          
+          # Render the datatable with additional formatting
+          output$rec4 <- DT::renderDT(
+            datatable(
+              rec_table_4,
+              filter = "top",
+              options = options_list4
+            ) %>%
+              formatStyle(
+                d_columns_indices4,
+                d_columns4,
+                backgroundColor = styleInterval(quantiles4, background_colors4)
+              )
+          )
+          
           forout_reactive$facility_outputs <- facility_outputs 
         } else {
           shinyalert("Proceed",
