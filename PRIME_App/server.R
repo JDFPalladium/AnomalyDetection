@@ -785,7 +785,6 @@ server <- function(input, output, session) {
           #message(cond)
         })
         if(exists("all_outputs")){
-          Sys.sleep(2)
           output$rec1 = DT::renderDT(
             datatable(
               all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
@@ -798,7 +797,8 @@ server <- function(input, output, session) {
                                grep("^E_", colnames(
                                  all_outputs
                                )))
-                             )))
+                             ))),
+              callback = JS("$.fn.dataTable.ext.errMode = 'none';")
             ) #%>%
               # formatStyle(
               #   7:(6 + length(grep(
