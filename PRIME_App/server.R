@@ -785,10 +785,12 @@ server <- function(input, output, session) {
           #message(cond)
         })
         if(exists("all_outputs")){
+          z <- all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")) %>%
+            mutate_if(is.numeric, as.numeric)
+          
           output$rec1 = DT::renderDT(
             datatable(
-              all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")) %>%
-                mutate_if(is.numeric, as.numeric),
+              z,
               filter = "top",
               options = list(scrollX = TRUE,
                              columnDefs = list(list(
