@@ -787,7 +787,8 @@ server <- function(input, output, session) {
         if(exists("all_outputs")){
           output$rec1 = DT::renderDT(
             datatable(
-              all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
+              all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")) %>%
+                mutate_if(is.numeric, as.numeric),
               filter = "top",
               options = list(scrollX = TRUE,
                              columnDefs = list(list(
@@ -797,8 +798,7 @@ server <- function(input, output, session) {
                                grep("^E_", colnames(
                                  all_outputs
                                )))
-                             ))),
-              callback = JS("$.fn.dataTable.ext.errMode = 'none';")
+                             )))
             ) #%>%
               # formatStyle(
               #   7:(6 + length(grep(
