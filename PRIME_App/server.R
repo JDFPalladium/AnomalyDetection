@@ -785,6 +785,7 @@ server <- function(input, output, session) {
           #message(cond)
         })
         if(exists("all_outputs")){
+          Sys.sleep(2)
           output$rec1 = DT::renderDT(
             datatable(
               all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
@@ -873,6 +874,7 @@ server <- function(input, output, session) {
         #message(cond)
       })
       if (exists("site_sex_outliers")) {
+        Sys.sleep(2)
         output$rec2 = DT::renderDT(
           datatable(
             site_sex_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
@@ -993,6 +995,7 @@ server <- function(input, output, session) {
         })
         
         if (exists("site_age_outliers")) {
+          Sys.sleep(2)
           output$rec3 = DT::renderDT(
             datatable(
               site_age_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
@@ -1072,6 +1075,7 @@ server <- function(input, output, session) {
         })
         
         if (exists("facility_outputs")) {
+          Sys.sleep(2)
           output$rec4 = DT::renderDT(
             datatable(
               facility_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
