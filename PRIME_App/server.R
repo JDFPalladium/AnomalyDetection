@@ -801,7 +801,7 @@ server <- function(input, output, session) {
                                  all_outputs
                                )))
                              )))
-            ) #%>%
+            ), server = FALSE #%>%
               # formatStyle(
               #   7:(6 + length(grep(
               #     "^D_", colnames(all_outputs)
