@@ -787,7 +787,7 @@ server <- function(input, output, session) {
         if(exists("all_outputs")){
           z <- all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No"))
           z <- as.data.frame(z)
-          reactable::reactable(z)
+          flextable::flextable(z)
           
           # output$rec1 = DT::renderDT(
           #   datatable(
