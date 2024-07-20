@@ -785,23 +785,23 @@ server <- function(input, output, session) {
           #message(cond)
         })
         if(exists("all_outputs")){
-          z <- all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")) %>%
-            mutate_if(is.numeric, as.numeric)
+          z <- all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No"))
+          reactable::reactable(z)
           
-          output$rec1 = DT::renderDT(
-            datatable(
-              z,
-              filter = "top",
-              options = list(scrollX = TRUE,
-                             columnDefs = list(list(
-                               visible = FALSE, targets = c(grep("^D_", colnames(
-                                 all_outputs
-                               )),
-                               grep("^E_", colnames(
-                                 all_outputs
-                               )))
-                             )))
-            ) #%>%
+          # output$rec1 = DT::renderDT(
+          #   datatable(
+          #     z,
+          #     filter = "top",
+          #     options = list(scrollX = TRUE,
+          #                    columnDefs = list(list(
+          #                      visible = FALSE, targets = c(grep("^D_", colnames(
+          #                        all_outputs
+          #                      )),
+          #                      grep("^E_", colnames(
+          #                        all_outputs
+          #                      )))
+          #                    )))
+           # ) #%>%
               # formatStyle(
               #   7:(6 + length(grep(
               #     "^D_", colnames(all_outputs)
@@ -821,7 +821,7 @@ server <- function(input, output, session) {
               #     )
               #   )
               # )
-          )
+          #)
           forout_reactive$all_outputs <- all_outputs 
         }
       }
