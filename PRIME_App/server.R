@@ -100,7 +100,7 @@ has_auth_code <- function(params) {
 
 server <- function(input, output, session) {
 
-  user_input  <-  reactiveValues(authenticated = FALSE,
+  user_input  <-  reactiveValues(authenticated = TRUE,
                                  status = "",
                                  d2_session = NULL,
                                  memo_authorized = FALSE,
@@ -786,8 +786,10 @@ server <- function(input, output, session) {
         })
         if(exists("all_outputs")){
           z <- all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No"))
-          z <- as.data.frame(z)
-          flextable::flextable(z)
+          print(head(z))
+          output$rec1 <- reactable::renderReactable({
+            reactable::reactable(z)
+          })
           
           # output$rec1 = DT::renderDT(
           #   datatable(
