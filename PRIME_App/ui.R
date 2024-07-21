@@ -322,7 +322,7 @@ ui <- dashboardPage(
                                width = 12,
                                "All Disaggregates table",
                                collapsible = TRUE,
-                               shinycssloaders::withSpinner(DT::DTOutput('rec1'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput('rec1'))
                              )
                            ),
                            conditionalPanel(
