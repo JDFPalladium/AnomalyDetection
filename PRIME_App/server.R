@@ -787,8 +787,12 @@ server <- function(input, output, session) {
         if(exists("all_outputs")){
           z <- all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No"))
           print(head(z))
-          output$rec1 <- reactable::renderReactable({
-            reactable::reactable(z)
+          # output$rec1 <- reactable::renderReactable({
+          #   reactable::reactable(z)
+          # })
+          
+          output$rec1 <- renderUI({
+            flextable::flextable((z))
           })
           
           # output$rec1 = DT::renderDT(
