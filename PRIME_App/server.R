@@ -787,13 +787,13 @@ server <- function(input, output, session) {
         if(exists("all_outputs")){
           z <- all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No"))
           print(head(z))
-          # output$rec1 <- reactable::renderReactable({
-          #   reactable::reactable(z)
-          # })
-          
-          output$rec1 <- renderUI({
-            flextable::flextable((z))
+          output$rec1 <- reactable::renderReactable({
+            reactable::reactable(z)
           })
+          
+          # output$rec1 <- renderUI({
+          #   flextable::flextable((z))
+          # })
           
           # output$rec1 = DT::renderDT(
           #   datatable(
@@ -1143,11 +1143,17 @@ server <- function(input, output, session) {
         incProgress(.2, detail = paste("Creating Summary Disaggregate Tab"))
         disags_summary <-
           createSummaryTab(dat_summary_list = disags_list)
-        output$rec6 = DT::renderDT(
-          disags_summary$summary,
-          filter = "top",
-          options = list(scrollX = TRUE)
-        )
+        
+        # output$rec6 = DT::renderDT(
+        #   disags_summary$summary,
+        #   filter = "top",
+        #   options = list(scrollX = TRUE)
+        # )
+        
+        output$rec6 <- reactable::renderReactable({
+          reactable::reactable(disags_summary$summary)
+        })
+        
         forout_reactive$disags_summary <- disags_summary$summary
       }
       

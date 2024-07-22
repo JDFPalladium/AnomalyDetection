@@ -279,7 +279,8 @@ ui <- dashboardPage(
                                width = 12,
                                "Disaggregate Summary Table",
                                collapsible = TRUE,
-                               shinycssloaders::withSpinner(DT::DTOutput('rec6'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('rec6'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("rec6"))
                              )
                            ),
                            conditionalPanel(
@@ -323,7 +324,8 @@ ui <- dashboardPage(
                                "All Disaggregates table",
                                collapsible = TRUE,
                                #shinycssloaders::withSpinner(DT::DTOutput('rec1'))
-                               shinycssloaders::withSpinner(uiOutput("rec1"))
+                               #shinycssloaders::withSpinner(uiOutput("rec1"))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("rec1"))
                              )
                            ),
                            conditionalPanel(
@@ -333,7 +335,7 @@ ui <- dashboardPage(
                                width = 12,
                                "Sex Disaggregate Table",
                                collapsible = TRUE,
-                               shinycssloaders::withSpinner(DT::DTOutput('rec2'))
+                               #shinycssloaders::withSpinner(DT::DTOutput('rec2'))
                              )
                            ),
                            conditionalPanel(
