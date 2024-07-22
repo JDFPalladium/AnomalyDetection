@@ -339,6 +339,7 @@ ui <- dashboardPage(
                                "Sex Disaggregate Table",
                                collapsible = TRUE,
                                #shinycssloaders::withSpinner(DT::DTOutput('rec2'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("rec2"))
                              )
                            ),
                            conditionalPanel(
@@ -348,7 +349,8 @@ ui <- dashboardPage(
                                width = 12,
                                "Age Disaggregate Table",
                                collapsible = TRUE,
-                               shinycssloaders::withSpinner(DT::DTOutput('rec3'))
+                               #shinycssloaders::withSpinner(DT::DTOutput('rec3'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("rec3"))
                              )
                            ),
                            conditionalPanel(
@@ -358,7 +360,8 @@ ui <- dashboardPage(
                                width = 12,
                                "Facility Disaggregate Table",
                                collapsible = TRUE,
-                               shinycssloaders::withSpinner(DT::DTOutput('rec4'))
+                               #shinycssloaders::withSpinner(DT::DTOutput('rec4'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("rec4"))
                              )
                            )
                          )
@@ -377,7 +380,8 @@ ui <- dashboardPage(
                                width = 12,
                                collapsible = TRUE,
                                "Summary of Outliers",
-                               shinycssloaders::withSpinner(DT::DTOutput('ts5'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('ts5'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("ts5"))
                              )
                            ),
                            conditionalPanel(
@@ -387,7 +391,8 @@ ui <- dashboardPage(
                                width = 12,
                                collapsible = TRUE,
                                "Facility Scorecard",
-                               shinycssloaders::withSpinner(DT::DTOutput('ts6'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('ts6'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("ts6"))
                              )
                            ),
                            conditionalPanel(
@@ -397,7 +402,8 @@ ui <- dashboardPage(
                                width = 12,
                                collapsible = TRUE,
                                "IP Scorecard",
-                               shinycssloaders::withSpinner(DT::DTOutput('ts7'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('ts7'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("ts7"))
                              )
                            )
                          ),
@@ -410,7 +416,8 @@ ui <- dashboardPage(
                                width = 12,
                                collapsible = TRUE,
                                "ARIMA Outputs",
-                               shinycssloaders::withSpinner(DT::DTOutput('ts2'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('ts2'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("ts2"))
                              )
                            ),
                            conditionalPanel(
@@ -420,7 +427,8 @@ ui <- dashboardPage(
                                width = 12,
                                collapsible = TRUE,
                                "ETS Outputs",
-                               shinycssloaders::withSpinner(DT::DTOutput('ts3'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('ts3'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("ts3"))
                              )
                            ),
                            conditionalPanel(
@@ -430,7 +438,8 @@ ui <- dashboardPage(
                                width = 12,
                                collapsible = TRUE,
                                "STL Outputs",
-                               shinycssloaders::withSpinner(DT::DTOutput('ts4'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('ts4'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("ts4"))
                              )
                            )
                          )

@@ -883,24 +883,26 @@ server <- function(input, output, session) {
         #message(cond)
       })
       if (exists("site_sex_outliers")) {
-        Sys.sleep(2)
-        output$rec2 = DT::renderDT(
-          datatable(
-            site_sex_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
-            filter = "top",
-            options = list(scrollX = TRUE,
-                           columnDefs = list(
-                             list(
-                               visible = FALSE,
-                               targets = c(grep(
-                                 "^D_", colnames(site_sex_outliers)
-                               ),
-                               grep(
-                                 "^E_", colnames(site_sex_outliers)
-                               ))
-                             )
-                           ))
-          ) #%>%
+        output$rec2 <- reactable::renderReactable({
+            reactable::reactable(site_sex_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")))
+          })
+        # output$rec2 = DT::renderDT(
+        #   datatable(
+        #     site_sex_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
+        #     filter = "top",
+        #     options = list(scrollX = TRUE,
+        #                    columnDefs = list(
+        #                      list(
+        #                        visible = FALSE,
+        #                        targets = c(grep(
+        #                          "^D_", colnames(site_sex_outliers)
+        #                        ),
+        #                        grep(
+        #                          "^E_", colnames(site_sex_outliers)
+        #                        ))
+        #                      )
+        #                    ))
+          #) #%>%
             # formatStyle(
             #   7:(6 + length(grep(
             #     "^D_", colnames(site_sex_outliers)
@@ -920,7 +922,7 @@ server <- function(input, output, session) {
             #     )
             #   )
             # )
-        )
+        #)
         
         forout_reactive$site_sex_outliers <- site_sex_outliers 
       } else {
@@ -1004,24 +1006,28 @@ server <- function(input, output, session) {
         })
         
         if (exists("site_age_outliers")) {
-          Sys.sleep(2)
-          output$rec3 = DT::renderDT(
-            datatable(
-              site_age_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
-              filter = "top",
-              options = list(scrollX = TRUE,
-                             columnDefs = list(
-                               list(
-                                 visible = FALSE,
-                                 targets = c(grep(
-                                   "^D_", colnames(site_age_outliers)
-                                 ),
-                                 grep(
-                                   "^E_", colnames(site_age_outliers)
-                                 ))
-                               )
-                             ))
-            ) #%>%
+          
+          output$rec3 <- reactable::renderReactable({
+            reactable::reactable(site_age_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")))
+          })
+
+          # output$rec3 = DT::renderDT(
+          #   datatable(
+          #     site_age_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
+          #     filter = "top",
+          #     options = list(scrollX = TRUE,
+          #                    columnDefs = list(
+          #                      list(
+          #                        visible = FALSE,
+          #                        targets = c(grep(
+          #                          "^D_", colnames(site_age_outliers)
+          #                        ),
+          #                        grep(
+          #                          "^E_", colnames(site_age_outliers)
+          #                        ))
+          #                      )
+          #                    ))
+            #) #%>%
               # formatStyle(
               #   7:(6 + length(grep(
               #     "^D_", colnames(site_age_outliers)
@@ -1041,7 +1047,7 @@ server <- function(input, output, session) {
               #     )
               #   )
               # )
-          )
+          #)
           forout_reactive$site_age_outliers <- site_age_outliers 
         } else {
           shinyalert("Proceed",
@@ -1084,24 +1090,28 @@ server <- function(input, output, session) {
         })
         
         if (exists("facility_outputs")) {
-          Sys.sleep(2)
-          output$rec4 = DT::renderDT(
-            datatable(
-              facility_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
-              filter = "top",
-              options = list(scrollX = TRUE,
-                             columnDefs = list(
-                               list(
-                                 visible = FALSE,
-                                 targets = c(grep(
-                                   "^D_", colnames(facility_outputs)
-                                 ),
-                                 grep(
-                                   "^E_", colnames(facility_outputs)
-                                 ))
-                               )
-                             ))
-            ) #%>%
+          
+          output$rec4 <- reactable::renderReactable({
+            reactable::reactable(facility_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")))
+          })
+
+          # output$rec4 = DT::renderDT(
+          #   datatable(
+          #     facility_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
+          #     filter = "top",
+          #     options = list(scrollX = TRUE,
+          #                    columnDefs = list(
+          #                      list(
+          #                        visible = FALSE,
+          #                        targets = c(grep(
+          #                          "^D_", colnames(facility_outputs)
+          #                        ),
+          #                        grep(
+          #                          "^E_", colnames(facility_outputs)
+          #                        ))
+          #                      )
+          #                    ))
+            #) #%>%
               # formatStyle(
               #   7:(6 + length(grep(
               #     "^D_", colnames(facility_outputs)
@@ -1121,7 +1131,7 @@ server <- function(input, output, session) {
               #     )
               #   )
               # )
-          )
+          #)
           forout_reactive$facility_outputs <- facility_outputs 
         } else {
           shinyalert("Proceed",
@@ -1757,31 +1767,49 @@ server <- function(input, output, session) {
       keys = keysts
     )
     print("end")
-    output$ts2 = DT::renderDT(tsoutputs$ARIMA,
-                              filter = "top",
-                              options = list(scrollX = TRUE))
+    # output$ts2 = DT::renderDT(tsoutputs$ARIMA,
+    #                           filter = "top",
+    #                           options = list(scrollX = TRUE))
+    output$ts2 <- reactable::renderReactable({
+      reactable::reactable(tsoutputs$ARIMA)
+    })
     
-    output$ts3 = DT::renderDT(tsoutputs$ETS,
-                              filter = "top",
-                              options = list(scrollX = TRUE))
+    # output$ts3 = DT::renderDT(tsoutputs$ETS,
+    #                           filter = "top",
+    #                           options = list(scrollX = TRUE))
+    output$ts3 <- reactable::renderReactable({
+      reactable::reactable(tsoutputs$ETS)
+    })
     
-    output$ts4 = DT::renderDT(tsoutputs$STL,
-                              filter = "top",
-                              options = list(scrollX = TRUE))
+    # output$ts4 = DT::renderDT(tsoutputs$STL,
+    #                           filter = "top",
+    #                           options = list(scrollX = TRUE))
+    output$ts4 <- reactable::renderReactable({
+      reactable::reactable(tsoutputs$STL)
+    })
     
-    output$ts5 = DT::renderDT(tsoutputs$Summary,
-                              filter = "top",
-                              options = list(scrollX = TRUE))
+    # output$ts5 = DT::renderDT(tsoutputs$Summary,
+    #                           filter = "top",
+    #                           options = list(scrollX = TRUE))
+    output$ts5 <- reactable::renderReactable({
+      reactable::reactable(tsoutputs$Summary)
+    })
     
-    output$ts6 = DT::renderDT(
-      tsoutputs$facility_scorecard,
-      filter = "top",
-      options = list(scrollX = TRUE)
-    )
+    # output$ts6 = DT::renderDT(
+    #   tsoutputs$facility_scorecard,
+    #   filter = "top",
+    #   options = list(scrollX = TRUE)
+    # )
+    output$ts6 <- reactable::renderReactable({
+      reactable::reactable(tsoutputs$facility_scorecard)
+    })
     
-    output$ts7 = DT::renderDT(tsoutputs$ip_scorecard,
-                              filter = "top",
-                              options = list(scrollX = TRUE))
+    # output$ts7 = DT::renderDT(tsoutputs$ip_scorecard,
+    #                           filter = "top",
+    #                           options = list(scrollX = TRUE))
+    output$ts7 <- reactable::renderReactable({
+      reactable::reactable(tsoutputs$ip_scorecard)
+    })
     
     forout_reactive_ts$ARIMA <- tsoutputs$ARIMA
     forout_reactive_ts$ETS <- tsoutputs$ETS
