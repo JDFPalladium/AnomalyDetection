@@ -84,6 +84,9 @@ WESTERNHEMISPHERE <- c("Jamaica", "Trinidad and Tobago", "Guyana",
                  "El Salvador", "Honduras", "Nicaragua",
                  "Brazil", "Colombia", "Peru")
 COUNTRIES <- c("Malawi", "Botswana", "Eswatini", "Asia", "West Africa", "Western Hemisphere",
-               "Zambia", "Zimbabwe", "Nigeria")
+               "Zambia", "Zimbabwe", "Nigeria", "Angola", "Burundi", "Cameroon",
+              "Cote d'Ivoire", "Democratic Republic of the Congo", "Dominican Republic",
+              "Ethiopia", "Haiti", "Kenya", "Lesotho", "Mozambique", "Namibia", "Rwanda",
+              "South Africa", "South Sudan", "Tanzania", "Uganda", "Ukraine", "Vietnam")
 USG_USERS = c("Agency", "Interagency", "Global Agency", "Global")
 PARTNER_USERS = c("Global Partner", "Partner")
