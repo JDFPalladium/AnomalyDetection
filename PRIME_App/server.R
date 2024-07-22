@@ -1163,11 +1163,16 @@ server <- function(input, output, session) {
         facility_summary <-
           createSummaryTab(dat_summary_list = facility_list,
                            disag = FALSE)
-        output$rec7 = DT::renderDT(
-          facility_summary$summary,
-          filter = "top",
-          options = list(scrollX = TRUE)
-        )
+        # output$rec7 = DT::renderDT(
+        #   facility_summary$summary,
+        #   filter = "top",
+        #   options = list(scrollX = TRUE)
+        # )
+        
+        output$rec7 <- reactable::renderReactable({
+          reactable::reactable(facility_summary$summary)
+        })
+        
         forout_reactive$facility_summary <- facility_summary$summary
       }
       
@@ -1185,9 +1190,13 @@ server <- function(input, output, session) {
       # Generate scorecard
       incProgress(.2, detail = paste("Creating Scorecard"))
       scorecard <- createScoreCard(scorecard_in = dat_tmp)
-      output$rec8 = DT::renderDT(scorecard,
-                                 filter = "top",
-                                 options = list(scrollX = TRUE))
+      # output$rec8 = DT::renderDT(scorecard,
+      #                            filter = "top",
+      #                            options = list(scrollX = TRUE))
+      
+      output$rec8 <- reactable::renderReactable({
+        reactable::reactable(scorecard)
+      })
       forout_reactive$scorecard <- scorecard
       
       # Create IP scorecard sheet
@@ -1208,7 +1217,10 @@ server <- function(input, output, session) {
         names(ip_cover)[i] <- ips[i]
       }
       
-      output$rec9 = DT::renderDT(ip_cover)
+      # output$rec9 = DT::renderDT(ip_cover)
+      output$rec9 <- reactable::renderReactable({
+        reactable::reactable(ip_cover)
+      })
       
       forout_reactive$ipcover <- ip_cover
       

@@ -290,7 +290,8 @@ ui <- dashboardPage(
                                width = 12,
                                "Facility Summary Table",
                                collapsible = TRUE,
-                               shinycssloaders::withSpinner(DT::DTOutput('rec7'))
+                               #shinycssloaders::withSpinner(DT::DTOutput('rec7'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("rec7"))
                              )
                            ),
                            conditionalPanel(
@@ -300,7 +301,8 @@ ui <- dashboardPage(
                                width = 12,
                                "Scorecard Table",
                                collapsible = TRUE,
-                               shinycssloaders::withSpinner(DT::DTOutput('rec8'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('rec8'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("rec8"))
                              )
                            ),
                            conditionalPanel(
@@ -310,7 +312,8 @@ ui <- dashboardPage(
                                width = 12,
                                collapsible = TRUE,
                                "IP Scorecard",
-                               shinycssloaders::withSpinner(DT::DTOutput('rec9'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('rec9'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("rec9"))
                              )
                            )
                          ),
