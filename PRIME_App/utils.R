@@ -1,12 +1,14 @@
 #' sortOutputs
 #' 
-#' Sort outputs by outlier flag and then by Mahalanobis distance.
+#' Sort recommender model outputs by outlier flag and then by Mahalanobis distance.
 #' Order columns by keys, DATIM data, estimated values, normalized deviations, and then outlier flags
-#' Function will return all observatios or only anomalous observations based on user-set parameter of RETURN_ALL
 #'
 #' @param dat dataframe returned by runRecAnalysis function
 #' @param keys character vector defined above
 #' @param scenario_tmp character of scenario ran
+#' @param return_all logical, indicates to return anomalies only or all observations - this is now defunct, always returning anomalies only
+#' @param min_thresh numeric, minimum value to consider as important deviation from expected value
+#' @param fund character of funding agencies to include in output
 #'
 #' @return dataframe containing recommender outputs stacked for all sex disags
 #' @export
@@ -16,23 +18,22 @@ sortOutputs <- function(dat,keys,scenario_tmp, return_all, min_thresh, fund) {
   
   # remove funding scenario from keys
   keys <- keys[!keys == "fundingagency"]
-  
-  # order columns by keys, DATIM values, estimates (prepended with "E_"),
-  # normalize deviations (prepended with "D_"), Mahalanobis distance, and outlier flag
-  # if(fund){
-  #   dat <- dat %>% filter(fundingagency == "USAID") 
-  # }
 
+  # filter model outputs for funding agencies users are interested in
   dat <- dat[dat$fundingagency %in% fund, ]
-  
+
+  # remove fundingagency variable which is no longer needed
   dat <- dat %>% select(-fundingagency)
 
+  # order columns by keys, DATIM values, estimates (prepended with "E_"),
+  # normalize deviations (prepended with "D_"), Mahalanobis distance, and outlier flag
   site_out_total <- dat %>%
     select(names(dat)[!grepl("^E_|^D_|^MD|outlier_sp", names(dat))],
            names(dat)[grepl("^E_", names(dat))],
            names(dat)[grepl("^D_", names(dat))],
            names(dat)[grepl("^MD", names(dat))],
            names(dat)[grepl("outlier_sp", names(dat))])
+  
   # Sort by outlier flag, and then by Mahalanobis distance
   site_out_total <- site_out_total %>% 
     arrange(desc(outlier_sp), desc(MD)) %>%
@@ -58,7 +59,7 @@ sortOutputs <- function(dat,keys,scenario_tmp, return_all, min_thresh, fund) {
       if(length(cols_to_keep)<2){next}
       # Get the indicator with the maximum normalized deviation
       site_out_total[m, "Indicator"] <- colnames(dat_tmp[, cols_to_keep])[which.max(dat_tmp[, cols_to_keep])]
-      # For low values, set corresponding deviations to zero, so they are not colored as red later
+      # For values below min_thresh, set corresponding deviations to zero, so they are not colored as red later
       site_out_total[m, (n_keys+1+n_columns*2):(n_keys+n_columns*3)] <- ifelse(
         site_out_total[m, (n_keys+1):(n_keys+n_columns)] <= min_thresh,
         0,
@@ -71,7 +72,7 @@ sortOutputs <- function(dat,keys,scenario_tmp, return_all, min_thresh, fund) {
 
   }
   
-  # Concatenate reported values with estimates
+  # Concatenate reported values with estimates for easier display in app
   for(p in 1:n_columns){
     site_out_total[, n_keys+p] <- paste0(site_out_total[, n_keys+p],
                                          " (",
@@ -117,11 +118,11 @@ runRecAnalysis <- function(dat,keys) {
   # Identify indicators with zero variance to drop
   cols_to_drop <- names(site_keep[,(ncol(keys)+1):ncol(site_keep)])[var_inds == 0] 
   site_keep <- site_keep[,!(names(site_keep) %in% cols_to_drop)]
+  
   ## Drop variables that are colinear
   # Create pairwise correlation matrix
-  # Convert dataframe to matrix
   dat_df <- site_keep
-  
+  # Convert dataframe to matrix
   dat_matrix <- data.matrix(site_keep[,(ncol(keys)+1):ncol(site_keep)], rownames.force = NA)
   # Calculate pairwise correlations
   cormat <- suppressWarnings(cor(dat_matrix, use = "pairwise.complete.obs"))
@@ -150,16 +151,18 @@ runRecAnalysis <- function(dat,keys) {
   
   # assign output, with collinear variables dropped, to site_keep
   site_keep <- dat_df
-  ## Drop rows with three or fewer MER indicators present 
+ 
+  ## Drop rows/observations with three or fewer MER indicators present 
   # calculate number of present indicators for each observation
   obs_count <- apply(site_keep[, (ncol(keys)+1):ncol(site_keep)], 1, function(x) length(which(!is.na(x))))
   # keep observations with at least 4 present values
   obs_to_keep <- which(obs_count > 3) 
   site_keep <- site_keep[obs_to_keep,]
-  
-  # sum of present values by variable; use na.rm so we remove NAs
+
+  ## Now, create sparse covariance matrix - refer to paper for further explanation
+  # Get sparse sum of each indicator - sum of present values by variable; use na.rm so we remove NAs
   sum_sparse <- colSums(site_keep[, (ncol(keys)+1):ncol(site_keep)], na.rm = TRUE) 
-  # get number of present values by indicator
+  # get number of present values by indicator - this is denominator of sparse average
   count_present_keep <- apply(site_keep[, (ncol(keys)+1):ncol(site_keep)], 2, function(x) length(which(!is.na(x))))
   # get sparse mu (vector of means)
   mu <- sum_sparse / count_present_keep 
@@ -177,10 +180,10 @@ runRecAnalysis <- function(dat,keys) {
   # N is the counts, s is where we store the covariances, and I is useful for some calculations
   S <- matrix(0, k, k) 
   
-  # Loop through each observations
+  # Loop through each observation
   for (i in 1:nrow(site_keep)){
-    
-    dat <- site_keep[i, ]
+
+    dat <- site_keep[i, ] # get corresponding row
     inds <- which(!is.na(dat[(ncol(keys)+1):ncol(site_keep)])) # inds returns the index of the columns that have non NA values
     yt <- dat[(ncol(keys)+1):ncol(site_keep)][inds] # yt are the actual values that are associated with the indices in inds
     yt_mu <- as.matrix(yt - mu[inds]) # yt_mu subtracts the mu for each indicator from yt for each indicator
@@ -188,7 +191,7 @@ runRecAnalysis <- function(dat,keys) {
     Hyt <- as.matrix(i_mat[inds, ]) # hyt is a matrix that has the number of present values as rows and the numbers of all variables as columns
     if(dim(Hyt)[2] == 1){Hyt <- t(Hyt)} #this relevant if we set the threshold too high and we only have 1 indicator column coming through
     
-    S <- S + (t(Hyt) %*% (t(yt_mu) %*% yt_mu) %*% Hyt)
+    S <- S + (t(Hyt) %*% (t(yt_mu) %*% yt_mu) %*% Hyt) # update covariance matrix
   }
 
   # Compute sparse correlation matrix
@@ -204,11 +207,12 @@ runRecAnalysis <- function(dat,keys) {
   cv<-qchisq(.95,df=ncol(site_sparse)-1)
   site_sparse$outlier_sp <- ifelse(site_sparse$MD>cv, 1, 0)
   
-  # Get outliers only for generating estimates
+  # Generating estimates is computationally expensive, so only generate for outliers
   site_outliers <- site_sparse[site_sparse$outlier_sp == 1, ]
 
   # Estimate present values - xt is the value to predict, yt are the other present values
   # value will be Rxtyt %*% Ryt_inv %*% yt-uyt + uxt
+  # refer to paper for explanation
   preds <- matrix(data = NA, nrow = nrow(site_outliers), ncol = k) # set up matrix to hold estimates
 
   # Loop through each row
@@ -251,10 +255,16 @@ runRecAnalysis <- function(dat,keys) {
   site_all <- cbind(site_outliers, preds_df)
 
   # Take the difference between estimate and actual and normalize by dividing by sample variance
+  # First, get the deviation
   deviation <- abs(site_all[, (ncol(site_sparse)+1):(ncol(site_all))] - site_all[, (ncol(keys)+1):(ncol(site_sparse)-2)])
+  # Then normalize by dividing by sample variance
   deviation <- mapply('/', deviation, diag(R))
   deviation <- data.frame(deviation)
+                              
+  # Prepend "D" so it's clear it refers to deviation
   names(deviation) <- paste0("D_", names(site_sparse)[(ncol(keys)+1):(ncol(site_sparse)-2)])
+                              
+  # Horizontally stack deviations to table with original values and estimates
   site_out_total <- cbind(site_all, deviation)
   return(site_out_total)
 
@@ -280,20 +290,23 @@ createSummaryTab <- function(dat_summary_list,
                       "kp", "scenario", "Indicator", "outlier_sp") 
     dat <- lapply(dat_summary_list, function(x) x[, cols_to_keep])
   } else {
+  # If summary tab to be created is for facility table
     cols_to_keep <- c("psnu", "facility", "primepartner", "scenario", "Indicator", "outlier_sp") 
     dat <- lapply(dat_summary_list, function(x) x[, cols_to_keep])
   }
   
-  # Bind list of dataframes into a single dataframe
+  # Bind list of dataframes into a single dataframe (only relevant with disags)
   dat <- rbindlist(dat)
   # Underlying tabs may contain all results, but summary tabs should present only outliers
+  # this is now redundant since sortOutputs was updated to always only return outliers
   dat <- dat[dat$outlier_sp == 1, ]
   # Drop the actual outlier flag as everything remaining is an outlier
   dat <- dat %>% select(-outlier_sp)
   
   # PSNU, Facility, Primepartner are keys for the scorecard - returned separately
   dat_for_scorecard <- dat[, c("psnu", "facility", "primepartner", "Indicator")]
-  
+
+  # everything remaining is an outlier - creating a flag so that we can use numeric operations later to summarize
   dat$outlier <- 1
   
   # Summarize data - create wide dataframe so that each scenario run becomes a column
@@ -369,69 +382,100 @@ createScoreCard <- function(scorecard_in){
   
 }
 
+
+#' runTimeSeries
+#' 
+#' Function to run time series anomaly detection using ARIMA, STL, ETS, and to create summary tables of anomalies found
+#'
+#' @param dat dataframe of values by facility and indicator organized chronologically
+#' @param recent_year numeric the year selected by the user for classification
+#' @param recent_qtr character the quarter selected by the user for classification
+#' @param MIN_THRESH numeric value below which to not consider as anomalous
+#' @param RETURN_ALL logical whether to return anomalies only or all values
+#' @param keys character vector of variables describing unique observation 
+#'
+#' @return list of dataframes
+#' @export
+#'
+#' @examples
+                  
 runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, keys) {
-  
+
+  # provide progress updates to users
   withProgress(message = 'Running Models', value = 0, {
   
   incProgress(.2, detail = paste("Preparing Data"))
     
-  # split by facility and indicator
+  # split by facility so we can loop through
   dat_split <- split(dat, dat$facility)
   
-  # Create shell
+  # Create shell so we retain placeholders for missing values
   earliest_year <- as.numeric(min(dat$fiscal_year))
   shell <- expand.grid(fiscal_year = earliest_year:recent_year, qtr = 1:4) %>%
     filter(!(fiscal_year >= recent_year & qtr > as.numeric(gsub(".*?([0-9]+).*", "\\1", recent_qtr)))) %>%
     arrange(fiscal_year, qtr)
-  
+
+  # initialize list to hold model outputs as we loop through facilities and indicators
   outlist_arima <- list()
   outlist_ets <- list()
   outlist_stl_arima <- list()
   
-  # for each facility
+  # loop through each facility
   for(i in 1:length(dat_split)){
 
+    # tell user what number facility we're up to and how many are remaining
     incProgress(1/length(dat_split), detail = paste("Running facility:", i, "of", length(dat_split)))
-    
+
+    # subset to get facility data
     dat_tmp <- dat_split[[i]]
+
+    # now split by indicator, since model is run per indicator
     ind_split <- split(dat_tmp, dat_tmp$indicator)
 
-    
+    # loop through indicators
     for(j in 1:length(ind_split)){
 
+      # subset to get data per indicator
       dat_ind <- ind_split[[j]]
-      
+
+      # join on shell, left join, so we retain placeholders for missing values
       shell_tmp <- merge(shell, dat_ind, by = c("fiscal_year", "qtr"), all.x = TRUE) 
  
       # set up as time series
       dat_ts <- ts(shell_tmp[1:(nrow(shell_tmp)-1), 'value'], start = c(earliest_year, 1), frequency = 4) %>%
-        na.trim(sides = "left") %>%
-        na_interpolation()
+        na.trim(sides = "left") %>% # removing leading zeros from earliest periods, if there are any
+        na_interpolation() # interpolate missing values with last observed value
       
       # Fit STL model and forecast last present period
       stlf_arima_forecast <- stlf(dat_ts,
                                   method = "arima",
                                   level = c(99),
                                   h = 1)
-      
+
+      # get 99% forecast interval and point forecast
       upper99 <- stlf_arima_forecast$upper[1]
       lower99 <- stlf_arima_forecast$lower[1]
       pred <- stlf_arima_forecast$mean[1]
       
 
+      # add forecast range to shell which we'll carry through
       shell_tmp$upper99 <- upper99
       shell_tmp$lower99 <- lower99
+
+      # get the actual value we observed for comparison with forecast interval
       actual <- tail(shell_tmp$value,1)
 
+      # if the observed value is outside the forecast interval and is above min_thresh, consider it an outlier
       if(!is.na(actual) & (actual < lower99 | actual > upper99) & (abs(actual - pred) > MIN_THRESH)){
         shell_tmp$outlier <- 1
       } else {
         shell_tmp$outlier <- 0
       }
-      
+
+      # add these results to the list initialized above
       outlist_stl_arima[[length(outlist_stl_arima)+1]] <- shell_tmp
       
-      # Fit STL model and forecast last present period
+      # Repeat for ETS model
       stlf_arima_forecast <- stlf(dat_ts,
                                   method = "ets",
                                   level = c(99),
@@ -452,7 +496,8 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
       }
       
       outlist_ets[[length(outlist_ets)+1]] <- shell_tmp
-      
+
+      # Repeat for ARIMA model
       arima_mod <- suppressWarnings(auto.arima(dat_ts,
                                                seasonal=TRUE,
                                                approximation = TRUE,
@@ -480,23 +525,33 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
     }
     
   }
-  
+
+
+  # With loops complete, now stack results for each time series model
   out_stl_arima <- rbindlist(outlist_stl_arima)
   out_ets <- rbindlist(outlist_ets)
   out_arima <- rbindlist(outlist_arima)
-  
+
+  # First, let's proces ARIMA outputs, then we'll process STL and ETS the same way
+  # sort outputs in reverse chronological order and drop missing values
   out_arima <- out_arima %>%
     arrange(desc(fiscal_year), desc(qtr)) %>%
     filter(!is.na(value))
+  # pivot wider so that each facility-indicator combination becomes a row, with values sorted from
+  # left to right, most recent to least (so that the most recent value, ie the one the user is interested in,
+  # is the first that appears)
   out_arima_wide <- pivot_wider(out_arima,
                                 id_cols = c("psnu", "facility", "primepartner", "indicator", "lower99", "upper99", "outlier"),
                                 names_from = c("fiscal_year", "qtr"),
                                 values_from = c("value"))
+  # this is now defunct - we always return all values for time series. used to give user the option to select.
   if(RETURN_ALL == FALSE){
     out_arima_wide <- out_arima_wide %>% filter(outlier == 1)
   }
-  
-  # Let's calculate by how much the differ (difference / range of interval)
+
+  # we want to not only push outliers to the top, but also to sort by degree of deviation from forecast range,
+  # meaning to get the most anomalous at the top. 
+  # Let's calculate by how much they differ (difference / range of interval)
   arima_out <- out_arima_wide %>%
     filter(!is.na(.[[length(keysts)+1]])) %>%
     mutate(gap = ifelse(.[[length(keys)]] > upper99, .[[length(keys)]] - upper99, lower99 - .[[length(keys)]]),
@@ -508,7 +563,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
   
   out_arima_wide <- out_arima_wide %>% filter(outlier == 1)
   
-  
+  # Now, repeat process for ETS
   out_ets <- out_ets %>%
     arrange(desc(fiscal_year), desc(qtr)) %>%
     filter(!is.na(value))
@@ -528,7 +583,8 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
   ets_out[, length(keys)] <- ets_out$most_recent 
   ets_out <- ets_out %>% select(-most_recent, -gap, -deviation, -upper99, -lower99) %>% as.data.frame()
   out_ets_wide <- out_ets_wide %>% filter(outlier == 1)
-  
+
+  # And repeat process for STL
   out_stl_arima <- out_stl_arima %>%
     arrange(desc(fiscal_year), desc(qtr)) %>%
     filter(!is.na(value))
@@ -549,7 +605,8 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
   stl_out <- stl_out %>% select(-most_recent, -gap, -deviation, -upper99, -lower99) %>% as.data.frame()
   out_stl_arima_wide <- out_stl_arima_wide %>% filter(outlier == 1)
   
-  # Create Summary Tab
+  # Create Summary Tab - merge the three outputs together and sum the number of outliers for each
+  # facility-indicator combination
   summary <- merge(out_arima_wide[, c("psnu", "facility", "primepartner",  "indicator", "upper99")],
                    out_stl_arima_wide[, c("psnu","facility", "primepartner", "indicator", "upper99")],
                    by = c("psnu","facility", "primepartner",  "indicator"), all = TRUE) %>%
@@ -567,7 +624,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
   summary <- summary %>%
     arrange(desc(Outliers))
   
-  # Create IP scorecard sheet
+  # Create IP scorecard sheet - identify the five indicators most commonly flagged as outliers per IP - as with recommender
   cover_ip <- summary %>%
     group_by(primepartner, indicator) %>%
     summarize(Outliers = sum(Outliers, na.rm = TRUE), .groups = "drop") %>% 
@@ -585,7 +642,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
     names(ip_cover)[i] <- ips[i]
   }
   
-  # Create facility scorecard sheet
+  # Create facility scorecard sheet - sum number of anomalies by indicator and by facility
   cover <- summary %>%
     group_by(facility, psnu, primepartner, indicator) %>%
     summarize(Outliers = sum(Outliers, na.rm = TRUE), .groups = "drop") %>% 
@@ -593,15 +650,10 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
     pivot_wider(., id_cols = c("facility", "psnu", "primepartner"), names_from = "indicator", values_from = "Outliers") %>%
     as.data.frame()
   cover[is.na(cover)] <- 0
-  # sort columns by number of outliers
-  # cover <- cbind.data.frame(PSNU = cover$psnu,
-  #                           Facility = cover$facility,
-  #                           PrimePartner = cover$primepartner,
-  #                           cover[, 4:ncol(cover)][order(colSums(cover[, 4:ncol(cover)]), decreasing = T)],
-  #                           stringsAsFactors = FALSE)
-
 
   # if multiple indicators selected, use rowsums and colsums to aggregate
+  # cover's first three columns are keys - psnu, primepartner, facility, so column four is the number of outliers
+  # this will be the case if more than one indicator is selected by user for analysis 
   if(ncol(cover)>4){
     cover <- cbind.data.frame(PSNU = cover$psnu,
                               Facility = cover$facility,
@@ -615,7 +667,7 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
     cover[nrow(cover),1:3] <- "Total"
   }
   
-  # If only one indicator selected, don't use rowsums and colsums
+  # If only one indicator selected, don't use rowsums and colsums which will break 
   if(ncol(cover) == 4){
     cover <- cbind.data.frame(PSNU = cover$psnu,
                               Facility = cover$facility,
@@ -632,11 +684,8 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
   }
 
   })
-  
-  # stl_out <- stl_out %>% mutate(outlier = ifelse(outlier == 1, "Yes", "No"))
-  # arima_out <- arima_out %>% mutate(outlier = ifelse(outlier == 1, "Yes", "No"))
-  # ets_out <- ets_out %>% mutate(outlier = ifelse(outlier == 1, "Yes", "No"))
-  
+
+  # return list of dataframes to then send back to UI and for download
   outlist <- list("facility_scorecard" = cover,
                   "ip_scorecard" = ip_cover,
                   "Summary" = summary,
@@ -646,47 +695,6 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
   
   return(outlist)
   
-}
-
-
-runChecks <- function(dat,
-                      year_for_analysis,
-                      qtr_for_analysis
-){
-  
-  if("prime_partner_name" %in% names(dat)){
-    dat$primepartner <- dat$prime_partner_name
-  }
-  
-  # Check to confirm if fiscal year selected by user for analysis exists in the dataset
-  if(!year_for_analysis %in% unique(dat$fiscal_year)){
-    shinyalert("Check the data file", "Please confirm the fiscal year selected is included in the file uploaded.", type="error")
-  } 
-  #   else if (year_for_analysis %in% unique(dat$fiscal_year)){
-  #   shinyalert("Success", "The fiscal year selected is included in the file uploaded.", type="success")
-  # }
-  # Check to confirm if quarter selected by user for analysis exists in the dataset
-  if(!qtr_for_analysis %in% names(dat)){
-    shinyalert("Check the data file", "Please confirm the quarter selected is included in the file uploaded.", type="error")
-  } 
-  #   else if(qtr_for_analysis %in% names(dat)){
-  #   shinyalert("Success", "The quarter selected is included in the file uploaded.", type="success")
-  # }
-  
-  if(any(!c("sitename","psnu","facility","indicator","numeratordenom",
-            "standardizeddisaggregate","ageasentered","sex", "primepartner") %in% names(dat))){ #I removed primepartner for now.
-    shinyalert("Check the data file","Please confirm the file selected contains the required columns:
-                 sitename, psnu, facility, indicator, numeratordenom, standardizeddisaggregate, ageasentered, sex, primepartner", type="error")
-  } 
-  #   else if (any(c("sitename","psnu","facility","indicator","numeratordenom", "standardizeddisaggregate","ageasentered","sex") %in% names(dat))){
-  #   shinyalert("Success","The data upload contains the fiscal year, quarter, and all necessary variables. Please continue with the data preparation", type="success")
-  # }
-  
-  # if((year_for_analysis %in% unique(dat$fiscal_year)) &&
-  #    (qtr_for_analysis %in% names(dat)) &&
-  #    (all(c("sitename","psnu","facility","indicator","numeratordenom","standardizeddisaggregate","ageasentered","sex", "primepartner") %in% names(dat)))) {
-  #   shinyalert("Proceed", "Continue to Run Models.", type="success")
-  # }
 }
 
 
@@ -708,9 +716,11 @@ runChecks <- function(dat,
 #'
 #' @examples
 formatCells <- function(name, disags, facilities, keys_disag, keys_facility, wb_format){
-  
+
+  # get the name of the sheet to create so we can know what output table to pull
   name_sheet <- sub("_.*", "", name)
 
+  # gather if sheet name indicates information is from disag or facility
   if(grepl("Sex|All|Age", name_sheet)){
     dat <- disags
     n_keys <- length(keys_disag)
@@ -719,22 +729,25 @@ formatCells <- function(name, disags, facilities, keys_disag, keys_facility, wb_
     n_keys <- length(keys_facility)
   }
   
-  dat_tmp <- dat[[name_sheet]]
-  n_columns <- sum(grepl("^E_", names(dat_tmp)))
+  dat_tmp <- dat[[name_sheet]] # get corresponding output table
+  n_columns <- sum(grepl("^E_", names(dat_tmp))) # number of indicators
   nrows <- nrow(dat_tmp)+1
   
   # https://www.w3schools.com/colors/colors_picker.asp?colorhex=8B0000
   cs1 <- createStyle(bgFill = "#FF0000")
   cs2 <- createStyle(bgFill = "#FF8080")
   cs3 <- createStyle(bgFill = "#FFFFFF")
-  
+
+  # get the columns that correspond to the deviation values
   deviations <- dat_tmp[, (n_keys + 1 + (2*n_columns)):(n_keys + n_columns + (2*n_columns))]
+  # create cutoffs for 80th and 90th percentile of deviation value range
   quants <- suppressWarnings(quantile(as.numeric(reshape2::melt(deviations)$value), c(.8, .9), na.rm = TRUE))
   
   # loop through columns
   for(j in 1:n_columns){
     
-    # Get Excel column position of deviation
+    # Get Excel column position of deviation and deviation
+    # since this is Excel, 27th column is AA, so code identifies which block of 26 a column is in
     deviation_col <- n_keys + j + (2*n_columns)
     estimation_col <- n_keys + j + n_columns
     deviation_col <- if(deviation_col <= 26){
@@ -765,20 +778,21 @@ formatCells <- function(name, disags, facilities, keys_disag, keys_facility, wb_
     } else if(estimation_col == 78){
       "BZ"
     }
-    
+
+    # apply conditional formatting - if deviation is above 80th percentile, color reported value with cs2
     conditionalFormatting(wb_format, name,
                           cols = n_keys + j,
                           rows = 2:nrows,
                           rule = paste0(deviation_col, 2, ">", quants[1]), 
                           style = cs2)
-    
+    # apply conditional formatting - if deviation is above 90th percentile, color reported value with cs1
     conditionalFormatting(wb_format, name,
                           cols = n_keys + j,
                           rows = 2:nrows,
                           rule = paste0(deviation_col, 2, ">", quants[2]), 
                           style = cs1)
     
-    # If less than 10, set to no fill
+    # If value is less than 10, set to no fill
     conditionalFormatting(wb_format, name,
                           cols = n_keys + j,
                           rows = 2:nrows,
@@ -787,7 +801,8 @@ formatCells <- function(name, disags, facilities, keys_disag, keys_facility, wb_
 
     
   }
-  
+
+  # shrink column width for estimated values and deviation columns
   setColWidths(wb_format, name, (n_keys+n_columns+1):(ncol(dat_tmp)+1), 0)
   
 }
