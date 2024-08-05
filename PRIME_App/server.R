@@ -1,67 +1,353 @@
-#### server.R, intakes items from ui.R, performs calculations, returns outputs to UI ####
+
+# add read parquet
+# qtr columns are automatically read in
+read_parquet_file <- function(my_file, n_rows = Inf, columns_to_read = NULL) {
+  print(paste0("reading parquet file: ", my_file))
+  
+  # Read the entire Parquet file
+  parquet_data <- aws.s3::s3read_using(
+    FUN = function(object) {
+      arrow::read_parquet(object)
+    },
+    bucket = Sys.getenv("S3_READ"),
+    object = my_file
+  )
+  
+  # Limit the number of rows if n_rows is specified
+  if (!is.infinite(n_rows) && n_rows > 0) {
+    parquet_data <- parquet_data[1:min(n_rows, nrow(parquet_data)), ]
+  }
+  
+  # Filter the columns after reading the entire file
+  # Automatically include any column that starts with "qtr"
+  qtr_columns <- grep("^qtr", colnames(parquet_data), value = TRUE)
+  if (!is.null(columns_to_read)) {
+    parquet_data <- parquet_data[, union(columns_to_read, qtr_columns), drop = FALSE]
+  }
+  
+  # Post-process parquet data to replace empty quotes with NA in specific columns
+  replace_empty_with_na <- function(x) {
+    ifelse(x == "", NA, x)
+  }
+  
+  # Check if parquet_data is a data frame and if the required columns exist
+  if (inherits(parquet_data, "data.frame")) {
+    cols_to_check <- c("qtr1", "qtr2", "qtr3", "qtr4")
+    existing_cols <- cols_to_check[cols_to_check %in% colnames(parquet_data)]
+    
+    if (length(existing_cols) > 0) {
+      parquet_data <- parquet_data %>%
+        mutate(across(all_of(existing_cols), replace_empty_with_na))
+    }
+  }
+  
+  return(parquet_data)
+}
 
 
 
-# initialize server function
+
+# connect to s3
+tryCatch({
+  pdaprules::s3_connect()
+},
+error = function(e) {
+  print(e)
+})
+
+# test connection
+# my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"), filter_parquet = TRUE)
+# sample_file <- my_items[10,2]
+# data_recent <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
+#                                     trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
+#                                     bucket = Sys.getenv("S3_READ"),
+#                                     object = sample_file)
+#data_recent <- read_parquet_file(sample_file)
+
+
+
+################ OAuth Client information #####################################
+if (interactive()) {
+  # testing url
+  options(shiny.port = 3123)
+  APP_URL <- "http://127.0.0.1:3123/"# This will be your local host path
+} else {
+  # deployed URL
+  APP_URL <- Sys.getenv("APP_URL") #This will be your shiny server path
+}
+
+{
+  
+  oauth_app <- httr::oauth_app(Sys.getenv("OAUTH_APPNAME"),
+                               key = Sys.getenv("OAUTH_KEYNAME"),        # dhis2 = Client ID
+                               secret = Sys.getenv("OAUTH_SECRET"), #dhis2 = Client Secret
+                               redirect_uri = APP_URL
+  )
+  
+  oauth_api <- httr::oauth_endpoint(base_url = paste0(Sys.getenv("BASE_URL"),"uaa/oauth"),
+                                    request=NULL,# Documentation says to leave this NULL for OAuth2
+                                    authorize = "authorize",
+                                    access="token"
+  )
+  
+  oauth_scope <- "ALL"
+}
+
+has_auth_code <- function(params) {
+  
+  return(!is.null(params$code))
+}
+
+
+
 server <- function(input, output, session) {
 
-
-#### App Landing Page ---------------  
-
-  # This loads as application is open - login popup
-  observeEvent("",{
-    showModal(modalDialog(
-      id = "passwordModal",
-      title = "Login",
-      textInput("username", "Username"),
-      passwordInput("password", "Password"),
-      footer = actionButton("submitBtn", "Submit", class = "btn-primary")
-    )
-    )
+  user_input  <-  reactiveValues(authenticated = FALSE,
+                                 status = "",
+                                 d2_session = NULL,
+                                 memo_authorized = FALSE,
+                                 #modal = TRUE
+                                 )
+  # User and mechanisms reactive value pulled only once ----
+  user <- reactiveValues(type = NULL)
+  mechanisms <- reactiveValues(my_cat_ops = NULL)
+  userGroups <- reactiveValues(streams = NULL)
+  
+  
+  
+  #### App Landing Page ---------------  
+  
+  output$password_modal_ui <- renderUI({
+    if (!user_input$authenticated) {
+      showModal(
+        modalDialog(
+          id = "passwordModal",
+          title = "Please Login",
+          footer = actionButton("login_button_oauth", "Log in with DATIM")
+        )
+      )
+    }
   })
 
-  # Intiate reactiveValues, like a list, to store values to be retrieved about user from Datim database
-  user <- reactiveValues(type = NULL)
-
-  # Code triggered when user presses Submit button on popup above
-  observeEvent(input$submitBtn, {
-    
-    # Check if entered username and password match
-    tryCatch({
-        datimutils::loginToDATIM(base_url = "https://test.datim.org/",
-                                 username = input$username,
-                                 password = input$password
-        )
-
-        # store data so call is made only once
-        user$type <- datimutils::getMyUserType()
-
-      # user has a value "type" - check if this type is in one of approved user groups, defined in global.R
-        if(user$type %in% c(USG_USERS, PARTNER_USERS)){
-
-          # If user is in approved user group, remove popup and enable access to main app
-          removeModal()
-          # First step with main app, show informational popup
-          showModal(modalDialog(includeHTML("intro_text.html"),
-                                easyClose = TRUE))
-
-        }
-        },
-        # Throw an error if the login is not successful / user not found or not in approved user group
-        error = function(e) {
-          showNotification("Incorrect username or password. Please try again.", type = "warning")
-          flog.info(paste0("User ", input$username, " login failed."), name = "datapack")
-        }
-    )
-
+  # observeEvent("",{
+  #   showModal(modalDialog(
+  #     id = "passwordModal",
+  #     title = "Login",
+  #     textInput("username", "Username"),
+  #     passwordInput("password", "Password"),
+  #     footer = actionButton("submitBtn", "Submit", class = "btn-primary")
+  #   )
+  #   )
+  # })
+  # 
+  
+  # observeEvent(user_input$modal, {
+  #   
+  #   print(
+  #     paste0(
+  #       "your modal value is: ",
+  #       user_input$modal
+  #     )
+  #   )
+  #   
+  #   if (user_input$modal) {
+  #     showModal(
+  #       modalDialog(
+  #       id = "passwordModal",
+  #       title = "Login",
+  #       # textInput("username", "Username"),
+  #       # passwordInput("password", "Password"),
+  #       footer = actionButton("login_button_oauth", "Log in with DATIM")
+  #       )
+  #     )
+  #   }
+  # })
+  
+  #UI that will display when redirected to OAuth login agent
+  output$ui_redirect <- renderUI({
+    #print(input$login_button_oauth) useful for debugging
+    if (!is.null(input$login_button_oauth)) { # nolint
+      if (input$login_button_oauth > 0) { # nolint
+        url <- httr::oauth2.0_authorize_url(oauth_api, oauth_app, scope = oauth_scope)
+        redirect <- sprintf("location.replace(\"%s\");", url)
+        tags$script(HTML(redirect))
+      } else NULL
+    } else NULL
   })
   
-  # User Instructions section ------
-  # Using introjs package
-  # First set up a data.frame that contains three columns - element, intro, position
-  # Each element corresponds to an element defined in ui.R. It is that UI object that will be highlighted
-  # when instructions are triggered. The text that will be displayed is in the intro column.
-  # Position indicated where relative to the UI item the instructions should appear.
+  # # is the user authenticated?
+  # output$ui <- renderUI({
+  #   if(user_input$authenticated == FALSE) {
+  #     uiOutput("uiLogin")
+  #   } else {
+  #     uiOutput("authenticated")
+  #   }
+  # })
+  
+  
+  observeEvent(input$submitBtn > 0, {
+    
+    print("submitting to modal...")
+    #print(session$clientData$url_search)
+    
+    #Grabs the code from the url
+    params <- parseQueryString(session$clientData$url_search)
+    #Wait until the auth code actually exists
+    req(has_auth_code(params))
+    
+    #Manually create a token
+    token <- httr::oauth2.0_token(
+      app = oauth_app,
+      endpoint = oauth_api,
+      scope = oauth_scope,
+      use_basic_auth = TRUE,
+      oob_value = APP_URL,
+      cache = FALSE,
+      credentials = httr::oauth2.0_access_token(endpoint = oauth_api,
+                                                app = oauth_app,
+                                                code = params$code,
+                                                use_basic_auth = TRUE)
+    )
+    
+    #print("here is your token...")
+    #print(token)
+    
+    loginAttempt <- tryCatch({
+      print("attempting to login")
+      user_input$uuid <- uuid::UUIDgenerate()
+      datimutils::loginToDATIMOAuth(base_url =  Sys.getenv("BASE_URL"),
+                                    token = token,
+                                    app = oauth_app,
+                                    api = oauth_api,
+                                    redirect_uri = APP_URL,
+                                    scope = oauth_scope,
+                                    d2_session_envir = parent.env(environment())
+      )
+      
+      # we remove the login modal as we continue to validate access
+      removeModal()
+      showModal(
+        modalDialog(
+          id = "transitionModal",
+          title = "One moment while we validate credentials ...",
+          footer = NULL
+        )
+      )
+      
+      # DISALLOW USER ACCESS TO THE APP-----
+      
+      # store data so call is made only once
+      userGroups$streams <-  datimutils::getMyStreams()
+      user$type <- datimutils::getMyUserType()
+      mechanisms$my_cat_ops <- datimutils::listMechs()
+      
+      # if a user is not to be allowed deny them entry
+      if (!user$type %in% c(USG_USERS#, PARTNER_USERS
+                            )) {
+        
+        # alert the user they cannot access the app
+        sendSweetAlert(
+          session,
+          title = "YOU CANNOT LOG IN",
+          text = "You are not authorized to use this application",
+          type = "error"
+        )
+        
+        # log them out
+        Sys.sleep(3)
+        flog.info(paste0("User ", user_input$d2_session$me$userCredentials$username, " logged out."))
+        user_input$authenticated  <-  FALSE
+        user_input$user_name <- ""
+        user_input$authorized  <-  FALSE
+        user_input$d2_session  <-  NULL
+        d2_default_session <- NULL
+        gc()
+        session$reload()
+        
+      }
+    },
+    # This function throws an error if the login is not successful
+    error = function(e) {
+      flog.info(paste0("User ", input$user_name, " login failed. ", e$message), name = "usgpartners")
+    }
+    )
+    
+    if (exists("d2_default_session")) {
+      
+      removeModal()
+      user_input$authenticated  <-  TRUE
+      user_input$d2_session  <-  d2_default_session$clone()
+      d2_default_session <- NULL
+      
+      #Need to check the user is a member of the PRIME Data Systems Group, COP Memo group, or a super user
+      user_input$memo_authorized <-
+        grepl("VDEqY8YeCEk|ezh8nmc4JbX", user_input$d2_session$me$userGroups) |
+        grepl(
+          "jtzbVV4ZmdP",
+          user_input$d2_session$me$userCredentials$userRoles
+        )
+      flog.info(
+        paste0(
+          "User ",
+          user_input$d2_session$me$userCredentials$username,
+          " logged in."
+        ),
+        name = "usgpartners"
+      )
+      
+      flog.info(
+        paste0(
+          "User ",
+          user_input$d2_session$me$userCredentials$username,
+          " logged in."
+        ),
+        name = "usgpartners"
+      )
+    }
+    
+  })
+  
+  
+    # observeEvent(input$submitBtn, {
+  #   
+  #   # Check if entered username and password match
+  #   tryCatch({
+  #       datimutils::loginToDATIM(base_url = Sys.getenv("BASE_URL"),
+  #                                username = input$username,
+  #                                password = input$password
+  #       )
+  # 
+  #       # store data so call is made only once
+  #       user$type <- datimutils::getMyUserType()
+  # 
+  #       if(user$type %in% c(USG_USERS, PARTNER_USERS)){
+  #         
+  #         removeModal()
+  #         showModal(modalDialog(includeHTML("intro_text.html"),
+  #                               easyClose = TRUE))
+  # 
+  #       }
+  #       },
+  #       # This function throws an error if the login is not successful
+  #       error = function(e) {
+  #         showNotification("Incorrect username or password. Please try again.", type = "warning")
+  #         flog.info(paste0("User ", input$username, " login failed."), name = "datapack")
+  #       }
+  #   )
+  # 
+  # })
+  
+  # observeEvent("", {
+  #   showModal(modalDialog(includeHTML("intro_text.html"),
+  #                         # footer = modalButton("Login")))
+  #                         easyClose = TRUE))
+  # })
+  
+  # observeEvent(input$intro, {
+  #   removeModal()
+  # })
+  
+  #### Recommender IntroJS ------
   steps <- reactive(data.frame(
     element = c(
       ".main-header",
@@ -300,11 +586,17 @@ server <- function(input, output, session) {
   # When upload data button is selected, trigger following code
   observeEvent(input$rec_upload, {
 
-    # Provide progress updates to user
+    
+    cols_to_read <- c(
+      "facility", "indicator", "psnu", "operatingunit", "country",
+      "numeratordenom", "standardizeddisaggregate", "statushiv", "ageasentered",
+      "prime_partner_name", "fiscal_year", "funding_agency",
+      "sitename", "sex", "otherdisaggregate_sub"
+    )
+    
     withProgress(message = 'Loading Data', value = 0.5, {
 
-    # Connect to S3 buckets and get table names
-    my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"))
+    my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"), filter_parquet = TRUE)
 
     # Select table name that contains name of OU, which is input$country_selected,
     # contains "Site" as opposed to aggregate data, and "Recent" as opposed to historical
@@ -312,31 +604,29 @@ server <- function(input, output, session) {
     my_data_recent <- my_items[grepl(input$country_selected, my_items$file_names) &
                                  grepl("Site", my_items$file_names) &
                                  grepl("Recent", my_items$file_names),]$path_names
+    
+    print(paste0("recommender uploading: ", my_data_recent))
 
-    # Extract desired table and store in data_recent
-    data_recent <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
-                                        trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
-                                        bucket = Sys.getenv("S3_READ"),
-                                        object = my_data_recent)
 
-    # Add data to reactive list so that it persists beyond execution of this code chunk
+    data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
+    
+    # Conditionally rename columns if they exist
+    column_renames <- c("prime_partner_name" = "primepartner",
+                        "funding_agency" = "fundingagency",
+                        "countryname" = "country")
+    
+    existing_columns <- intersect(names(data_recent), names(column_renames))
+    data_recent <- data_recent %>%
+      rename_at(vars(all_of(existing_columns)), ~ column_renames[existing_columns])
+    
+    
     input_reactive$data_loaded <- data_recent
-
-    # Deal with some inconsistency in column names. 
-    # Sometimes, prime_partner_name or primepartner will appear - change all to primepartner
-    if("prime_partner_name" %in% names(input_reactive$data_loaded)){
-      input_reactive$data_loaded$primepartner <- input_reactive$data_loaded$prime_partner_name
-    }
-    # Sometimes, funding_agency or fundingagency will appear - change all to fundingagency
-    if("funding_agency" %in% names(input_reactive$data_loaded)){
-      input_reactive$data_loaded$fundingagency <- input_reactive$data_loaded$funding_agency
-    }
-    # Sometimes, countryname or country will appear - change all to country
-    if("countryname" %in% names(input_reactive$data_loaded)){
-      input_reactive$data_loaded$country <- input_reactive$data_loaded$countryname
-    }
-
-    # If a region was selected, filter for the country or countries selected
+    rm(data_recent)
+    gc()
+  
+    print(table(input_reactive$data_loaded$country))
+    
+    
     if (input_reactive$data_loaded$operatingunit[1] == "Asia Region") {
       input_reactive$data_loaded <- input_reactive$data_loaded %>% filter(country %in% input$asiafilter)
     }
@@ -347,7 +637,9 @@ server <- function(input, output, session) {
       input_reactive$data_loaded <- input_reactive$data_loaded %>% filter(country %in% input$westernhemishpherefilter)
     }
 
-    # Update the year range for user selection based on years that appear in dataset
+    
+    
+    print(nrow(input_reactive$data_loaded))
     updateNumericInput(session,
                        "year",
                        value = max(input_reactive$data_loaded$fiscal_year),
@@ -499,35 +791,25 @@ server <- function(input, output, session) {
     
       incProgress(.3, detail = paste("Processing Data"))
       
-    
     # Confirm they are strings and not factors
-    input_reactive$data_recent$sitename <- as.character(input_reactive$data_recent$sitename)
-    input_reactive$data_recent$psnu <- as.character(input_reactive$data_recent$psnu)
-    input_reactive$data_recent$facility <- as.character(input_reactive$data_recent$facility)
-    input_reactive$data_recent$indicator <- as.character(input_reactive$data_recent$indicator)
-    input_reactive$data_recent$ageasentered <- as.character(input_reactive$data_recent$ageasentered)
-    input_reactive$data_recent$sex <- as.character(input_reactive$data_recent$sex)
-    input_reactive$data_recent$primepartner <- as.character(input_reactive$data_recent$primepartner)
-    input_reactive$data_recent$standardizeddisaggregate <- as.character(input_reactive$data_recent$standardizeddisaggregate)
-    input_reactive$data_recent$numeratordenom <- as.character(input_reactive$data_recent$numeratordenom)
-    input_reactive$data_recent$otherdisaggregate_sub <- as.character(input_reactive$data_recent$otherdisaggregate_sub)
-    input_reactive$data_recent$qtr1 <- as.numeric(input_reactive$data_recent$qtr1)
-    input_reactive$data_recent$qtr2 <- as.numeric(input_reactive$data_recent$qtr2)
-    input_reactive$data_recent$qtr3 <- as.numeric(input_reactive$data_recent$qtr3)
-    input_reactive$data_recent$qtr4 <- as.numeric(input_reactive$data_recent$qtr4)
-    
+    input_reactive$data_recent <- input_reactive$data_recent %>%
+      mutate(across(c(sitename, psnu, facility, indicator, ageasentered, sex, primepartner, standardizeddisaggregate, numeratordenom, otherdisaggregate_sub), as.character)) %>%
+      mutate(across(c(qtr1, qtr2, qtr3, qtr4), as.numeric))
+      
+      # Trigger garbage collection to free up memory
+      gc()
+      print(names(input_reactive$data_recent))
     
     # filter to the fiscal year entered by the user
     input_reactive$data_recent <- input_reactive$data_recent %>% filter(fiscal_year == input$year)
     
     # remove the rows that report on Total Numerator or Total Denominator
-    input_reactive$data_recent <-
-      input_reactive$data_recent %>% filter(!standardizeddisaggregate %in% c("Total Numerator", "Total Denominator"))
-    input_reactive$data_recent <-
-      input_reactive$data_recent %>% filter(tolower(facility) != "data reported above facility level")
-    
     # remove rows that are aggregates of age groups (e.g. 15+ and 50+)
-    input_reactive$data_recent <- input_reactive$data_recent[-grep("\\+", input_reactive$data_recent$ageasentered),]
+    input_reactive$data_recent <- input_reactive$data_recent %>%
+      filter(fiscal_year == input$year,
+             !standardizeddisaggregate %in% c("Total Numerator", "Total Denominator"),
+             !tolower(facility) == "data reported above facility level",
+             !grepl("\\+", ageasentered))
     
     # label indicators with N and D for those for which both numerators and denominators are reported
     input_reactive$data_recent$indicator <- paste0(input_reactive$data_recent$indicator, "_", input_reactive$data_recent$numeratordenom)
@@ -535,9 +817,11 @@ server <- function(input, output, session) {
     # add transgender to the sex column
     input_reactive$data_recent$tg <-
       ifelse(grepl("TG", input_reactive$data_recent$otherdisaggregate_sub), "Transgender", "")
-    input_reactive$data_recent$sex2 <- paste(input_reactive$data_recent$sex, input_reactive$data_recent$tg, sep = "")
+
     
-    # keep only necessary columns
+    #input_reactive$data_recent$sex2 <- paste(input_reactive$data_recent$sex, input_reactive$data_recent$tg, sep = "")
+    input_reactive$data_recent$sex2 <- paste0(input_reactive$data_recent$sex, input_reactive$data_recent$tg)
+    
     cols_to_keep <-
       c(
         "sitename",
@@ -554,63 +838,33 @@ server <- function(input, output, session) {
         input$quarter
       )
     input_reactive$data_recent <- input_reactive$data_recent[, cols_to_keep]
-
-    # rename sex2 back to original
     input_reactive$data_recent <- input_reactive$data_recent %>% dplyr::rename(sex = sex2)
-
-    # Now, create a copy of data_recent to create a table that will be used for modeling with all disaggregates
-    # (later, we'll take data_recent and process a table for facility-level analysis)
-    input_reactive$dat_disag_out1 <- input_reactive$data_recent
     
-    # for disaggregate output - create a column for the key population disaggregate
-    input_reactive$dat_disag_out1$kp <- ifelse(grepl("KeyPop", input_reactive$dat_disag_out1$standardizeddisaggregate), "Yes", "No")
-    
-    # for disaggregate output - drop disaggregate and numeratordenom columns
-    cols_to_drop <- c("numeratordenom", "standardizeddisaggregate")
-    input_reactive$dat_disag_out1 <- input_reactive$dat_disag_out1[,!(names(input_reactive$dat_disag_out1) %in% cols_to_drop)]
-    
-    # for disaggregate output - we'll need the qtr variable - drop the 1/2/3/4 from quarter name
-    # so that we can reference the variable regardless of the quarter selected
-    names(input_reactive$dat_disag_out1) <- gsub("[0-9]", "", names(input_reactive$dat_disag_out1))
-    input_reactive$dat_disag_out1 <- input_reactive$dat_disag_out1 %>%
-      filter(!is.na(qtr))
-    
-    # group by facility, age, sex, and indicator, kp, and psnu, and then summarize qtr (before pivot)
-    input_reactive$dat_disag_out1 <-
-      input_reactive$dat_disag_out1 %>% group_by(facility,
-                       ageasentered,
-                       sex,
-                       indicator,
-                       kp,
-                       psnu,
-                       primepartner,
-                       fundingagency) %>%
+    input_reactive$dat_disag_out1 <- input_reactive$data_recent %>%
+      mutate(kp = ifelse(grepl("KeyPop", standardizeddisaggregate), "Yes", "No")) %>%
+      select(-numeratordenom, -standardizeddisaggregate) %>%
+      rename_with(~ gsub("[0-9]", "", .x), matches("[0-9]")) %>%
+      filter(!is.na(qtr)) %>%
+      group_by(facility, ageasentered, sex, indicator, kp, psnu, primepartner, fundingagency) %>%
       summarise(qtr_sum = sum(qtr, na.rm = TRUE))
+    
 
     # for disaggregate output - pivot wider to get MER indicators in wide format
     input_reactive$dat_disag_out <- input_reactive$dat_disag_out1 %>%
       pivot_wider(names_from = "indicator", values_from = "qtr_sum") %>%
       as.data.frame()
 
-    # Now, we'll copy data_recent and create dat_facility_out to be used when modeling facility level data
-    input_reactive$dat_facility_out <- input_reactive$data_recent
-    
-    # facility level file - filter for just the quarter of interest
-    names(input_reactive$dat_facility_out) <- gsub("[0-9]", "", names(input_reactive$dat_facility_out))
-    input_reactive$dat_facility_out <- input_reactive$dat_facility_out %>%
-      filter(!is.na(qtr))
-    
-    # facility level file - group by facility, psnu and indicator, and then summarize qtr 2 (before pivot)
-    input_reactive$dat_facility_out <- input_reactive$dat_facility_out %>%
+
+    input_reactive$dat_facility_out <- input_reactive$data_recent %>%
+      rename_with(~ gsub("[0-9]", "", .x), matches("[0-9]")) %>%
+      filter(!is.na(qtr)) %>%
       group_by(facility, indicator, psnu, primepartner, fundingagency) %>%
-      summarise(qtr_sum = sum(qtr, na.rm = TRUE))
-    
-    # facility level file - pivot wider to get indicators in wide format
-    input_reactive$dat_facility_out <- input_reactive$dat_facility_out %>%
-      pivot_wider(names_from = "indicator", values_from = "qtr_sum") %>%
+      summarise(qtr_sum = sum(qtr, na.rm = TRUE)) %>%
+      pivot_wider(names_from = indicator, values_from = qtr_sum) %>%
       as.data.frame()
     
-    # Give progress update to user
+
+    # Run checks ---------------
     incProgress(.3, detail = paste("Checking Names and Dimensions"))
 
     # Run checks
@@ -692,7 +946,7 @@ server <- function(input, output, session) {
   # Code triggered when Run Model button is pressed
   observeEvent(input$recrun, {
 
-    # Initialize objects to store results
+    gc()
     all_outputs <- NULL
     site_sex_outliers <- NULL
     site_age_outliers <- NULL
@@ -743,42 +997,51 @@ server <- function(input, output, session) {
         # If outliers were found, then all_outputs will exist
         # Generate table that displays observation-level results and return to UI as output$rec1
         if(exists("all_outputs")){
-          output$rec1 = DT::renderDT(
-            datatable(
-              all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
-              filter = "top",
-              options = list(scrollX = TRUE,
-                             columnDefs = list(list(
-                               visible = FALSE, targets = c(grep("^D_", colnames(
-                                 all_outputs
-                               )),
-                               grep("^E_", colnames(
-                                 all_outputs
-                               )))
-                             )))
-            ) %>%
-            # this is the color coding
-              formatStyle(
-                7:(6 + length(grep(
-                  "^D_", colnames(all_outputs)
-                ))),
-                grep("^D_", colnames(all_outputs)),
-                backgroundColor = styleInterval(
-                  as.numeric(quantile(
-                    all_outputs[, grep("^D_", colnames(all_outputs))],
-                    probs = c(.8, .9, 1),
-                    na.rm = T
-                  )),
-                  c(
-                    "rgb(255,255,255)",
-                    "rgb(255,170,170)",
-                    "rgb(255,80,80)",
-                    "rgb(255,0,0)"
-                  )
-                )
-              )
-          )
-          # store this table as well for download
+
+          z <- all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No"))
+          print(head(z))
+          output$rec1 <- reactable::renderReactable({
+            reactable::reactable(z)
+          })
+          
+          # output$rec1 <- renderUI({
+          #   flextable::flextable((z))
+          # })
+          
+          # output$rec1 = DT::renderDT(
+          #   datatable(
+          #     z,
+          #     filter = "top",
+          #     options = list(scrollX = TRUE,
+          #                    columnDefs = list(list(
+          #                      visible = FALSE, targets = c(grep("^D_", colnames(
+          #                        all_outputs
+          #                      )),
+          #                      grep("^E_", colnames(
+          #                        all_outputs
+          #                      )))
+          #                    )))
+           # ) #%>%
+              # formatStyle(
+              #   7:(6 + length(grep(
+              #     "^D_", colnames(all_outputs)
+              #   ))),
+              #   grep("^D_", colnames(all_outputs)),
+              #   backgroundColor = styleInterval(
+              #     as.numeric(quantile(
+              #       all_outputs[, grep("^D_", colnames(all_outputs))],
+              #       probs = c(.8, .9, 1),
+              #       na.rm = T
+              #     )),
+              #     c(
+              #       "rgb(255,255,255)",
+              #       "rgb(255,170,170)",
+              #       "rgb(255,80,80)",
+              #       "rgb(255,0,0)"
+              #     )
+              #   )
+              # )
+          #)
           forout_reactive$all_outputs <- all_outputs 
         }
       }
@@ -842,43 +1105,46 @@ server <- function(input, output, session) {
 
       # If outliers are found, create output table to send back to UI and store table for download
       if (exists("site_sex_outliers")) {
-        output$rec2 = DT::renderDT(
-          datatable(
-            site_sex_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
-            filter = "top",
-            options = list(scrollX = TRUE,
-                           columnDefs = list(
-                             list(
-                               visible = FALSE,
-                               targets = c(grep(
-                                 "^D_", colnames(site_sex_outliers)
-                               ),
-                               grep(
-                                 "^E_", colnames(site_sex_outliers)
-                               ))
-                             )
-                           ))
-          ) %>%
-            formatStyle(
-              7:(6 + length(grep(
-                "^D_", colnames(site_sex_outliers)
-              ))),
-              grep("^D_", colnames(site_sex_outliers)),
-              backgroundColor = styleInterval(
-                as.numeric(quantile(
-                  site_sex_outliers[, grep("^D_", colnames(site_sex_outliers))],
-                  probs = c(.8, .9, 1),
-                  na.rm = T
-                )),
-                c(
-                  "rgb(255,255,255)",
-                  "rgb(255,170,170)",
-                  "rgb(255,80,80)",
-                  "rgb(255,0,0)"
-                )
-              )
-            )
-        )
+        output$rec2 <- reactable::renderReactable({
+            reactable::reactable(site_sex_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")))
+          })
+        # output$rec2 = DT::renderDT(
+        #   datatable(
+        #     site_sex_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
+        #     filter = "top",
+        #     options = list(scrollX = TRUE,
+        #                    columnDefs = list(
+        #                      list(
+        #                        visible = FALSE,
+        #                        targets = c(grep(
+        #                          "^D_", colnames(site_sex_outliers)
+        #                        ),
+        #                        grep(
+        #                          "^E_", colnames(site_sex_outliers)
+        #                        ))
+        #                      )
+        #                    ))
+          #) #%>%
+            # formatStyle(
+            #   7:(6 + length(grep(
+            #     "^D_", colnames(site_sex_outliers)
+            #   ))),
+            #   grep("^D_", colnames(site_sex_outliers)),
+            #   backgroundColor = styleInterval(
+            #     as.numeric(quantile(
+            #       site_sex_outliers[, grep("^D_", colnames(site_sex_outliers))],
+            #       probs = c(.8, .9, 1),
+            #       na.rm = T
+            #     )),
+            #     c(
+            #       "rgb(255,255,255)",
+            #       "rgb(255,170,170)",
+            #       "rgb(255,80,80)",
+            #       "rgb(255,0,0)"
+            #     )
+            #   )
+            # )
+        #)
         
         forout_reactive$site_sex_outliers <- site_sex_outliers 
       } else {
@@ -962,43 +1228,48 @@ server <- function(input, output, session) {
 
         # If outliers are found, create table to send back to UI
         if (exists("site_age_outliers")) {
-          output$rec3 = DT::renderDT(
-            datatable(
-              site_age_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
-              filter = "top",
-              options = list(scrollX = TRUE,
-                             columnDefs = list(
-                               list(
-                                 visible = FALSE,
-                                 targets = c(grep(
-                                   "^D_", colnames(site_age_outliers)
-                                 ),
-                                 grep(
-                                   "^E_", colnames(site_age_outliers)
-                                 ))
-                               )
-                             ))
-            ) %>%
-              formatStyle(
-                7:(6 + length(grep(
-                  "^D_", colnames(site_age_outliers)
-                ))),
-                grep("^D_", colnames(site_age_outliers)),
-                backgroundColor = styleInterval(
-                  as.numeric(quantile(
-                    site_age_outliers[, grep("^D_", colnames(site_age_outliers))],
-                    probs = c(.8, .9, 1),
-                    na.rm = T
-                  )),
-                  c(
-                    "rgb(255,255,255)",
-                    "rgb(255,170,170)",
-                    "rgb(255,80,80)",
-                    "rgb(255,0,0)"
-                  )
-                )
-              )
-          )
+          
+          output$rec3 <- reactable::renderReactable({
+            reactable::reactable(site_age_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")))
+          })
+
+          # output$rec3 = DT::renderDT(
+          #   datatable(
+          #     site_age_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
+          #     filter = "top",
+          #     options = list(scrollX = TRUE,
+          #                    columnDefs = list(
+          #                      list(
+          #                        visible = FALSE,
+          #                        targets = c(grep(
+          #                          "^D_", colnames(site_age_outliers)
+          #                        ),
+          #                        grep(
+          #                          "^E_", colnames(site_age_outliers)
+          #                        ))
+          #                      )
+          #                    ))
+            #) #%>%
+              # formatStyle(
+              #   7:(6 + length(grep(
+              #     "^D_", colnames(site_age_outliers)
+              #   ))),
+              #   grep("^D_", colnames(site_age_outliers)),
+              #   backgroundColor = styleInterval(
+              #     as.numeric(quantile(
+              #       site_age_outliers[, grep("^D_", colnames(site_age_outliers))],
+              #       probs = c(.8, .9, 1),
+              #       na.rm = T
+              #     )),
+              #     c(
+              #       "rgb(255,255,255)",
+              #       "rgb(255,170,170)",
+              #       "rgb(255,80,80)",
+              #       "rgb(255,0,0)"
+              #     )
+              #   )
+              # )
+          #)
           forout_reactive$site_age_outliers <- site_age_outliers 
         } else {
           shinyalert("Proceed",
@@ -1041,43 +1312,48 @@ server <- function(input, output, session) {
         })
         
         if (exists("facility_outputs")) {
-          output$rec4 = DT::renderDT(
-            datatable(
-              facility_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
-              filter = "top",
-              options = list(scrollX = TRUE,
-                             columnDefs = list(
-                               list(
-                                 visible = FALSE,
-                                 targets = c(grep(
-                                   "^D_", colnames(facility_outputs)
-                                 ),
-                                 grep(
-                                   "^E_", colnames(facility_outputs)
-                                 ))
-                               )
-                             ))
-            ) %>%
-              formatStyle(
-                7:(6 + length(grep(
-                  "^D_", colnames(facility_outputs)
-                ))),
-                grep("^D_", colnames(facility_outputs)),
-                backgroundColor = styleInterval(
-                  as.numeric(quantile(
-                    facility_outputs[, grep("^D_", colnames(facility_outputs))],
-                    probs = c(.8, .9, 1),
-                    na.rm = T
-                  )),
-                  c(
-                    "rgb(255,255,255)",
-                    "rgb(255,170,170)",
-                    "rgb(255,80,80)",
-                    "rgb(255,0,0)"
-                  )
-                )
-              )
-          )
+          
+          output$rec4 <- reactable::renderReactable({
+            reactable::reactable(facility_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")))
+          })
+
+          # output$rec4 = DT::renderDT(
+          #   datatable(
+          #     facility_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
+          #     filter = "top",
+          #     options = list(scrollX = TRUE,
+          #                    columnDefs = list(
+          #                      list(
+          #                        visible = FALSE,
+          #                        targets = c(grep(
+          #                          "^D_", colnames(facility_outputs)
+          #                        ),
+          #                        grep(
+          #                          "^E_", colnames(facility_outputs)
+          #                        ))
+          #                      )
+          #                    ))
+            #) #%>%
+              # formatStyle(
+              #   7:(6 + length(grep(
+              #     "^D_", colnames(facility_outputs)
+              #   ))),
+              #   grep("^D_", colnames(facility_outputs)),
+              #   backgroundColor = styleInterval(
+              #     as.numeric(quantile(
+              #       facility_outputs[, grep("^D_", colnames(facility_outputs))],
+              #       probs = c(.8, .9, 1),
+              #       na.rm = T
+              #     )),
+              #     c(
+              #       "rgb(255,255,255)",
+              #       "rgb(255,170,170)",
+              #       "rgb(255,80,80)",
+              #       "rgb(255,0,0)"
+              #     )
+              #   )
+              # )
+          #)
           forout_reactive$facility_outputs <- facility_outputs 
         } else {
           shinyalert("Proceed",
@@ -1102,12 +1378,17 @@ server <- function(input, output, session) {
         incProgress(.2, detail = paste("Creating Summary Disaggregate Tab"))
         disags_summary <-
           createSummaryTab(dat_summary_list = disags_list)
-        output$rec6 = DT::renderDT(
-          disags_summary$summary,
-          filter = "top",
-          options = list(scrollX = TRUE)
-        )
-        # Add summary table to list for later download
+        
+        # output$rec6 = DT::renderDT(
+        #   disags_summary$summary,
+        #   filter = "top",
+        #   options = list(scrollX = TRUE)
+        # )
+        
+        output$rec6 <- reactable::renderReactable({
+          reactable::reactable(disags_summary$summary)
+        })
+        
         forout_reactive$disags_summary <- disags_summary$summary
       }
       
@@ -1117,11 +1398,16 @@ server <- function(input, output, session) {
         facility_summary <-
           createSummaryTab(dat_summary_list = facility_list,
                            disag = FALSE)
-        output$rec7 = DT::renderDT(
-          facility_summary$summary,
-          filter = "top",
-          options = list(scrollX = TRUE)
-        )
+        # output$rec7 = DT::renderDT(
+        #   facility_summary$summary,
+        #   filter = "top",
+        #   options = list(scrollX = TRUE)
+        # )
+        
+        output$rec7 <- reactable::renderReactable({
+          reactable::reactable(facility_summary$summary)
+        })
+        
         forout_reactive$facility_summary <- facility_summary$summary
       }
       
@@ -1140,9 +1426,13 @@ server <- function(input, output, session) {
       # Generate scorecard - createScoreCard defined in utils
       incProgress(.2, detail = paste("Creating Scorecard"))
       scorecard <- createScoreCard(scorecard_in = dat_tmp)
-      output$rec8 = DT::renderDT(scorecard,
-                                 filter = "top",
-                                 options = list(scrollX = TRUE))
+      # output$rec8 = DT::renderDT(scorecard,
+      #                            filter = "top",
+      #                            options = list(scrollX = TRUE))
+      
+      output$rec8 <- reactable::renderReactable({
+        reactable::reactable(scorecard)
+      })
       forout_reactive$scorecard <- scorecard
       
       # Create IP scorecard sheet - summarize number of outliers by indicator by partner
@@ -1164,10 +1454,12 @@ server <- function(input, output, session) {
         names(ip_cover)[i] <- ips[i]
       }
 
-      # Return IP scorecard to UI
-      output$rec9 = DT::renderDT(ip_cover)
-
-      # and store IP scorecard for later download
+      
+      # output$rec9 = DT::renderDT(ip_cover)
+      output$rec9 <- reactable::renderReactable({
+        reactable::reactable(ip_cover)
+      })
+      
       forout_reactive$ipcover <- ip_cover
 
       # notify user that model runs are complete
@@ -1204,22 +1496,28 @@ server <- function(input, output, session) {
     # first, we'll retreive data from the table that contains the string "Recent"
     # then, we'll retrieve data from the table that contains the string "Historical"
     
+    cols_to_read <- c(
+      "facility", "indicator", "psnu", "operatingunit", "country",
+      "numeratordenom", "standardizeddisaggregate", "statushiv", "ageasentered",
+      "prime_partner_name", "fiscal_year", "funding_agency"
+    )
+    
+    
     withProgress(message = 'Loading Recent Data', value = 0.3, {
 
-      # steps to retrieve data from S3 bucket are same as above
-      my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"))
+      
+      my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"), filter_parquet = TRUE)
 
       my_data_recent <- my_items[grepl(input$country_selected_ts, my_items$file_names) &
                                    grepl("Site", my_items$file_names) &
                                    grepl("Recent", my_items$file_names),]$path_names
 
-      data_recent <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
-                                          trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
-                                          bucket = Sys.getenv("S3_READ"),
-                                          object = my_data_recent)
+      print(paste0("upload: ", my_data_recent))
 
-      # Synchronizing column names as before - do this for each table separately before stacking, otherwise
-      # the vertical stacking may not work correctly
+      data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
+      print(dim(data_recent))
+      print(names(data_recent))
+      
       if("prime_partner_name" %in% names(data_recent)){
         data_recent$primepartner <- data_recent$prime_partner_name
       }
@@ -1238,11 +1536,11 @@ server <- function(input, output, session) {
       my_data_historical <- my_items[grepl(input$country_selected_ts, my_items$file_names) &
                                    grepl("Site", my_items$file_names) &
                                    grepl("Historic", my_items$file_names),]$path_names
-      
-      data_historical <- aws.s3::s3read_using(FUN = readr::read_delim, "|", escape_double = FALSE,
-                                          trim_ws = TRUE, col_types = readr::cols(.default = readr::col_character()), 
-                                          bucket = Sys.getenv("S3_READ"),
-                                          object = my_data_historical)
+
+      print(paste0("historical: ", my_data_historical))
+
+      data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
+      print(dim(data_historical))
       
       if("prime_partner_name" %in% names(data_historical)){
         data_historical$primepartner <- data_historical$prime_partner_name
@@ -1633,34 +1931,51 @@ server <- function(input, output, session) {
       keys = keysts
     )
 
-    # Retrieve model results and send tables back to UI for display
-    output$ts2 = DT::renderDT(tsoutputs$ARIMA,
-                              filter = "top",
-                              options = list(scrollX = TRUE))
+    print("end")
+    # output$ts2 = DT::renderDT(tsoutputs$ARIMA,
+    #                           filter = "top",
+    #                           options = list(scrollX = TRUE))
+    output$ts2 <- reactable::renderReactable({
+      reactable::reactable(tsoutputs$ARIMA)
+    })
     
-    output$ts3 = DT::renderDT(tsoutputs$ETS,
-                              filter = "top",
-                              options = list(scrollX = TRUE))
+    # output$ts3 = DT::renderDT(tsoutputs$ETS,
+    #                           filter = "top",
+    #                           options = list(scrollX = TRUE))
+    output$ts3 <- reactable::renderReactable({
+      reactable::reactable(tsoutputs$ETS)
+    })
     
-    output$ts4 = DT::renderDT(tsoutputs$STL,
-                              filter = "top",
-                              options = list(scrollX = TRUE))
+    # output$ts4 = DT::renderDT(tsoutputs$STL,
+    #                           filter = "top",
+    #                           options = list(scrollX = TRUE))
+    output$ts4 <- reactable::renderReactable({
+      reactable::reactable(tsoutputs$STL)
+    })
     
-    output$ts5 = DT::renderDT(tsoutputs$Summary,
-                              filter = "top",
-                              options = list(scrollX = TRUE))
+    # output$ts5 = DT::renderDT(tsoutputs$Summary,
+    #                           filter = "top",
+    #                           options = list(scrollX = TRUE))
+    output$ts5 <- reactable::renderReactable({
+      reactable::reactable(tsoutputs$Summary)
+    })
     
-    output$ts6 = DT::renderDT(
-      tsoutputs$facility_scorecard,
-      filter = "top",
-      options = list(scrollX = TRUE)
-    )
+    # output$ts6 = DT::renderDT(
+    #   tsoutputs$facility_scorecard,
+    #   filter = "top",
+    #   options = list(scrollX = TRUE)
+    # )
+    output$ts6 <- reactable::renderReactable({
+      reactable::reactable(tsoutputs$facility_scorecard)
+    })
     
-    output$ts7 = DT::renderDT(tsoutputs$ip_scorecard,
-                              filter = "top",
-                              options = list(scrollX = TRUE))
-
-    # add output tables to list to make available later for download
+    # output$ts7 = DT::renderDT(tsoutputs$ip_scorecard,
+    #                           filter = "top",
+    #                           options = list(scrollX = TRUE))
+    output$ts7 <- reactable::renderReactable({
+      reactable::reactable(tsoutputs$ip_scorecard)
+    })
+    
     forout_reactive_ts$ARIMA <- tsoutputs$ARIMA
     forout_reactive_ts$ETS <- tsoutputs$ETS
     forout_reactive_ts$STL <- tsoutputs$STL

@@ -1,4 +1,9 @@
-#### Script to create UI components for Shiny app ####
+
+library(shiny)
+
+# ui <- shinyUI(
+#   uiOutput("ui")
+# )
 
 ui <- dashboardPage(
   # First, creating dashboard header, along top of the application
@@ -28,7 +33,7 @@ ui <- dashboardPage(
         placement = "bottom",
         arrow = TRUE
       )
-      
+
     ),
     # Info button - links to Github repository
     tags$li(
@@ -76,8 +81,10 @@ ui <- dashboardPage(
                         selectInput("type", "Type",
                                     c('Recommender', 'Time Series'))
                       ))),
-      
-      #### Recommender Sidebar Menu ####
+
+      #### Recommender Menu ####
+
+
       conditionalPanel(
         condition = "input.type == 'Recommender'",
         fluidRow(column(12, div(
@@ -93,8 +100,10 @@ ui <- dashboardPage(
                 tags$b("Data Upload"),
                 # Dropdown to select country or region
                 selectInput("country_selected",
-                            "Select OU", 
-                            choices = sort(COUNTRIES), # options set in global.R
+
+                            "Select OU",
+                            choices = sort(COUNTRIES),
+
                             selected = NULL)))),
             # If region is selected, then dropdown appears to select country/countries within region
             fluidRow(column(
@@ -131,8 +140,9 @@ ui <- dashboardPage(
                 actionButton(
                   "rec_upload",
                   "Load Data")))),
-                br(), 
-            # Once data is uploaded, proceed to Data Checks section
+
+                br(),
+
               fluidRow(column(
                 12,
                 div(id = "step2",
@@ -176,8 +186,8 @@ ui <- dashboardPage(
           div(id = "step4",
               actionButton("recrun", "Run Model"), )
         )))))))
-      
-      
+
+
       ,
       #### Time Series Menu ####
       # Similar flow to recommender, will highlight differences
@@ -194,7 +204,7 @@ ui <- dashboardPage(
               id = "tsstep1",
               tags$b("Data Upload"),
               selectInput("country_selected_ts",
-                          "Select OU", 
+                          "Select OU",
                           choices = sort(COUNTRIES),
                           selected = NULL)))),
           fluidRow(column(
@@ -241,7 +251,7 @@ ui <- dashboardPage(
               actionButton(
                 "ts_upload",
                 "Load Data")))),
-          br(), 
+          br(),
           fluidRow(column(
             12,
             div(id = "tsstep2",
@@ -283,6 +293,8 @@ ui <- dashboardPage(
 
   #### Main panel of the application - Results of analysis ####
   dashboardBody(
+    uiOutput("password_modal_ui"),
+    uiOutput("ui_redirect"),
     fluidRow(div(id = "body_title",
                  (h2(
                    textOutput('title')
@@ -303,7 +315,8 @@ ui <- dashboardPage(
                                width = 12,
                                "Disaggregate Summary Table",
                                collapsible = TRUE,
-                               shinycssloaders::withSpinner(DT::DTOutput('rec6'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('rec6'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("rec6"))
                              )
                            ),
                            # Output table showing number of anomalies when considering patterns rolled up to facility level
@@ -314,7 +327,8 @@ ui <- dashboardPage(
                                width = 12,
                                "Facility Summary Table",
                                collapsible = TRUE,
-                               shinycssloaders::withSpinner(DT::DTOutput('rec7'))
+                               #shinycssloaders::withSpinner(DT::DTOutput('rec7'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("rec7"))
                              )
                            ),
                            # Facility scorecard table
@@ -325,7 +339,8 @@ ui <- dashboardPage(
                                width = 12,
                                "Scorecard Table",
                                collapsible = TRUE,
-                               shinycssloaders::withSpinner(DT::DTOutput('rec8'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('rec8'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("rec8"))
                              )
                            ),
                            # Implementing Partner Scorecard
@@ -336,7 +351,8 @@ ui <- dashboardPage(
                                width = 12,
                                collapsible = TRUE,
                                "IP Scorecard",
-                               shinycssloaders::withSpinner(DT::DTOutput('rec9'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('rec9'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("rec9"))
                              )
                            )
                          ),
@@ -351,7 +367,9 @@ ui <- dashboardPage(
                                width = 12,
                                "All Disaggregates table",
                                collapsible = TRUE,
-                               shinycssloaders::withSpinner(DT::DTOutput('rec1'))
+                               #shinycssloaders::withSpinner(DT::DTOutput('rec1'))
+                               #shinycssloaders::withSpinner(uiOutput("rec1"))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("rec1"))
                              )
                            ),
                            # results when calculating patterns separately by sex
@@ -362,7 +380,8 @@ ui <- dashboardPage(
                                width = 12,
                                "Sex Disaggregate Table",
                                collapsible = TRUE,
-                               shinycssloaders::withSpinner(DT::DTOutput('rec2'))
+                               #shinycssloaders::withSpinner(DT::DTOutput('rec2'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("rec2"))
                              )
                            ),
                            # Results when calculating patterns separately by age group
@@ -373,7 +392,8 @@ ui <- dashboardPage(
                                width = 12,
                                "Age Disaggregate Table",
                                collapsible = TRUE,
-                               shinycssloaders::withSpinner(DT::DTOutput('rec3'))
+                               #shinycssloaders::withSpinner(DT::DTOutput('rec3'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("rec3"))
                              )
                            ),
                            # Results when calculating patterns by facility
@@ -384,7 +404,8 @@ ui <- dashboardPage(
                                width = 12,
                                "Facility Disaggregate Table",
                                collapsible = TRUE,
-                               shinycssloaders::withSpinner(DT::DTOutput('rec4'))
+                               #shinycssloaders::withSpinner(DT::DTOutput('rec4'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("rec4"))
                              )
                            )
                          )
@@ -406,7 +427,8 @@ ui <- dashboardPage(
                                width = 12,
                                collapsible = TRUE,
                                "Summary of Outliers",
-                               shinycssloaders::withSpinner(DT::DTOutput('ts5'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('ts5'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("ts5"))
                              )
                            ),
                            conditionalPanel(
@@ -416,7 +438,8 @@ ui <- dashboardPage(
                                width = 12,
                                collapsible = TRUE,
                                "Facility Scorecard",
-                               shinycssloaders::withSpinner(DT::DTOutput('ts6'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('ts6'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("ts6"))
                              )
                            ),
                            conditionalPanel(
@@ -426,7 +449,8 @@ ui <- dashboardPage(
                                width = 12,
                                collapsible = TRUE,
                                "IP Scorecard",
-                               shinycssloaders::withSpinner(DT::DTOutput('ts7'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('ts7'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("ts7"))
                              )
                            )
                          ),
@@ -439,7 +463,8 @@ ui <- dashboardPage(
                                width = 12,
                                collapsible = TRUE,
                                "ARIMA Outputs",
-                               shinycssloaders::withSpinner(DT::DTOutput('ts2'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('ts2'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("ts2"))
                              )
                            ),
                            conditionalPanel(
@@ -449,7 +474,8 @@ ui <- dashboardPage(
                                width = 12,
                                collapsible = TRUE,
                                "ETS Outputs",
-                               shinycssloaders::withSpinner(DT::DTOutput('ts3'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('ts3'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("ts3"))
                              )
                            ),
                            conditionalPanel(
@@ -459,13 +485,14 @@ ui <- dashboardPage(
                                width = 12,
                                collapsible = TRUE,
                                "STL Outputs",
-                               shinycssloaders::withSpinner(DT::DTOutput('ts4'))
+                               # shinycssloaders::withSpinner(DT::DTOutput('ts4'))
+                               shinycssloaders::withSpinner(reactable::reactableOutput("ts4"))
                              )
                            )
                          )
                        )
                      )))
-    
-    
+
+
   )
 )

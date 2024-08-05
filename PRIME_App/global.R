@@ -1,4 +1,5 @@
 #Utils Packages#
+library(arrow)
 library(dplyr)
 library(tidyr)
 library(modi)
@@ -28,6 +29,7 @@ library(aws.s3)
 library(pdaprules)
 library(readr)
 library(datimutils)
+library(paws)
 
 #Global Settings
 source("utils.R")
@@ -82,6 +84,9 @@ WESTERNHEMISPHERE <- c("Jamaica", "Trinidad and Tobago", "Guyana",
                  "El Salvador", "Honduras", "Nicaragua",
                  "Brazil", "Colombia", "Peru")
 COUNTRIES <- c("Malawi", "Botswana", "Eswatini", "Asia", "West Africa", "Western Hemisphere",
-               "Zambia", "Zimbabwe", "Nigeria")
+               "Zambia", "Zimbabwe", "Nigeria", "Angola", "Burundi", "Cameroon",
+              "Cote d'Ivoire", "Democratic Republic of the Congo", "Dominican Republic",
+              "Ethiopia", "Haiti", "Kenya", "Lesotho", "Mozambique", "Namibia", "Rwanda",
+              "South Africa", "South Sudan", "Tanzania", "Uganda", "Ukraine", "Vietnam")
 USG_USERS = c("Agency", "Interagency", "Global Agency", "Global")
-PARTNER_USERS = c("Global Partner", "Partner")
+#PARTNER_USERS = c("Global Partner", "Partner")
