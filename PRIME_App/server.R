@@ -242,7 +242,7 @@ server <- function(input, output, session) {
       mechanisms$my_cat_ops <- datimutils::listMechs()
       
       # if a user is not to be allowed deny them entry
-      if (!user$type %in% c(USG_USERS#, PARTNER_USERS
+      if (!user$type %in% c(USG_USERS, PARTNER_USERS
                             )) {
         
         # alert the user they cannot access the app
