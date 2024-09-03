@@ -1004,49 +1004,11 @@ server <- function(input, output, session) {
         if(exists("all_outputs")){
 
           z <- all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No"))
-          print(head(z))
+
           output$rec1 <- reactable::renderReactable({
             reactable::reactable(z)
           })
-          
-          # output$rec1 <- renderUI({
-          #   flextable::flextable((z))
-          # })
-          
-          # output$rec1 = DT::renderDT(
-          #   datatable(
-          #     z,
-          #     filter = "top",
-          #     options = list(scrollX = TRUE,
-          #                    columnDefs = list(list(
-          #                      visible = FALSE, targets = c(grep("^D_", colnames(
-          #                        all_outputs
-          #                      )),
-          #                      grep("^E_", colnames(
-          #                        all_outputs
-          #                      )))
-          #                    )))
-           # ) #%>%
-              # formatStyle(
-              #   7:(6 + length(grep(
-              #     "^D_", colnames(all_outputs)
-              #   ))),
-              #   grep("^D_", colnames(all_outputs)),
-              #   backgroundColor = styleInterval(
-              #     as.numeric(quantile(
-              #       all_outputs[, grep("^D_", colnames(all_outputs))],
-              #       probs = c(.8, .9, 1),
-              #       na.rm = T
-              #     )),
-              #     c(
-              #       "rgb(255,255,255)",
-              #       "rgb(255,170,170)",
-              #       "rgb(255,80,80)",
-              #       "rgb(255,0,0)"
-              #     )
-              #   )
-              # )
-          #)
+
           forout_reactive$all_outputs <- all_outputs 
         }
       }
@@ -1113,44 +1075,7 @@ server <- function(input, output, session) {
         output$rec2 <- reactable::renderReactable({
             reactable::reactable(site_sex_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")))
           })
-        # output$rec2 = DT::renderDT(
-        #   datatable(
-        #     site_sex_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
-        #     filter = "top",
-        #     options = list(scrollX = TRUE,
-        #                    columnDefs = list(
-        #                      list(
-        #                        visible = FALSE,
-        #                        targets = c(grep(
-        #                          "^D_", colnames(site_sex_outliers)
-        #                        ),
-        #                        grep(
-        #                          "^E_", colnames(site_sex_outliers)
-        #                        ))
-        #                      )
-        #                    ))
-          #) #%>%
-            # formatStyle(
-            #   7:(6 + length(grep(
-            #     "^D_", colnames(site_sex_outliers)
-            #   ))),
-            #   grep("^D_", colnames(site_sex_outliers)),
-            #   backgroundColor = styleInterval(
-            #     as.numeric(quantile(
-            #       site_sex_outliers[, grep("^D_", colnames(site_sex_outliers))],
-            #       probs = c(.8, .9, 1),
-            #       na.rm = T
-            #     )),
-            #     c(
-            #       "rgb(255,255,255)",
-            #       "rgb(255,170,170)",
-            #       "rgb(255,80,80)",
-            #       "rgb(255,0,0)"
-            #     )
-            #   )
-            # )
-        #)
-        
+
         forout_reactive$site_sex_outliers <- site_sex_outliers 
       } else {
         shinyalert("Proceed",
@@ -1238,43 +1163,7 @@ server <- function(input, output, session) {
             reactable::reactable(site_age_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")))
           })
 
-          # output$rec3 = DT::renderDT(
-          #   datatable(
-          #     site_age_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
-          #     filter = "top",
-          #     options = list(scrollX = TRUE,
-          #                    columnDefs = list(
-          #                      list(
-          #                        visible = FALSE,
-          #                        targets = c(grep(
-          #                          "^D_", colnames(site_age_outliers)
-          #                        ),
-          #                        grep(
-          #                          "^E_", colnames(site_age_outliers)
-          #                        ))
-          #                      )
-          #                    ))
-            #) #%>%
-              # formatStyle(
-              #   7:(6 + length(grep(
-              #     "^D_", colnames(site_age_outliers)
-              #   ))),
-              #   grep("^D_", colnames(site_age_outliers)),
-              #   backgroundColor = styleInterval(
-              #     as.numeric(quantile(
-              #       site_age_outliers[, grep("^D_", colnames(site_age_outliers))],
-              #       probs = c(.8, .9, 1),
-              #       na.rm = T
-              #     )),
-              #     c(
-              #       "rgb(255,255,255)",
-              #       "rgb(255,170,170)",
-              #       "rgb(255,80,80)",
-              #       "rgb(255,0,0)"
-              #     )
-              #   )
-              # )
-          #)
+
           forout_reactive$site_age_outliers <- site_age_outliers 
         } else {
           shinyalert("Proceed",
@@ -1322,43 +1211,6 @@ server <- function(input, output, session) {
             reactable::reactable(facility_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")))
           })
 
-          # output$rec4 = DT::renderDT(
-          #   datatable(
-          #     facility_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
-          #     filter = "top",
-          #     options = list(scrollX = TRUE,
-          #                    columnDefs = list(
-          #                      list(
-          #                        visible = FALSE,
-          #                        targets = c(grep(
-          #                          "^D_", colnames(facility_outputs)
-          #                        ),
-          #                        grep(
-          #                          "^E_", colnames(facility_outputs)
-          #                        ))
-          #                      )
-          #                    ))
-            #) #%>%
-              # formatStyle(
-              #   7:(6 + length(grep(
-              #     "^D_", colnames(facility_outputs)
-              #   ))),
-              #   grep("^D_", colnames(facility_outputs)),
-              #   backgroundColor = styleInterval(
-              #     as.numeric(quantile(
-              #       facility_outputs[, grep("^D_", colnames(facility_outputs))],
-              #       probs = c(.8, .9, 1),
-              #       na.rm = T
-              #     )),
-              #     c(
-              #       "rgb(255,255,255)",
-              #       "rgb(255,170,170)",
-              #       "rgb(255,80,80)",
-              #       "rgb(255,0,0)"
-              #     )
-              #   )
-              # )
-          #)
           forout_reactive$facility_outputs <- facility_outputs 
         } else {
           shinyalert("Proceed",
@@ -1384,11 +1236,6 @@ server <- function(input, output, session) {
         disags_summary <-
           createSummaryTab(dat_summary_list = disags_list)
         
-        # output$rec6 = DT::renderDT(
-        #   disags_summary$summary,
-        #   filter = "top",
-        #   options = list(scrollX = TRUE)
-        # )
         
         output$rec6 <- reactable::renderReactable({
           reactable::reactable(disags_summary$summary)
@@ -1403,11 +1250,6 @@ server <- function(input, output, session) {
         facility_summary <-
           createSummaryTab(dat_summary_list = facility_list,
                            disag = FALSE)
-        # output$rec7 = DT::renderDT(
-        #   facility_summary$summary,
-        #   filter = "top",
-        #   options = list(scrollX = TRUE)
-        # )
         
         output$rec7 <- reactable::renderReactable({
           reactable::reactable(facility_summary$summary)
