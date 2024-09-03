@@ -69,7 +69,9 @@ sortOutputs <- function(dat,keys,scenario_tmp, return_all, min_thresh, fund) {
     
     # Create a column to contain the scenario name
     site_out_total$scenario <- paste0("outlier_", scenario_tmp)
-
+    
+    site_out_total <- site_out_total %>%
+      mutate(across(where(is.numeric), function(x) round(x, 2)))
   }
   
   # Concatenate reported values with estimates for easier display in app
