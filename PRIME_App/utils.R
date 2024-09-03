@@ -134,22 +134,22 @@ runRecAnalysis <- function(dat,keys) {
   # Get correlation matrix in long format
   cormat_long <- reshape2::melt(cormat)
 
-  # While there is a correlation between two MER indicators of greater than 0.95:
-  while(max(cormat_long$value, na.rm = TRUE) > 0.95) {
-    # Get relevant indicators that are collinear
-    cormat_perf <- cormat_long %>% filter(value > .95)
-    # Select the first variable to drop
-    col_to_drop <- cormat_perf$Var1[1]
-    col_to_drop <- toString(col_to_drop)
-    # Drop the variable from dat_df
-    dat_df <- dat_df[, !names(dat_df) %in% col_to_drop]
-    # Follow steps above to recompute pairwise correlation matrix
-    dat_matrix <- data.matrix(dat_df[,(ncol(keys)+1):ncol(dat_df)], rownames.force = NA)
-    cormat <- suppressWarnings(cor(dat_matrix, use = "pairwise.complete.obs"))
-    cormat[lower.tri(cormat)] <- 0
-    diag(cormat) <- 0
-    cormat_long <- reshape2::melt(cormat)
-  }
+  # # While there is a correlation between two MER indicators of greater than 0.95:
+  # while(max(cormat_long$value, na.rm = TRUE) > 0.95) {
+  #   # Get relevant indicators that are collinear
+  #   cormat_perf <- cormat_long %>% filter(value > .95)
+  #   # Select the first variable to drop
+  #   col_to_drop <- cormat_perf$Var1[1]
+  #   col_to_drop <- toString(col_to_drop)
+  #   # Drop the variable from dat_df
+  #   dat_df <- dat_df[, !names(dat_df) %in% col_to_drop]
+  #   # Follow steps above to recompute pairwise correlation matrix
+  #   dat_matrix <- data.matrix(dat_df[,(ncol(keys)+1):ncol(dat_df)], rownames.force = NA)
+  #   cormat <- suppressWarnings(cor(dat_matrix, use = "pairwise.complete.obs"))
+  #   cormat[lower.tri(cormat)] <- 0
+  #   diag(cormat) <- 0
+  #   cormat_long <- reshape2::melt(cormat)
+  # }
   
   # assign output, with collinear variables dropped, to site_keep
   site_keep <- dat_df
