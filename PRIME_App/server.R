@@ -619,6 +619,11 @@ server <- function(input, output, session) {
     data_recent <- data_recent %>%
       rename_at(vars(all_of(existing_columns)), ~ column_renames[existing_columns])
     
+    # drop extraneous rows from funding agency
+    data_recent <- data_recent[data_recent$fundingagency %in% FUNDERS, ]
+    
+    # drop keep only major indicators (avoid correlations with others)
+    data_recent <- data_recent[data_recent$indicator %in% quarterly_indicators, ]
     
     input_reactive$data_loaded <- data_recent
     rm(data_recent)
@@ -1554,6 +1559,9 @@ server <- function(input, output, session) {
 
       # Combine the two datasets
       data_all <- bind_rows(data_recent, data_historical)
+      
+      # drop extraneous rows from funding agency
+      data_all <- data_all[data_all$fundingagency %in% FUNDERS, ]
       
       # add data to list so it persists
       input_reactive_ts$data_loaded <- data_all

@@ -90,3 +90,4 @@ COUNTRIES <- c("Malawi", "Botswana", "Eswatini", "Asia", "West Africa", "Western
               "South Africa", "South Sudan", "Tanzania", "Uganda", "Ukraine", "Vietnam")
 USG_USERS = c("Agency", "Interagency", "Global Agency", "Global")
 PARTNER_USERS = c("Global Partner", "Partner")
+FUNDERS <- c("HHS/CDC", "USAID", "DOD", "HHS/HRSA", "State/AF")
