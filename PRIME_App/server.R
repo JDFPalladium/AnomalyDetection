@@ -1273,9 +1273,7 @@ server <- function(input, output, session) {
       # Generate scorecard - createScoreCard defined in utils
       incProgress(.2, detail = paste("Creating Scorecard"))
       scorecard <- createScoreCard(scorecard_in = dat_tmp)
-      # output$rec8 = DT::renderDT(scorecard,
-      #                            filter = "top",
-      #                            options = list(scrollX = TRUE))
+
       
       output$rec8 <- reactable::renderReactable({
         reactable::reactable(scorecard)
