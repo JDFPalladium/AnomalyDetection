@@ -1001,7 +1001,8 @@ server <- function(input, output, session) {
 
         # If outliers were found, then all_outputs will exist
         # Generate table that displays observation-level results and return to UI as output$rec1
-        if(exists("all_outputs")){
+        # if(exists("all_outputs")){
+        if(!is.null(all_outputs)){
 
           z <- all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No"))
 
@@ -1010,11 +1011,15 @@ server <- function(input, output, session) {
           })
 
           forout_reactive$all_outputs <- all_outputs 
+        } else {
+          shinyalert("Proceed",
+                     "No outliers found with all disaggregates",
+                     type = "warning")
         }
       }
 
       # Update progress for user to indicate next set of models are being run
-      incProgress(.2, detail = paste("Running Model with Sex Disaggregrates"))
+      incProgress(.2, detail = paste("Running Model with Sex Disaggregates"))
 
       ## Run models generating patterns by sex
       dat <- input_reactive$dat_disag_out
@@ -1071,7 +1076,8 @@ server <- function(input, output, session) {
       })
 
       # If outliers are found, create output table to send back to UI and store table for download
-      if (exists("site_sex_outliers")) {
+      # if (exists("site_sex_outliers")) {
+      if (!is.null(site_sex_outliers)) {
         output$rec2 <- reactable::renderReactable({
             reactable::reactable(site_sex_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")))
           })
@@ -1079,7 +1085,7 @@ server <- function(input, output, session) {
         forout_reactive$site_sex_outliers <- site_sex_outliers 
       } else {
         shinyalert("Proceed",
-                   "Completed Sex Disag. No outliers found.",
+                   "No outliers found by sex disaggregates",
                    type = "success")
       }
       
@@ -1137,9 +1143,13 @@ server <- function(input, output, session) {
           }
         }
         
+        
         # stack the outputs and drop the age group variable so that outputs from all runs can be appropriately stacked
-        site_age_outliers <-
+        site_age_outliers <- tryCatch({
           do.call(plyr::rbind.fill, site_out) %>% select(-agegroup)
+        }, error = function(cond){
+          message("Insufficient data to run by either age disaggregate.")
+        })
         
         # Sort outputs by anomalous distance
         site_age_outliers <- tryCatch({
@@ -1157,7 +1167,8 @@ server <- function(input, output, session) {
         })
 
         # If outliers are found, create table to send back to UI
-        if (exists("site_age_outliers")) {
+        # if (exists("site_age_outliers")) {
+        if (!is.null(site_age_outliers)) {
           
           output$rec3 <- reactable::renderReactable({
             reactable::reactable(site_age_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")))
@@ -1167,8 +1178,8 @@ server <- function(input, output, session) {
           forout_reactive$site_age_outliers <- site_age_outliers 
         } else {
           shinyalert("Proceed",
-                     "Completed Age Disag. No outliers found.",
-                     type = "success")
+                     "No outliers found by age disaggregate",
+                     type = "warning")
         }
       }
       
@@ -1205,7 +1216,8 @@ server <- function(input, output, session) {
           #message(cond)
         })
         
-        if (exists("facility_outputs")) {
+        # if (exists("facility_outputs")) {
+        if (!is.null(facility_outputs)) {
           
           output$rec4 <- reactable::renderReactable({
             reactable::reactable(facility_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")))
@@ -1214,8 +1226,8 @@ server <- function(input, output, session) {
           forout_reactive$facility_outputs <- facility_outputs 
         } else {
           shinyalert("Proceed",
-                     "Completed Facility Run. No outliers found.",
-                     type = "success")
+                     "No outliers found at facility level.",
+                     type = "warning")
         }
         
       }
