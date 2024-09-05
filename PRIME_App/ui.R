@@ -173,7 +173,7 @@ ui <- dashboardPage(
               value = 10),
             # Dropdown to select which funders to considers - updates in server.R based on data uploaded
             pickerInput(inputId = "recfunder",
-                        label = "Select supported sites",
+                        label = "Select Funding Agency",
                         choices = NULL,
                         selected = NULL,
                         options = list(`actions-box` = TRUE),
@@ -276,7 +276,7 @@ ui <- dashboardPage(
               label = "Ignore values below",
               value = 10),
             pickerInput(inputId = "tsfunder",
-                        label = "Select supported sites",
+                        label = "Select Funding Agency",
                         choices = NULL,
                         selected = NULL,
                         options = list(`actions-box` = TRUE),
