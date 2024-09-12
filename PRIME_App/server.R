@@ -102,7 +102,7 @@ has_auth_code <- function(params) {
 
 server <- function(input, output, session) {
 
-  user_input  <-  reactiveValues(authenticated = FALSE,
+  user_input  <-  reactiveValues(authenticated = TRUE,
                                  status = "",
                                  d2_session = NULL,
                                  memo_authorized = FALSE,
@@ -654,7 +654,7 @@ server <- function(input, output, session) {
       rename_at(vars(all_of(existing_columns)), ~ column_renames[existing_columns])
     
     # drop extraneous rows from funding agency
-    data_recent <- data_recent[data_recent$fundingagency %in% FUNDERS, ]
+    data_recent <- data_recent[!(tolower(data_recent$fundingagency) %in% c("dedup", "default", "data reported above facility level")), ]
     
     # drop keep only major indicators (avoid correlations with others)
     data_recent <- data_recent[data_recent$indicator %in% quarterly_indicators, ]
@@ -1524,7 +1524,7 @@ server <- function(input, output, session) {
       data_all <- bind_rows(data_recent, data_historical)
       
       # drop extraneous rows from funding agency
-      data_all <- data_all[data_all$fundingagency %in% FUNDERS, ]
+      data_all <- data_all[!(tolower(data_all$fundingagency) %in% c("dedup", "default", "data reported above facility level")), ]
       
       # add data to list so it persists
       input_reactive_ts$data_loaded <- data_all
