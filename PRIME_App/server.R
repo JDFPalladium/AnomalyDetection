@@ -606,9 +606,22 @@ server <- function(input, output, session) {
                                  grepl("Recent", my_items$file_names),]$path_names
     
     print(paste0("recommender uploading: ", my_data_recent))
+    
+    # Check if more than one file exists
+    if (length(my_data_recent) > 1) {
+      # Loop through and read each file
+      data_recent <- lapply(my_data_recent, function(file) {
+        read_parquet_file(file, columns_to_read = cols_to_read)
+      })
+      # Combine the data (assuming they have the same structure)
+      data_recent <- do.call(rbind, data_recent)
+    } else {
+      # If only one file exists, read it directly
+      data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
+    }
 
 
-    data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
+    #data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
     
     # Conditionally rename columns if they exist
     column_renames <- c("prime_partner_name" = "primepartner",
@@ -1514,7 +1527,22 @@ server <- function(input, output, session) {
 
       print(paste0("upload: ", my_data_recent))
 
-      data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
+      
+      #data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
+      # Check if more than one file exists
+      if (length(my_data_recent) > 1) {
+        # Loop through and read each file
+        data_recent <- lapply(my_data_recent, function(file) {
+          read_parquet_file(file, columns_to_read = cols_to_read)
+        })
+        # Combine the data (assuming they have the same structure)
+        data_recent <- do.call(rbind, data_recent)
+      } else {
+        # If only one file exists, read it directly
+        data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
+      }
+      
+      
       print(dim(data_recent))
       print(names(data_recent))
       
@@ -1539,7 +1567,20 @@ server <- function(input, output, session) {
 
       print(paste0("historical: ", my_data_historical))
 
-      data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
+      #data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
+      # Check if more than one file exists
+      if (length(my_data_historical) > 1) {
+        # Loop through and read each file
+        data_historical <- lapply(my_data_historical, function(file) {
+          read_parquet_file(file, columns_to_read = cols_to_read)
+        })
+        # Combine the data (assuming they have the same structure)
+        data_historical <- do.call(rbind, data_historical)
+      } else {
+        # If only one file exists, read it directly
+        data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
+      }
+      
       print(dim(data_historical))
       
       if("prime_partner_name" %in% names(data_historical)){
