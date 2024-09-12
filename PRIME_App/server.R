@@ -1045,11 +1045,11 @@ server <- function(input, output, session) {
           })
 
           forout_reactive$all_outputs <- all_outputs 
-        } else {
-          shinyalert("Proceed",
-                     "No outliers found with all disaggregates",
-                     type = "warning")
-        }
+        } #else {
+        #   shinyalert("Proceed",
+        #              "No outliers found with all disaggregates",
+        #              type = "warning")
+        # }
       }
 
       # Update progress for user to indicate next set of models are being run
@@ -1117,11 +1117,11 @@ server <- function(input, output, session) {
           })
 
         forout_reactive$site_sex_outliers <- site_sex_outliers 
-      } else {
-        shinyalert("Proceed",
-                   "No outliers found by sex disaggregates",
-                   type = "success")
-      }
+      } #else {
+      #   shinyalert("Proceed",
+      #              "No outliers found by sex disaggregates",
+      #              type = "success")
+      # }
       
       # Update progress for users
       incProgress(.2, detail = paste("Running Model with Age Disaggregrates"))
@@ -1210,11 +1210,11 @@ server <- function(input, output, session) {
 
 
           forout_reactive$site_age_outliers <- site_age_outliers 
-        } else {
-          shinyalert("Proceed",
-                     "No outliers found by age disaggregate",
-                     type = "warning")
-        }
+        } #else {
+        #   shinyalert("Proceed",
+        #              "No outliers found by age disaggregate",
+        #              type = "warning")
+        # }
       }
       
       # update progress for users
@@ -1258,11 +1258,11 @@ server <- function(input, output, session) {
           })
 
           forout_reactive$facility_outputs <- facility_outputs 
-        } else {
-          shinyalert("Proceed",
-                     "No outliers found at facility level.",
-                     type = "warning")
-        }
+        } #else {
+        #   shinyalert("Proceed",
+        #              "No outliers found at facility level.",
+        #              type = "warning")
+        # }
         
       }
 
