@@ -363,7 +363,7 @@ ui <- dashboardPage(
                            conditionalPanel(
                              condition = "output.rec1",
                              box(
-                               title = "Observations: The number for each outcome is shown, with the expected value shown in parentheses. Red cells show the largest deviations.",
+                               title = "Observations: The number for each outcome is shown, with the expected value shown in parentheses.",
                                width = 12,
                                "All Disaggregates table",
                                collapsible = TRUE,
@@ -376,7 +376,7 @@ ui <- dashboardPage(
                            conditionalPanel(
                              condition = "output.rec2",
                              box(
-                               title = "Observations: The number for each outcome is shown, with the expected value shown in parentheses. Red cells show the largest deviations.",
+                               title = "Observations: The number for each outcome is shown, with the expected value shown in parentheses.",
                                width = 12,
                                "Sex Disaggregate Table",
                                collapsible = TRUE,
@@ -388,7 +388,7 @@ ui <- dashboardPage(
                            conditionalPanel(
                              condition = "output.rec3",
                              box(
-                               title = "Observations: The number for each outcome is shown, with the expected value shown in parentheses. Red cells show the largest deviations.",
+                               title = "Observations: The number for each outcome is shown, with the expected value shown in parentheses.",
                                width = 12,
                                "Age Disaggregate Table",
                                collapsible = TRUE,
@@ -400,7 +400,7 @@ ui <- dashboardPage(
                            conditionalPanel(
                              condition = "output.rec4",
                              box(
-                               title = "Observations: The number for each outcome is shown, with the expected value shown in parentheses. Red cells show the largest deviations.",
+                               title = "Observations: The number for each outcome is shown, with the expected value shown in parentheses.",
                                width = 12,
                                "Facility Disaggregate Table",
                                collapsible = TRUE,
