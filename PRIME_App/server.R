@@ -242,7 +242,7 @@ server <- function(input, output, session) {
       mechanisms$my_cat_ops <- datimutils::listMechs()
       
       # if a user is not to be allowed deny them entry
-      if (!user$type %in% c(USG_USERS#, PARTNER_USERS
+      if (!user$type %in% c(USG_USERS, PARTNER_USERS
                             )) {
         
         # alert the user they cannot access the app
@@ -653,6 +653,11 @@ server <- function(input, output, session) {
     data_recent <- data_recent %>%
       rename_at(vars(all_of(existing_columns)), ~ column_renames[existing_columns])
     
+    # drop extraneous rows from funding agency
+    data_recent <- data_recent[!(tolower(data_recent$fundingagency) %in% c("dedup", "default", "data reported above facility level")), ]
+    
+    # drop keep only major indicators (avoid correlations with others)
+    data_recent <- data_recent[data_recent$indicator %in% quarterly_indicators, ]
     
     input_reactive$data_loaded <- data_recent
     rm(data_recent)
@@ -1030,58 +1035,25 @@ server <- function(input, output, session) {
 
         # If outliers were found, then all_outputs will exist
         # Generate table that displays observation-level results and return to UI as output$rec1
-        if(exists("all_outputs")){
+        # if(exists("all_outputs")){
+        if(!is.null(all_outputs)){
 
           z <- all_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No"))
-          print(head(z))
+
           output$rec1 <- reactable::renderReactable({
             reactable::reactable(z)
           })
-          
-          # output$rec1 <- renderUI({
-          #   flextable::flextable((z))
-          # })
-          
-          # output$rec1 = DT::renderDT(
-          #   datatable(
-          #     z,
-          #     filter = "top",
-          #     options = list(scrollX = TRUE,
-          #                    columnDefs = list(list(
-          #                      visible = FALSE, targets = c(grep("^D_", colnames(
-          #                        all_outputs
-          #                      )),
-          #                      grep("^E_", colnames(
-          #                        all_outputs
-          #                      )))
-          #                    )))
-           # ) #%>%
-              # formatStyle(
-              #   7:(6 + length(grep(
-              #     "^D_", colnames(all_outputs)
-              #   ))),
-              #   grep("^D_", colnames(all_outputs)),
-              #   backgroundColor = styleInterval(
-              #     as.numeric(quantile(
-              #       all_outputs[, grep("^D_", colnames(all_outputs))],
-              #       probs = c(.8, .9, 1),
-              #       na.rm = T
-              #     )),
-              #     c(
-              #       "rgb(255,255,255)",
-              #       "rgb(255,170,170)",
-              #       "rgb(255,80,80)",
-              #       "rgb(255,0,0)"
-              #     )
-              #   )
-              # )
-          #)
+
           forout_reactive$all_outputs <- all_outputs 
-        }
+        } #else {
+        #   shinyalert("Proceed",
+        #              "No outliers found with all disaggregates",
+        #              type = "warning")
+        # }
       }
 
       # Update progress for user to indicate next set of models are being run
-      incProgress(.2, detail = paste("Running Model with Sex Disaggregrates"))
+      incProgress(.2, detail = paste("Running Model with Sex Disaggregates"))
 
       ## Run models generating patterns by sex
       dat <- input_reactive$dat_disag_out
@@ -1138,54 +1110,18 @@ server <- function(input, output, session) {
       })
 
       # If outliers are found, create output table to send back to UI and store table for download
-      if (exists("site_sex_outliers")) {
+      # if (exists("site_sex_outliers")) {
+      if (!is.null(site_sex_outliers)) {
         output$rec2 <- reactable::renderReactable({
             reactable::reactable(site_sex_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")))
           })
-        # output$rec2 = DT::renderDT(
-        #   datatable(
-        #     site_sex_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
-        #     filter = "top",
-        #     options = list(scrollX = TRUE,
-        #                    columnDefs = list(
-        #                      list(
-        #                        visible = FALSE,
-        #                        targets = c(grep(
-        #                          "^D_", colnames(site_sex_outliers)
-        #                        ),
-        #                        grep(
-        #                          "^E_", colnames(site_sex_outliers)
-        #                        ))
-        #                      )
-        #                    ))
-          #) #%>%
-            # formatStyle(
-            #   7:(6 + length(grep(
-            #     "^D_", colnames(site_sex_outliers)
-            #   ))),
-            #   grep("^D_", colnames(site_sex_outliers)),
-            #   backgroundColor = styleInterval(
-            #     as.numeric(quantile(
-            #       site_sex_outliers[, grep("^D_", colnames(site_sex_outliers))],
-            #       probs = c(.8, .9, 1),
-            #       na.rm = T
-            #     )),
-            #     c(
-            #       "rgb(255,255,255)",
-            #       "rgb(255,170,170)",
-            #       "rgb(255,80,80)",
-            #       "rgb(255,0,0)"
-            #     )
-            #   )
-            # )
-        #)
-        
+
         forout_reactive$site_sex_outliers <- site_sex_outliers 
-      } else {
-        shinyalert("Proceed",
-                   "Completed Sex Disag. No outliers found.",
-                   type = "success")
-      }
+      } #else {
+      #   shinyalert("Proceed",
+      #              "No outliers found by sex disaggregates",
+      #              type = "success")
+      # }
       
       # Update progress for users
       incProgress(.2, detail = paste("Running Model with Age Disaggregrates"))
@@ -1241,9 +1177,13 @@ server <- function(input, output, session) {
           }
         }
         
+        
         # stack the outputs and drop the age group variable so that outputs from all runs can be appropriately stacked
-        site_age_outliers <-
+        site_age_outliers <- tryCatch({
           do.call(plyr::rbind.fill, site_out) %>% select(-agegroup)
+        }, error = function(cond){
+          message("Insufficient data to run by either age disaggregate.")
+        })
         
         # Sort outputs by anomalous distance
         site_age_outliers <- tryCatch({
@@ -1261,55 +1201,20 @@ server <- function(input, output, session) {
         })
 
         # If outliers are found, create table to send back to UI
-        if (exists("site_age_outliers")) {
+        # if (exists("site_age_outliers")) {
+        if (!is.null(site_age_outliers)) {
           
           output$rec3 <- reactable::renderReactable({
             reactable::reactable(site_age_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")))
           })
 
-          # output$rec3 = DT::renderDT(
-          #   datatable(
-          #     site_age_outliers %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
-          #     filter = "top",
-          #     options = list(scrollX = TRUE,
-          #                    columnDefs = list(
-          #                      list(
-          #                        visible = FALSE,
-          #                        targets = c(grep(
-          #                          "^D_", colnames(site_age_outliers)
-          #                        ),
-          #                        grep(
-          #                          "^E_", colnames(site_age_outliers)
-          #                        ))
-          #                      )
-          #                    ))
-            #) #%>%
-              # formatStyle(
-              #   7:(6 + length(grep(
-              #     "^D_", colnames(site_age_outliers)
-              #   ))),
-              #   grep("^D_", colnames(site_age_outliers)),
-              #   backgroundColor = styleInterval(
-              #     as.numeric(quantile(
-              #       site_age_outliers[, grep("^D_", colnames(site_age_outliers))],
-              #       probs = c(.8, .9, 1),
-              #       na.rm = T
-              #     )),
-              #     c(
-              #       "rgb(255,255,255)",
-              #       "rgb(255,170,170)",
-              #       "rgb(255,80,80)",
-              #       "rgb(255,0,0)"
-              #     )
-              #   )
-              # )
-          #)
+
           forout_reactive$site_age_outliers <- site_age_outliers 
-        } else {
-          shinyalert("Proceed",
-                     "Completed Age Disag. No outliers found.",
-                     type = "success")
-        }
+        } #else {
+        #   shinyalert("Proceed",
+        #              "No outliers found by age disaggregate",
+        #              type = "warning")
+        # }
       }
       
       # update progress for users
@@ -1345,55 +1250,19 @@ server <- function(input, output, session) {
           #message(cond)
         })
         
-        if (exists("facility_outputs")) {
+        # if (exists("facility_outputs")) {
+        if (!is.null(facility_outputs)) {
           
           output$rec4 <- reactable::renderReactable({
             reactable::reactable(facility_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")))
           })
 
-          # output$rec4 = DT::renderDT(
-          #   datatable(
-          #     facility_outputs %>% mutate(outlier_sp = ifelse(outlier_sp == 1, "Yes", "No")),
-          #     filter = "top",
-          #     options = list(scrollX = TRUE,
-          #                    columnDefs = list(
-          #                      list(
-          #                        visible = FALSE,
-          #                        targets = c(grep(
-          #                          "^D_", colnames(facility_outputs)
-          #                        ),
-          #                        grep(
-          #                          "^E_", colnames(facility_outputs)
-          #                        ))
-          #                      )
-          #                    ))
-            #) #%>%
-              # formatStyle(
-              #   7:(6 + length(grep(
-              #     "^D_", colnames(facility_outputs)
-              #   ))),
-              #   grep("^D_", colnames(facility_outputs)),
-              #   backgroundColor = styleInterval(
-              #     as.numeric(quantile(
-              #       facility_outputs[, grep("^D_", colnames(facility_outputs))],
-              #       probs = c(.8, .9, 1),
-              #       na.rm = T
-              #     )),
-              #     c(
-              #       "rgb(255,255,255)",
-              #       "rgb(255,170,170)",
-              #       "rgb(255,80,80)",
-              #       "rgb(255,0,0)"
-              #     )
-              #   )
-              # )
-          #)
           forout_reactive$facility_outputs <- facility_outputs 
-        } else {
-          shinyalert("Proceed",
-                     "Completed Facility Run. No outliers found.",
-                     type = "success")
-        }
+        } #else {
+        #   shinyalert("Proceed",
+        #              "No outliers found at facility level.",
+        #              type = "warning")
+        # }
         
       }
 
@@ -1413,11 +1282,6 @@ server <- function(input, output, session) {
         disags_summary <-
           createSummaryTab(dat_summary_list = disags_list)
         
-        # output$rec6 = DT::renderDT(
-        #   disags_summary$summary,
-        #   filter = "top",
-        #   options = list(scrollX = TRUE)
-        # )
         
         output$rec6 <- reactable::renderReactable({
           reactable::reactable(disags_summary$summary)
@@ -1432,11 +1296,6 @@ server <- function(input, output, session) {
         facility_summary <-
           createSummaryTab(dat_summary_list = facility_list,
                            disag = FALSE)
-        # output$rec7 = DT::renderDT(
-        #   facility_summary$summary,
-        #   filter = "top",
-        #   options = list(scrollX = TRUE)
-        # )
         
         output$rec7 <- reactable::renderReactable({
           reactable::reactable(facility_summary$summary)
@@ -1460,9 +1319,7 @@ server <- function(input, output, session) {
       # Generate scorecard - createScoreCard defined in utils
       incProgress(.2, detail = paste("Creating Scorecard"))
       scorecard <- createScoreCard(scorecard_in = dat_tmp)
-      # output$rec8 = DT::renderDT(scorecard,
-      #                            filter = "top",
-      #                            options = list(scrollX = TRUE))
+
       
       output$rec8 <- reactable::renderReactable({
         reactable::reactable(scorecard)
@@ -1665,6 +1522,9 @@ server <- function(input, output, session) {
 
       # Combine the two datasets
       data_all <- bind_rows(data_recent, data_historical)
+      
+      # drop extraneous rows from funding agency
+      data_all <- data_all[!(tolower(data_all$fundingagency) %in% c("dedup", "default", "data reported above facility level")), ]
       
       # add data to list so it persists
       input_reactive_ts$data_loaded <- data_all
