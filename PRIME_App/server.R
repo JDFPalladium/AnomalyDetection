@@ -601,9 +601,30 @@ server <- function(input, output, session) {
     # Select table name that contains name of OU, which is input$country_selected,
     # contains "Site" as opposed to aggregate data, and "Recent" as opposed to historical
     # my_data_recent is then the table name to extract
-    my_data_recent <- my_items[grepl(input$country_selected, my_items$file_names) &
-                                 grepl("Site", my_items$file_names) &
-                                 grepl("Recent", my_items$file_names),]$path_names
+    # western hemisphere does not exist in s3
+    # it is made up of south america, and carribean
+    if (input$country_selected == "Western Hemisphere") {
+      
+      ous <- c(
+        "Central and South America Region",
+        "Caribbean"
+      )
+      
+      ous_pattern <- paste(ous, collapse = "|")
+      
+      my_data_recent <- my_items[
+        grepl(ous_pattern, my_items$file_names, ignore.case = TRUE) &
+          grepl("Site", my_items$file_names, ignore.case = TRUE) &
+          grepl("Recent", my_items$file_names, ignore.case = TRUE),
+      ]$path_names
+      
+      my_data_recent
+    } else {
+      
+      my_data_recent <- my_items[grepl(input$country_selected, my_items$file_names, ignore.case = TRUE) &
+                                   grepl("Site", my_items$file_names, ignore.case = TRUE) &
+                                   grepl("Recent", my_items$file_names, ignore.case = TRUE),]$path_names
+    }
     
     print(paste0("recommender uploading: ", my_data_recent))
     
@@ -1521,9 +1542,33 @@ server <- function(input, output, session) {
       
       my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"), filter_parquet = TRUE)
 
-      my_data_recent <- my_items[grepl(input$country_selected_ts, my_items$file_names) &
-                                   grepl("Site", my_items$file_names) &
-                                   grepl("Recent", my_items$file_names),]$path_names
+      # Select table name that contains name of OU, which is input$country_selected,
+      # contains "Site" as opposed to aggregate data, and "Recent" as opposed to historical
+      # my_data_recent is then the table name to extract
+      # western hemisphere does not exist in s3
+      # it is made up of south america, and carribean
+      if (input$country_selected_ts == "Western Hemisphere") {
+        
+        ous <- c(
+          "Central and South America Region",
+          "Caribbean"
+        )
+        
+        ous_pattern <- paste(ous, collapse = "|")
+        
+        my_data_recent <- my_items[
+          grepl(ous_pattern, my_items$file_names, ignore.case = TRUE) &
+            grepl("Site", my_items$file_names, ignore.case = TRUE) &
+            grepl("Recent", my_items$file_names, ignore.case = TRUE),
+        ]$path_names
+        
+        my_data_recent
+      } else {
+        
+        my_data_recent <- my_items[grepl(input$country_selected_ts, my_items$file_names, ignore.case = TRUE) &
+                                     grepl("Site", my_items$file_names, ignore.case = TRUE) &
+                                     grepl("Recent", my_items$file_names, ignore.case = TRUE),]$path_names
+      }
 
       print(paste0("upload: ", my_data_recent))
 
@@ -1561,10 +1606,35 @@ server <- function(input, output, session) {
     # now, repeat with earlier dataset
     withProgress(message = 'Loading Historical Data', value = 0.7, {
       
-      my_data_historical <- my_items[grepl(input$country_selected_ts, my_items$file_names) &
-                                   grepl("Site", my_items$file_names) &
-                                   grepl("Historic", my_items$file_names),]$path_names
-
+      # Select table name that contains name of OU, which is input$country_selected,
+      # contains "Site" as opposed to aggregate data, and "Recent" as opposed to historical
+      # my_data_recent is then the table name to extract
+      # western hemisphere does not exist in s3
+      # it is made up of south america, and carribean
+      if (input$country_selected_ts == "Western Hemisphere") {
+        
+        ous <- c(
+          "Central and South America Region",
+          "Caribbean"
+        )
+        
+        ous_pattern <- paste(ous, collapse = "|")
+        
+        my_data_historical <- my_items[
+          grepl(ous_pattern, my_items$file_names, ignore.case = TRUE) &
+            grepl("Site", my_items$file_names, ignore.case = TRUE) &
+            grepl("Historic", my_items$file_names, ignore.case = TRUE),
+        ]$path_names
+        
+        my_data_historical
+      } else {
+        
+        my_data_historical <- my_items[grepl(input$country_selected_ts, my_items$file_names, ignore.case = TRUE) &
+                                         grepl("Site", my_items$file_names, ignore.case = TRUE) &
+                                         grepl("Historic", my_items$file_names, ignore.case = TRUE),]$path_names
+      }
+      
+      
       print(paste0("historical: ", my_data_historical))
 
       #data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
