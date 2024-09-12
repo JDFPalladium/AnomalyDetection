@@ -601,14 +601,48 @@ server <- function(input, output, session) {
     # Select table name that contains name of OU, which is input$country_selected,
     # contains "Site" as opposed to aggregate data, and "Recent" as opposed to historical
     # my_data_recent is then the table name to extract
-    my_data_recent <- my_items[grepl(input$country_selected, my_items$file_names) &
-                                 grepl("Site", my_items$file_names) &
-                                 grepl("Recent", my_items$file_names),]$path_names
+    # western hemisphere does not exist in s3
+    # it is made up of south america, and carribean
+    if (input$country_selected == "Western Hemisphere") {
+      
+      ous <- c(
+        "Central and South America Region",
+        "Caribbean"
+      )
+      
+      ous_pattern <- paste(ous, collapse = "|")
+      
+      my_data_recent <- my_items[
+        grepl(ous_pattern, my_items$file_names, ignore.case = TRUE) &
+          grepl("Site", my_items$file_names, ignore.case = TRUE) &
+          grepl("Recent", my_items$file_names, ignore.case = TRUE),
+      ]$path_names
+      
+      my_data_recent
+    } else {
+      
+      my_data_recent <- my_items[grepl(input$country_selected, my_items$file_names, ignore.case = TRUE) &
+                                   grepl("Site", my_items$file_names, ignore.case = TRUE) &
+                                   grepl("Recent", my_items$file_names, ignore.case = TRUE),]$path_names
+    }
     
     print(paste0("recommender uploading: ", my_data_recent))
+    
+    # Check if more than one file exists
+    if (length(my_data_recent) > 1) {
+      # Loop through and read each file
+      data_recent <- lapply(my_data_recent, function(file) {
+        read_parquet_file(file, columns_to_read = cols_to_read)
+      })
+      # Combine the data (assuming they have the same structure)
+      data_recent <- do.call(rbind, data_recent)
+    } else {
+      # If only one file exists, read it directly
+      data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
+    }
 
 
-    data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
+    #data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
     
     # Conditionally rename columns if they exist
     column_renames <- c("prime_partner_name" = "primepartner",
@@ -1365,13 +1399,52 @@ server <- function(input, output, session) {
       
       my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"), filter_parquet = TRUE)
 
-      my_data_recent <- my_items[grepl(input$country_selected_ts, my_items$file_names) &
-                                   grepl("Site", my_items$file_names) &
-                                   grepl("Recent", my_items$file_names),]$path_names
+      # Select table name that contains name of OU, which is input$country_selected,
+      # contains "Site" as opposed to aggregate data, and "Recent" as opposed to historical
+      # my_data_recent is then the table name to extract
+      # western hemisphere does not exist in s3
+      # it is made up of south america, and carribean
+      if (input$country_selected_ts == "Western Hemisphere") {
+        
+        ous <- c(
+          "Central and South America Region",
+          "Caribbean"
+        )
+        
+        ous_pattern <- paste(ous, collapse = "|")
+        
+        my_data_recent <- my_items[
+          grepl(ous_pattern, my_items$file_names, ignore.case = TRUE) &
+            grepl("Site", my_items$file_names, ignore.case = TRUE) &
+            grepl("Recent", my_items$file_names, ignore.case = TRUE),
+        ]$path_names
+        
+        my_data_recent
+      } else {
+        
+        my_data_recent <- my_items[grepl(input$country_selected_ts, my_items$file_names, ignore.case = TRUE) &
+                                     grepl("Site", my_items$file_names, ignore.case = TRUE) &
+                                     grepl("Recent", my_items$file_names, ignore.case = TRUE),]$path_names
+      }
 
       print(paste0("upload: ", my_data_recent))
 
-      data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
+      
+      #data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
+      # Check if more than one file exists
+      if (length(my_data_recent) > 1) {
+        # Loop through and read each file
+        data_recent <- lapply(my_data_recent, function(file) {
+          read_parquet_file(file, columns_to_read = cols_to_read)
+        })
+        # Combine the data (assuming they have the same structure)
+        data_recent <- do.call(rbind, data_recent)
+      } else {
+        # If only one file exists, read it directly
+        data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
+      }
+      
+      
       print(dim(data_recent))
       print(names(data_recent))
       
@@ -1390,13 +1463,51 @@ server <- function(input, output, session) {
     # now, repeat with earlier dataset
     withProgress(message = 'Loading Historical Data', value = 0.7, {
       
-      my_data_historical <- my_items[grepl(input$country_selected_ts, my_items$file_names) &
-                                   grepl("Site", my_items$file_names) &
-                                   grepl("Historic", my_items$file_names),]$path_names
-
+      # Select table name that contains name of OU, which is input$country_selected,
+      # contains "Site" as opposed to aggregate data, and "Recent" as opposed to historical
+      # my_data_recent is then the table name to extract
+      # western hemisphere does not exist in s3
+      # it is made up of south america, and carribean
+      if (input$country_selected_ts == "Western Hemisphere") {
+        
+        ous <- c(
+          "Central and South America Region",
+          "Caribbean"
+        )
+        
+        ous_pattern <- paste(ous, collapse = "|")
+        
+        my_data_historical <- my_items[
+          grepl(ous_pattern, my_items$file_names, ignore.case = TRUE) &
+            grepl("Site", my_items$file_names, ignore.case = TRUE) &
+            grepl("Historic", my_items$file_names, ignore.case = TRUE),
+        ]$path_names
+        
+        my_data_historical
+      } else {
+        
+        my_data_historical <- my_items[grepl(input$country_selected_ts, my_items$file_names, ignore.case = TRUE) &
+                                         grepl("Site", my_items$file_names, ignore.case = TRUE) &
+                                         grepl("Historic", my_items$file_names, ignore.case = TRUE),]$path_names
+      }
+      
+      
       print(paste0("historical: ", my_data_historical))
 
-      data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
+      #data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
+      # Check if more than one file exists
+      if (length(my_data_historical) > 1) {
+        # Loop through and read each file
+        data_historical <- lapply(my_data_historical, function(file) {
+          read_parquet_file(file, columns_to_read = cols_to_read)
+        })
+        # Combine the data (assuming they have the same structure)
+        data_historical <- do.call(rbind, data_historical)
+      } else {
+        # If only one file exists, read it directly
+        data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
+      }
+      
       print(dim(data_historical))
       
       if("prime_partner_name" %in% names(data_historical)){
