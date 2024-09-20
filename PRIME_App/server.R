@@ -1,47 +1,69 @@
 
 # add read parquet
 # qtr columns are automatically read in
-read_parquet_file <- function(my_file, n_rows = Inf, columns_to_read = NULL) {
-  print(paste0("reading parquet file: ", my_file))
+read_parquet_file <- function(my_file, chunk_size = 1000, columns_to_read = NULL) {
+  print(paste0("Reading parquet file: ", my_file))
   
-  # Read the entire Parquet file
-  parquet_data <- aws.s3::s3read_using(
+  # Initialize a list to collect chunks
+  all_chunks <- list()
+  
+  # Define a function to process each chunk and add it to the list
+  process_chunk <- function(chunk) {
+    # Collect chunk into the list
+    all_chunks <<- append(all_chunks, list(chunk))
+    #print(paste("Processed chunk with", nrow(chunk), "rows"))
+  }
+  
+  # Function to read and process the Parquet file in chunks
+  process_file_in_chunks <- function(file_path, chunk_size) {
+    # Read the entire Parquet file as an Arrow Table
+    table <- arrow::read_parquet(file_path)
+    
+    #######
+    # Filter the columns after reading the entire file
+    # Automatically include any column that starts with "qtr"
+    qtr_columns <- grep("^qtr", colnames(table), value = TRUE)
+    if (!is.null(columns_to_read)) {
+      table <- table[, union(columns_to_read, qtr_columns), drop = FALSE]
+    }
+    
+    # Post-process parquet data to replace empty quotes with NA in specific columns
+    replace_empty_with_na <- function(x) {
+      ifelse(x == "", NA, x)
+    }
+    
+    # Check if table is a data frame and if the required columns exist
+    if (inherits(table, "data.frame")) {
+      cols_to_check <- c("qtr1", "qtr2", "qtr3", "qtr4")
+      existing_cols <- cols_to_check[cols_to_check %in% colnames(table)]
+      
+      if (length(existing_cols) > 0) {
+        table <- table %>%
+          mutate(across(all_of(existing_cols), replace_empty_with_na))
+      }
+    }
+    #######
+    
+    # Convert the Arrow Table to chunks
+    num_rows <- nrow(table)
+    for (start in seq(1, num_rows, by = chunk_size)) {
+      end <- min(start + chunk_size - 1, num_rows)
+      chunk <- table[start:end, ]
+      process_chunk(chunk)
+    }
+  }
+  
+  # Read and process the Parquet file from S3
+  aws.s3::s3read_using(
     FUN = function(object) {
-      arrow::read_parquet(object)
+      process_file_in_chunks(object, chunk_size)
     },
     bucket = Sys.getenv("S3_READ"),
     object = my_file
   )
   
-  # Limit the number of rows if n_rows is specified
-  if (!is.infinite(n_rows) && n_rows > 0) {
-    parquet_data <- parquet_data[1:min(n_rows, nrow(parquet_data)), ]
-  }
-  
-  # Filter the columns after reading the entire file
-  # Automatically include any column that starts with "qtr"
-  qtr_columns <- grep("^qtr", colnames(parquet_data), value = TRUE)
-  if (!is.null(columns_to_read)) {
-    parquet_data <- parquet_data[, union(columns_to_read, qtr_columns), drop = FALSE]
-  }
-  
-  # Post-process parquet data to replace empty quotes with NA in specific columns
-  replace_empty_with_na <- function(x) {
-    ifelse(x == "", NA, x)
-  }
-  
-  # Check if parquet_data is a data frame and if the required columns exist
-  if (inherits(parquet_data, "data.frame")) {
-    cols_to_check <- c("qtr1", "qtr2", "qtr3", "qtr4")
-    existing_cols <- cols_to_check[cols_to_check %in% colnames(parquet_data)]
-    
-    if (length(existing_cols) > 0) {
-      parquet_data <- parquet_data %>%
-        mutate(across(all_of(existing_cols), replace_empty_with_na))
-    }
-  }
-  
-  return(parquet_data)
+  # Return the collected chunks
+  return(all_chunks)
 }
 
 
@@ -640,6 +662,7 @@ server <- function(input, output, session) {
       # If only one file exists, read it directly
       data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
     }
+    data_recent <- dplyr::bind_rows(data_recent)
 
 
     #data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
@@ -1444,6 +1467,8 @@ server <- function(input, output, session) {
         data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
       }
       
+      data_recent <- dplyr::bind_rows(data_recent)
+      
       
       print(dim(data_recent))
       print(names(data_recent))
@@ -1507,6 +1532,8 @@ server <- function(input, output, session) {
         # If only one file exists, read it directly
         data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
       }
+      
+      data_historical <- dplyr::bind_rows(data_historical)
       
       print(dim(data_historical))
       
