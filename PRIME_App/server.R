@@ -1729,6 +1729,7 @@ server <- function(input, output, session) {
     input_reactive_ts$mer_data <- input_reactive_ts$mer_data %>%
       filter(indicator %in% quarterly_indicators)
 
+
     # concatenate indicator with N-D so we can track them separately
     input_reactive_ts$mer_data$indicator <-
       paste0(input_reactive_ts$mer_data$indicator, "_", input_reactive_ts$mer_data$numeratordenom)
@@ -1816,7 +1817,14 @@ server <- function(input, output, session) {
     input_reactive_ts$mer_data_long <- input_reactive_ts$mer_data_long %>% arrange(desc(fiscal_year))
     input_reactive_ts$mer_data_long <- input_reactive_ts$mer_data_long %>%
       group_by(facility, indicator) %>%
-      mutate(primepartner = primepartner[1])
+      mutate(primepartner = last(primepartner),
+             fundingagency = last(fundingagency))
+    
+    updatePickerInput(session,
+                      "tsfunder",
+                      choices = unique(input_reactive_ts$mer_data_long$fundingagency),
+                      selected = unique(input_reactive_ts$mer_data_long$fundingagency),
+                      options = list(`actions-box` = TRUE))
 
     # summarize indicator value by facility/indicator/fiscal_year/qtr
     input_reactive_ts$mer_data_long <- input_reactive_ts$mer_data_long %>%
