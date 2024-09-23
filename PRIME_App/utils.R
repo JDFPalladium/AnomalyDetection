@@ -526,6 +526,8 @@ runTimeSeries <- function(dat, recent_year, recent_qtr, MIN_THRESH, RETURN_ALL, 
       
     }
     
+    if (i %% 10 == 0){Sys.sleep(3)}
+    
   }
 
 
