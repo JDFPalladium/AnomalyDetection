@@ -1,8 +1,9 @@
 
 # add read parquet
 # qtr columns are automatically read in
-read_parquet_file <- function(my_file, chunk_size = 1000, columns_to_read = NULL) {
-  print(paste0("Reading parquet file: ", my_file))
+h <- 500
+read_parquet_file <- function(my_file, chunk_size = h, columns_to_read = NULL) {
+  print(paste0("Reading parquet file in ",h, " chunks: ", my_file))
   
   # Initialize a list to collect chunks
   all_chunks <- list()
@@ -11,7 +12,9 @@ read_parquet_file <- function(my_file, chunk_size = 1000, columns_to_read = NULL
   process_chunk <- function(chunk) {
     # Collect chunk into the list
     all_chunks <<- append(all_chunks, list(chunk))
-    #print(paste("Processed chunk with", nrow(chunk), "rows"))
+    
+    # Call garbage collection after processing each chunk
+    #gc()
   }
   
   # Function to read and process the Parquet file in chunks
@@ -65,6 +68,7 @@ read_parquet_file <- function(my_file, chunk_size = 1000, columns_to_read = NULL
   # Return the collected chunks
   return(all_chunks)
 }
+
 
 
 
