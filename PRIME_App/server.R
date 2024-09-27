@@ -1,7 +1,7 @@
 
 # add read parquet
 # qtr columns are automatically read in
-h <- 10000
+h <- 100000
 read_parquet_file <- function(my_file, chunk_size = h, columns_to_read = NULL) {
   print(paste0("Reading parquet file in ",h, " chunks: ", my_file))
   
