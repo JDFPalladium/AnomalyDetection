@@ -1532,71 +1532,73 @@ server <- function(input, output, session) {
       
     })
 
-    # now, repeat with earlier dataset
-    withProgress(message = 'Loading Historical Data', value = 0.7, {
+    # # now, repeat with earlier dataset
+    # withProgress(message = 'Loading Historical Data', value = 0.7, {
+    #   
+    #   # Select table name that contains name of OU, which is input$country_selected,
+    #   # contains "Site" as opposed to aggregate data, and "Recent" as opposed to historical
+    #   # my_data_recent is then the table name to extract
+    #   # western hemisphere does not exist in s3
+    #   # it is made up of south america, and carribean
+    #   if (input$country_selected_ts == "Western Hemisphere") {
+    #     
+    #     ous <- c(
+    #       "Central and South America Region",
+    #       "Caribbean"
+    #     )
+    #     
+    #     ous_pattern <- paste(ous, collapse = "|")
+    #     
+    #     my_data_historical <- my_items[
+    #       grepl(ous_pattern, my_items$file_names, ignore.case = TRUE) &
+    #         grepl("Site", my_items$file_names, ignore.case = TRUE) &
+    #         grepl("Historic", my_items$file_names, ignore.case = TRUE),
+    #     ]$path_names
+    #     
+    #     my_data_historical
+    #   } else {
+    #     
+    #     my_data_historical <- my_items[grepl(input$country_selected_ts, my_items$file_names, ignore.case = TRUE) &
+    #                                      grepl("Site", my_items$file_names, ignore.case = TRUE) &
+    #                                      grepl("Historic", my_items$file_names, ignore.case = TRUE),]$path_names
+    #   }
+    #   
+    #   
+    #   print(paste0("historical: ", my_data_historical))
+    # 
+    #   #data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
+    #   # Check if more than one file exists
+    #   if (length(my_data_historical) > 1) {
+    #     # Loop through and read each file
+    #     data_historical <- lapply(my_data_historical, function(file) {
+    #       read_parquet_file(file, columns_to_read = cols_to_read)
+    #     })
+    #     # Combine the data (assuming they have the same structure)
+    #     data_historical <- do.call(rbind, data_historical)
+    #   } else {
+    #     # If only one file exists, read it directly
+    #     data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
+    #   }
+    #   
+    #   data_historical <- dplyr::bind_rows(data_historical)
+    #   
+    #   print(dim(data_historical))
+    #   
+    #   if("prime_partner_name" %in% names(data_historical)){
+    #     data_historical$primepartner <- data_historical$prime_partner_name
+    #   }
+    #   if("funding_agency" %in% names(data_historical)){
+    #     data_historical$fundingagency <- data_historical$funding_agency
+    #   }
+    #   if("countryname" %in% names(data_historical)){
+    #     data_historical$country <- data_historical$countryname
+    #   }
+# 
+#       # Combine the two datasets
+#       data_all <- bind_rows(data_recent, data_historical)
       
-      # Select table name that contains name of OU, which is input$country_selected,
-      # contains "Site" as opposed to aggregate data, and "Recent" as opposed to historical
-      # my_data_recent is then the table name to extract
-      # western hemisphere does not exist in s3
-      # it is made up of south america, and carribean
-      if (input$country_selected_ts == "Western Hemisphere") {
-        
-        ous <- c(
-          "Central and South America Region",
-          "Caribbean"
-        )
-        
-        ous_pattern <- paste(ous, collapse = "|")
-        
-        my_data_historical <- my_items[
-          grepl(ous_pattern, my_items$file_names, ignore.case = TRUE) &
-            grepl("Site", my_items$file_names, ignore.case = TRUE) &
-            grepl("Historic", my_items$file_names, ignore.case = TRUE),
-        ]$path_names
-        
-        my_data_historical
-      } else {
-        
-        my_data_historical <- my_items[grepl(input$country_selected_ts, my_items$file_names, ignore.case = TRUE) &
-                                         grepl("Site", my_items$file_names, ignore.case = TRUE) &
-                                         grepl("Historic", my_items$file_names, ignore.case = TRUE),]$path_names
-      }
-      
-      
-      print(paste0("historical: ", my_data_historical))
-
-      #data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
-      # Check if more than one file exists
-      if (length(my_data_historical) > 1) {
-        # Loop through and read each file
-        data_historical <- lapply(my_data_historical, function(file) {
-          read_parquet_file(file, columns_to_read = cols_to_read)
-        })
-        # Combine the data (assuming they have the same structure)
-        data_historical <- do.call(rbind, data_historical)
-      } else {
-        # If only one file exists, read it directly
-        data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
-      }
-      
-      data_historical <- dplyr::bind_rows(data_historical)
-      
-      print(dim(data_historical))
-      
-      if("prime_partner_name" %in% names(data_historical)){
-        data_historical$primepartner <- data_historical$prime_partner_name
-      }
-      if("funding_agency" %in% names(data_historical)){
-        data_historical$fundingagency <- data_historical$funding_agency
-      }
-      if("countryname" %in% names(data_historical)){
-        data_historical$country <- data_historical$countryname
-      }
-
-      # Combine the two datasets
-      data_all <- bind_rows(data_recent, data_historical)
-      
+    data_all <- data_recent
+    
       # drop extraneous rows from funding agency
       data_all <- data_all[!(tolower(data_all$fundingagency) %in% c("dedup", "default", "data reported above facility level")), ]
       
@@ -1677,7 +1679,7 @@ server <- function(input, output, session) {
                  "Select Year/Quarter for Analysis and Run Data Checks.",
                  type="success")
       
-    })
+    # })
   })
   
   
@@ -1776,7 +1778,6 @@ server <- function(input, output, session) {
     input_reactive_ts$mer_data <- input_reactive_ts$mer_data %>%
       filter(indicator %in% quarterly_indicators)
 
-
     # concatenate indicator with N-D so we can track them separately
     input_reactive_ts$mer_data$indicator <-
       paste0(input_reactive_ts$mer_data$indicator, "_", input_reactive_ts$mer_data$numeratordenom)
@@ -1806,12 +1807,16 @@ server <- function(input, output, session) {
     input_reactive_ts$mer_data <-
       input_reactive_ts$mer_data[!input_reactive_ts$mer_data$primepartner %in% c("Dedup", "TBD"),]
 
-    # drop columns no longer needed
-    input_reactive_ts$mer_data <-
-      input_reactive_ts$mer_data[,!names(input_reactive_ts$mer_data) %in% c("numeratordenom",
-                                        "standardizeddisaggregate",
-                                        "ageasentered",
-                                        "statushiv")]
+    
+    # # drop columns no longer needed
+    # input_reactive_ts$mer_data <-
+    #   input_reactive_ts$mer_data[,!names(input_reactive_ts$mer_data) %in% c("numeratordenom",
+    #                                     "standardizeddisaggregate",
+    #                                     "ageasentered",
+    #                                     "statushiv")]
+    
+    input_reactive_ts$mer_data <- input_reactive_ts$mer_data %>%
+      select(-numeratordenom, -standardizeddisaggregate, -statushiv, -ageasentered)
     
     # Pivot longer to get all the values in one column
     input_reactive_ts$mer_data_long <- pivot_longer(input_reactive_ts$mer_data,
