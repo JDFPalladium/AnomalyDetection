@@ -729,8 +729,10 @@ server <- function(input, output, session) {
                         "countryname" = "country")
     
     existing_columns <- intersect(names(data_recent), names(column_renames))
-    data_recent <- data_recent %>%
-      rename_at(vars(all_of(existing_columns)), ~ column_renames[existing_columns])
+    # data_recent <- data_recent %>%
+    #   rename_at(vars(all_of(existing_columns)), ~ column_renames[existing_columns])
+    # Assuming data_recent is a data.table
+    setnames(data_recent, old = existing_columns, new = column_renames[existing_columns])
     
     # drop extraneous rows from funding agency
     data_recent <- data_recent[!(tolower(data_recent$fundingagency) %in% c("dedup", "default", "data reported above facility level")), ]
@@ -1606,7 +1608,9 @@ server <- function(input, output, session) {
 #       # Combine the two datasets
 #       data_all <- bind_rows(data_recent, data_historical)
       
-    data_all <- data_recent
+      data_all <- data_recent
+      rm(data_recent)
+      gc()
     
       # drop extraneous rows from funding agency
       data_all <- data_all[!(tolower(data_all$fundingagency) %in% c("dedup", "default", "data reported above facility level")), ]
