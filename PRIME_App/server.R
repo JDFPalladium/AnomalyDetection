@@ -83,6 +83,8 @@ read_parquet_file <- function(my_file, n_rows = Inf, columns_to_read = NULL) {
     bucket = Sys.getenv("S3_READ"),
     object = my_file
   )
+  
+  print("file read complete")
   gc()
 
   # Limit the number of rows if n_rows is specified
