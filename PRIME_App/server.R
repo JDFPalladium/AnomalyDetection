@@ -714,6 +714,7 @@ server <- function(input, output, session) {
       data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
     }
     data_recent <- dplyr::bind_rows(data_recent)
+    print("rec_upload File read is complete!")
 
 
     #data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
@@ -1520,7 +1521,7 @@ server <- function(input, output, session) {
       
       data_recent <- dplyr::bind_rows(data_recent)
       
-      
+      print("ts_upload File read is complete!")
       print(dim(data_recent))
       print(names(data_recent))
       
