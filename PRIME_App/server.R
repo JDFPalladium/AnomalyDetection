@@ -13,7 +13,6 @@ read_parquet_file <- function(my_file, chunk_size = h, columns_to_read = NULL) {
   process_chunk <- function(chunk) {
     # Convert the chunk to data.table
     dt_chunk <- as.data.table(chunk)
-    rm(dt_chunk)
 
     # Append the chunk to the list
     all_chunks <<- append(all_chunks, list(dt_chunk))
