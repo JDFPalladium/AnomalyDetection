@@ -1,122 +1,122 @@
 # add read parquet
 # qtr columns are automatically read in
-# h <- 1000  # Default chunk size
-# 
-# # Function to read parquet file more efficiently
-# read_parquet_file <- function(my_file, chunk_size = h, columns_to_read = NULL) {
-#   print(paste0("Reading parquet file in ", h, " chunks: ", my_file))
-# 
-#   # Initialize a list to collect chunks
-#   all_chunks <- list()
-# 
-#   # Define a function to process each chunk and add it to the list
-#   process_chunk <- function(chunk) {
-#     # Convert the chunk to data.table
-#     dt_chunk <- as.data.table(chunk)
-#     rm(dt_chunk)
-# 
-#     # Append the chunk to the list
-#     all_chunks <<- append(all_chunks, list(dt_chunk))
-# 
-#     # Optionally, call garbage collection after processing each chunk
-#     # gc()
-#   }
-# 
-#   # Function to read and process the Parquet file in chunks
-#   process_file_in_chunks <- function(file_path, chunk_size) {
-#     # Read the entire Parquet file as an Arrow Table
-#     table <- arrow::read_parquet(file_path)
-# 
-#     # Automatically include any column that starts with "qtr"
-#     qtr_columns <- grep("^qtr", colnames(table), value = TRUE)
-#     if (!is.null(columns_to_read)) {
-#       table <- table[, union(columns_to_read, qtr_columns), drop = FALSE]
-#     }
-# 
-#     # Convert Arrow Table to data.table directly
-#     dt_table <- as.data.table(table)
-# 
-#     # Post-process parquet data to replace empty quotes with NA in specific columns
-#     replace_empty_with_na <- function(x) {
-#       fifelse(x == "", NA_character_, x)
-#     }
-# 
-#     # Check and replace empty strings with NA for "qtr" columns
-#     cols_to_check <- c("qtr1", "qtr2", "qtr3", "qtr4")
-#     existing_cols <- cols_to_check[cols_to_check %in% colnames(dt_table)]
-# 
-#     if (length(existing_cols) > 0) {
-#       dt_table[, (existing_cols) := lapply(.SD, replace_empty_with_na), .SDcols = existing_cols]
-#     }
-# 
-#     # Convert the data.table to chunks
-#     num_rows <- nrow(dt_table)
-#     for (start in seq(1, num_rows, by = chunk_size)) {
-#       end <- min(start + chunk_size - 1, num_rows)
-#       chunk <- dt_table[start:end, ]
-#       process_chunk(chunk)
-#     }
-#   }
-# 
-#   # Read and process the Parquet file from S3
-#   aws.s3::s3read_using(
-#     FUN = function(object) {
-#       process_file_in_chunks(object, chunk_size)
-#     },
-#     bucket = Sys.getenv("S3_READ"),
-#     object = my_file
-#   )
-# 
-#   # Return the collected chunks as a single data.table
-#   return(rbindlist(all_chunks, use.names = TRUE, fill = TRUE))
-# }
+h <- 1000  # Default chunk size
 
-# old read parquet file ---
-read_parquet_file <- function(my_file, n_rows = Inf, columns_to_read = NULL) {
-  print(paste0("reading parquet file: ", my_file))
+# Function to read parquet file more efficiently
+read_parquet_file <- function(my_file, chunk_size = h, columns_to_read = NULL) {
+  print(paste0("Reading parquet file in ", h, " chunks: ", my_file))
 
-  # Read the entire Parquet file
-  parquet_data <- aws.s3::s3read_using(
+  # Initialize a list to collect chunks
+  all_chunks <- list()
+
+  # Define a function to process each chunk and add it to the list
+  process_chunk <- function(chunk) {
+    # Convert the chunk to data.table
+    dt_chunk <- as.data.table(chunk)
+    rm(dt_chunk)
+
+    # Append the chunk to the list
+    all_chunks <<- append(all_chunks, list(dt_chunk))
+
+    # Optionally, call garbage collection after processing each chunk
+    # gc()
+  }
+
+  # Function to read and process the Parquet file in chunks
+  process_file_in_chunks <- function(file_path, chunk_size) {
+    # Read the entire Parquet file as an Arrow Table
+    table <- arrow::read_parquet(file_path)
+
+    # Automatically include any column that starts with "qtr"
+    qtr_columns <- grep("^qtr", colnames(table), value = TRUE)
+    if (!is.null(columns_to_read)) {
+      table <- table[, union(columns_to_read, qtr_columns), drop = FALSE]
+    }
+
+    # Convert Arrow Table to data.table directly
+    dt_table <- as.data.table(table)
+
+    # Post-process parquet data to replace empty quotes with NA in specific columns
+    replace_empty_with_na <- function(x) {
+      fifelse(x == "", NA_character_, x)
+    }
+
+    # Check and replace empty strings with NA for "qtr" columns
+    cols_to_check <- c("qtr1", "qtr2", "qtr3", "qtr4")
+    existing_cols <- cols_to_check[cols_to_check %in% colnames(dt_table)]
+
+    if (length(existing_cols) > 0) {
+      dt_table[, (existing_cols) := lapply(.SD, replace_empty_with_na), .SDcols = existing_cols]
+    }
+
+    # Convert the data.table to chunks
+    num_rows <- nrow(dt_table)
+    for (start in seq(1, num_rows, by = chunk_size)) {
+      end <- min(start + chunk_size - 1, num_rows)
+      chunk <- dt_table[start:end, ]
+      process_chunk(chunk)
+    }
+  }
+
+  # Read and process the Parquet file from S3
+  aws.s3::s3read_using(
     FUN = function(object) {
-      arrow::read_parquet(object)
+      process_file_in_chunks(object, chunk_size)
     },
     bucket = Sys.getenv("S3_READ"),
     object = my_file
   )
-  
-  print("file read complete")
-  gc()
 
-  # Limit the number of rows if n_rows is specified
-  if (!is.infinite(n_rows) && n_rows > 0) {
-    parquet_data <- parquet_data[1:min(n_rows, nrow(parquet_data)), ]
-  }
-
-  # Filter the columns after reading the entire file
-  # Automatically include any column that starts with "qtr"
-  qtr_columns <- grep("^qtr", colnames(parquet_data), value = TRUE)
-  if (!is.null(columns_to_read)) {
-    parquet_data <- parquet_data[, union(columns_to_read, qtr_columns), drop = FALSE]
-  }
-
-  # Post-process parquet data to replace empty quotes with NA in specific columns
-  replace_empty_with_na <- function(x) {
-    ifelse(x == "", NA, x)
-  }
-
-  # Check if parquet_data is a data frame and if the required columns exist
-  if (inherits(parquet_data, "data.frame")) {
-    cols_to_check <- c("qtr1", "qtr2", "qtr3", "qtr4")
-    existing_cols <- cols_to_check[cols_to_check %in% colnames(parquet_data)]
-
-    if (length(existing_cols) > 0) {
-      parquet_data <- parquet_data %>%
-        mutate(across(all_of(existing_cols), replace_empty_with_na))
-    }
-  }
-
-  return(parquet_data)
+  # Return the collected chunks as a single data.table
+  return(rbindlist(all_chunks, use.names = TRUE, fill = TRUE))
 }
+
+# old read parquet file ---
+# read_parquet_file <- function(my_file, n_rows = Inf, columns_to_read = NULL) {
+#   print(paste0("reading parquet file: ", my_file))
+# 
+#   # Read the entire Parquet file
+#   parquet_data <- aws.s3::s3read_using(
+#     FUN = function(object) {
+#       arrow::read_parquet(object)
+#     },
+#     bucket = Sys.getenv("S3_READ"),
+#     object = my_file
+#   )
+#   
+#   print("file read complete")
+#   gc()
+# 
+#   # Limit the number of rows if n_rows is specified
+#   if (!is.infinite(n_rows) && n_rows > 0) {
+#     parquet_data <- parquet_data[1:min(n_rows, nrow(parquet_data)), ]
+#   }
+# 
+#   # Filter the columns after reading the entire file
+#   # Automatically include any column that starts with "qtr"
+#   qtr_columns <- grep("^qtr", colnames(parquet_data), value = TRUE)
+#   if (!is.null(columns_to_read)) {
+#     parquet_data <- parquet_data[, union(columns_to_read, qtr_columns), drop = FALSE]
+#   }
+# 
+#   # Post-process parquet data to replace empty quotes with NA in specific columns
+#   replace_empty_with_na <- function(x) {
+#     ifelse(x == "", NA, x)
+#   }
+# 
+#   # Check if parquet_data is a data frame and if the required columns exist
+#   if (inherits(parquet_data, "data.frame")) {
+#     cols_to_check <- c("qtr1", "qtr2", "qtr3", "qtr4")
+#     existing_cols <- cols_to_check[cols_to_check %in% colnames(parquet_data)]
+# 
+#     if (length(existing_cols) > 0) {
+#       parquet_data <- parquet_data %>%
+#         mutate(across(all_of(existing_cols), replace_empty_with_na))
+#     }
+#   }
+# 
+#   return(parquet_data)
+# }
 
 
 
