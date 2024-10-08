@@ -688,6 +688,7 @@ server <- function(input, output, session) {
       ]$path_names
       
       my_data_recent
+      
     } else {
       
       my_data_recent <- my_items[grepl(input$country_selected, my_items$file_names, ignore.case = TRUE) &
@@ -705,9 +706,18 @@ server <- function(input, output, session) {
       })
       # Combine the data (assuming they have the same structure)
       data_recent <- do.call(rbind, data_recent)
+      
+    } else if(input$country_selected %in% c("Tanzania", "Kenya", "Ethiopia", "Nigeria", "South Africa")){ 
+      
+      data_recent <- s3read_using(FUN = read_parquet,
+                                     object = paste0("usaid/", gsub("\\s+", "", tolower(input$country_selected)), ".parquet"),
+                                     bucket = Sys.getenv("S3_WRITE"))
+      gc()
+      
     } else {
       # If only one file exists, read it directly
       data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
+      print(names(data_recent))
     }
     data_recent <- dplyr::bind_rows(data_recent)
 
@@ -946,6 +956,7 @@ server <- function(input, output, session) {
         "fundingagency",
         input$quarter
       )
+    input_reactive$data_recent <- as.data.frame(input_reactive$data_recent)
     input_reactive$data_recent <- input_reactive$data_recent[, cols_to_keep]
     input_reactive$data_recent <- input_reactive$data_recent %>% dplyr::rename(sex = sex2)
     
@@ -1509,6 +1520,14 @@ server <- function(input, output, session) {
         })
         # Combine the data (assuming they have the same structure)
         data_recent <- do.call(rbind, data_recent)
+        
+      } else if(input$country_selected_ts %in% c("Tanzania", "Kenya", "Ethiopia", "Nigeria", "South Africa")){ 
+        
+        data_recent <- s3read_using(FUN = read_parquet,
+                                    object = paste0("usaid/", gsub("\\s+", "", tolower(input$country_selected_ts)), ".parquet"),
+                                    bucket = Sys.getenv("S3_WRITE"))
+        gc()
+        
       } else {
         # If only one file exists, read it directly
         data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
