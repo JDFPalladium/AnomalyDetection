@@ -128,7 +128,7 @@ runRecAnalysis <- function(dat,keys) {
   dat_matrix <- data.matrix(site_keep[,(ncol(keys)+1):ncol(site_keep)], rownames.force = NA)
   # Calculate pairwise correlations
   cormat <- suppressWarnings(cor(dat_matrix, use = "pairwise.complete.obs"))
-  highly_correlated <- findCorrelation(cormat, cutoff = 0.99)
+  highly_correlated <- caret::findCorrelation(cormat, cutoff = 0.99)
   # Set lower triangle to zero since we don't want to double count; diag to zero as these are the same variable
   cormat[lower.tri(cormat)] <- 0
   diag(cormat) <- 0
