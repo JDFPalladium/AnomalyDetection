@@ -102,7 +102,7 @@ runRecAnalysis <- function(dat,keys) {
 
   # Create copy of input data
   site_spread <- dat
-  
+
   # Subset input data to keys columns
   keys <- site_spread[, 1:length(keys)] 
 
@@ -120,7 +120,7 @@ runRecAnalysis <- function(dat,keys) {
   # Identify indicators with zero variance to drop
   cols_to_drop <- names(site_keep[,(ncol(keys)+1):ncol(site_keep)])[var_inds == 0] 
   site_keep <- site_keep[,!(names(site_keep) %in% cols_to_drop)]
-  
+
   ## Drop variables that are colinear
   # Create pairwise correlation matrix
   dat_df <- site_keep
@@ -128,16 +128,35 @@ runRecAnalysis <- function(dat,keys) {
   dat_matrix <- data.matrix(site_keep[,(ncol(keys)+1):ncol(site_keep)], rownames.force = NA)
   # Calculate pairwise correlations
   cormat <- suppressWarnings(cor(dat_matrix, use = "pairwise.complete.obs"))
+  highly_correlated <- findCorrelation(cormat, cutoff = 0.99)
   # Set lower triangle to zero since we don't want to double count; diag to zero as these are the same variable
   cormat[lower.tri(cormat)] <- 0
   diag(cormat) <- 0
   # Get correlation matrix in long format
   cormat_long <- reshape2::melt(cormat)
 
+  set.seed(123)  # For reproducibility
+  # noise_level <- 1e-2
+  noise_level <- 0.01 * apply(dat_df[, ncol(keys)+highly_correlated], 2, function(x) sd(x, na.rm = TRUE)) 
+  print(noise_level)
+
+  # Add noise to highly correlated columns only
+  # dat_df[, ncol(keys)+highly_correlated] <- dat_df[, ncol(keys)+highly_correlated] +
+  #   as.data.frame(matrix(rnorm(n = length(highly_correlated) * nrow(dat_df),
+  #                mean = 0, sd = noise_level),
+  #          nrow = nrow(dat_df), ncol = length(highly_correlated)))
+  column_indices <- match(names(noise_level), names(dat_df))
+  print(column_indices)
+
+  for (i in 1:length(column_indices)) {
+    print(column_indices[i])
+    dat_df[[column_indices[i]]] <- dat_df[[column_indices[i]]] + rnorm(nrow(dat_df), mean = 0, sd = noise_level[i])
+  }
+  
   # # While there is a correlation between two MER indicators of greater than 0.95:
-  # while(max(cormat_long$value, na.rm = TRUE) > 0.95) {
+  # while(max(cormat_long$value, na.rm = TRUE) > 0.99) {
   #   # Get relevant indicators that are collinear
-  #   cormat_perf <- cormat_long %>% filter(value > .95)
+  #   cormat_perf <- cormat_long %>% filter(value > .99)
   #   # Select the first variable to drop
   #   col_to_drop <- cormat_perf$Var1[1]
   #   col_to_drop <- toString(col_to_drop)
@@ -161,6 +180,7 @@ runRecAnalysis <- function(dat,keys) {
   obs_to_keep <- which(obs_count > 3) 
   site_keep <- site_keep[obs_to_keep,]
 
+  
   ## Now, create sparse covariance matrix - refer to paper for further explanation
   # Get sparse sum of each indicator - sum of present values by variable; use na.rm so we remove NAs
   sum_sparse <- colSums(site_keep[, (ncol(keys)+1):ncol(site_keep)], na.rm = TRUE) 
@@ -181,6 +201,7 @@ runRecAnalysis <- function(dat,keys) {
   
   # N is the counts, s is where we store the covariances, and I is useful for some calculations
   S <- matrix(0, k, k) 
+
   
   # Loop through each observation
   for (i in 1:nrow(site_keep)){
@@ -195,14 +216,15 @@ runRecAnalysis <- function(dat,keys) {
     
     S <- S + (t(Hyt) %*% (t(yt_mu) %*% yt_mu) %*% Hyt) # update covariance matrix
   }
-
+  
   # Compute sparse correlation matrix
   N_sqrt <- sqrt(N)
   diag(N_sqrt) <- 1/(diag(N_sqrt))
   R <- (N_sqrt %*% S %*% N_sqrt)
-
+  
   # Calculate Mahalanobis distance
   site_sparse <- site_keep
+
   site_sparse$MD <- suppressWarnings(MDmiss(site_sparse[, (ncol(keys)+1):ncol(site_sparse)], center = mu, cov = R))
 
   # Use quantile function to generate cutoff for anomaly flag
