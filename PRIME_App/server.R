@@ -1,69 +1,125 @@
+#library(data.table)
+#library(caret)
 
 # add read parquet
 # qtr columns are automatically read in
-read_parquet_file <- function(my_file, chunk_size = 1000, columns_to_read = NULL) {
-  print(paste0("Reading parquet file: ", my_file))
+# h <- 1000  # Default chunk size
+# 
+# # Function to read parquet file more efficiently
+# read_parquet_file <- function(my_file, chunk_size = h, columns_to_read = NULL) {
+#   print(paste0("Reading parquet file in ", h, " chunks: ", my_file))
+# 
+#   # Initialize a list to collect chunks
+#   all_chunks <- list()
+# 
+#   # Define a function to process each chunk and add it to the list
+#   process_chunk <- function(chunk) {
+#     # Convert the chunk to data.table
+#     dt_chunk <- as.data.table(chunk)
+# 
+#     # Append the chunk to the list
+#     all_chunks <<- append(all_chunks, list(dt_chunk))
+# 
+#     # Optionally, call garbage collection after processing each chunk
+#     # gc()
+#   }
+# 
+#   # Function to read and process the Parquet file in chunks
+#   process_file_in_chunks <- function(file_path, chunk_size) {
+#     # Read the entire Parquet file as an Arrow Table
+#     table <- arrow::read_parquet(file_path)
+# 
+#     # Automatically include any column that starts with "qtr"
+#     qtr_columns <- grep("^qtr", colnames(table), value = TRUE)
+#     if (!is.null(columns_to_read)) {
+#       table <- table[, union(columns_to_read, qtr_columns), drop = FALSE]
+#     }
+# 
+#     # Convert Arrow Table to data.table directly
+#     dt_table <- as.data.table(table)
+# 
+#     # Post-process parquet data to replace empty quotes with NA in specific columns
+#     replace_empty_with_na <- function(x) {
+#       fifelse(x == "", NA_character_, x)
+#     }
+# 
+#     # Check and replace empty strings with NA for "qtr" columns
+#     cols_to_check <- c("qtr1", "qtr2", "qtr3", "qtr4")
+#     existing_cols <- cols_to_check[cols_to_check %in% colnames(dt_table)]
+# 
+#     if (length(existing_cols) > 0) {
+#       dt_table[, (existing_cols) := lapply(.SD, replace_empty_with_na), .SDcols = existing_cols]
+#     }
+# 
+#     # Convert the data.table to chunks
+#     num_rows <- nrow(dt_table)
+#     for (start in seq(1, num_rows, by = chunk_size)) {
+#       end <- min(start + chunk_size - 1, num_rows)
+#       chunk <- dt_table[start:end, ]
+#       process_chunk(chunk)
+#     }
+#   }
+# 
+#   # Read and process the Parquet file from S3
+#   aws.s3::s3read_using(
+#     FUN = function(object) {
+#       process_file_in_chunks(object, chunk_size)
+#     },
+#     bucket = Sys.getenv("S3_READ"),
+#     object = my_file
+#   )
+# 
+#   # Return the collected chunks as a single data.table
+#   return(rbindlist(all_chunks, use.names = TRUE, fill = TRUE))
+# }
+
+# old read parquet file ---
+read_parquet_file <- function(my_file, n_rows = Inf, columns_to_read = NULL) {
+  print(paste0("reading parquet file: ", my_file))
   
-  # Initialize a list to collect chunks
-  all_chunks <- list()
-  
-  # Define a function to process each chunk and add it to the list
-  process_chunk <- function(chunk) {
-    # Collect chunk into the list
-    all_chunks <<- append(all_chunks, list(chunk))
-    #print(paste("Processed chunk with", nrow(chunk), "rows"))
-  }
-  
-  # Function to read and process the Parquet file in chunks
-  process_file_in_chunks <- function(file_path, chunk_size) {
-    # Read the entire Parquet file as an Arrow Table
-    table <- arrow::read_parquet(file_path)
-    
-    #######
-    # Filter the columns after reading the entire file
-    # Automatically include any column that starts with "qtr"
-    qtr_columns <- grep("^qtr", colnames(table), value = TRUE)
-    if (!is.null(columns_to_read)) {
-      table <- table[, union(columns_to_read, qtr_columns), drop = FALSE]
-    }
-    
-    # Post-process parquet data to replace empty quotes with NA in specific columns
-    replace_empty_with_na <- function(x) {
-      ifelse(x == "", NA, x)
-    }
-    
-    # Check if table is a data frame and if the required columns exist
-    if (inherits(table, "data.frame")) {
-      cols_to_check <- c("qtr1", "qtr2", "qtr3", "qtr4")
-      existing_cols <- cols_to_check[cols_to_check %in% colnames(table)]
-      
-      if (length(existing_cols) > 0) {
-        table <- table %>%
-          mutate(across(all_of(existing_cols), replace_empty_with_na))
-      }
-    }
-    #######
-    
-    # Convert the Arrow Table to chunks
-    num_rows <- nrow(table)
-    for (start in seq(1, num_rows, by = chunk_size)) {
-      end <- min(start + chunk_size - 1, num_rows)
-      chunk <- table[start:end, ]
-      process_chunk(chunk)
-    }
-  }
-  
-  # Read and process the Parquet file from S3
-  aws.s3::s3read_using(
+  # Read the entire Parquet file
+  parquet_data <- aws.s3::s3read_using(
     FUN = function(object) {
-      process_file_in_chunks(object, chunk_size)
+      arrow::read_parquet(object)
     },
     bucket = Sys.getenv("S3_READ"),
     object = my_file
   )
   
-  # Return the collected chunks
-  return(all_chunks)
+  print("file read complete")
+  gc()
+  
+  # Limit the number of rows if n_rows is specified
+  if (!is.infinite(n_rows) && n_rows > 0) {
+    parquet_data <- parquet_data[1:min(n_rows, nrow(parquet_data)), ]
+  }
+  
+  # Filter the columns after reading the entire file
+  # Automatically include any column that starts with "qtr"
+  qtr_columns <- grep("^qtr", colnames(parquet_data), value = TRUE)
+  if (!is.null(columns_to_read)) {
+    parquet_data <- parquet_data[, union(columns_to_read, qtr_columns), drop = FALSE]
+  }
+  
+  # Post-process parquet data to replace empty quotes with NA in specific columns
+  replace_empty_with_na <- function(x) {
+    ifelse(x == "", NA, x)
+  }
+  
+  # Check if parquet_data is a data frame and if the required columns exist
+  if (inherits(parquet_data, "data.frame")) {
+    cols_to_check <- c("qtr1", "qtr2", "qtr3", "qtr4")
+    existing_cols <- cols_to_check[cols_to_check %in% colnames(parquet_data)]
+    
+    if (length(existing_cols) > 0) {
+      # Replace empty values with NA in-place, column by column
+      for (col in existing_cols) {
+        parquet_data[[col]] <- replace_empty_with_na(parquet_data[[col]])
+      }
+    }
+  }
+  
+  return(parquet_data)
 }
 
 
@@ -641,6 +697,7 @@ server <- function(input, output, session) {
       ]$path_names
       
       my_data_recent
+      
     } else {
       
       my_data_recent <- my_items[grepl(input$country_selected, my_items$file_names, ignore.case = TRUE) &
@@ -658,11 +715,21 @@ server <- function(input, output, session) {
       })
       # Combine the data (assuming they have the same structure)
       data_recent <- do.call(rbind, data_recent)
+      
+    } else if(input$country_selected %in% c("Tanzania", "Kenya", "Ethiopia", "Nigeria", "South Africa")){ 
+      
+      data_recent <- s3read_using(FUN = read_parquet,
+                                     object = paste0("usaid/", gsub("\\s+", "", tolower(input$country_selected)), ".parquet"),
+                                     bucket = Sys.getenv("S3_WRITE"))
+      gc()
+      
     } else {
       # If only one file exists, read it directly
       data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
+      print(names(data_recent))
     }
     data_recent <- dplyr::bind_rows(data_recent)
+    print("rec_upload File read is complete!")
 
 
     #data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
@@ -673,8 +740,10 @@ server <- function(input, output, session) {
                         "countryname" = "country")
     
     existing_columns <- intersect(names(data_recent), names(column_renames))
-    data_recent <- data_recent %>%
-      rename_at(vars(all_of(existing_columns)), ~ column_renames[existing_columns])
+    # data_recent <- data_recent %>%
+    #   rename_at(vars(all_of(existing_columns)), ~ column_renames[existing_columns])
+    # Assuming data_recent is a data.table
+    setnames(data_recent, old = existing_columns, new = column_renames[existing_columns])
     
     # drop extraneous rows from funding agency
     data_recent <- data_recent[!(tolower(data_recent$fundingagency) %in% c("dedup", "default", "data reported above facility level")), ]
@@ -899,6 +968,7 @@ server <- function(input, output, session) {
         "fundingagency",
         input$quarter
       )
+    input_reactive$data_recent <- as.data.frame(input_reactive$data_recent)
     input_reactive$data_recent <- input_reactive$data_recent[, cols_to_keep]
     input_reactive$data_recent <- input_reactive$data_recent %>% dplyr::rename(sex = sex2)
     
@@ -1462,6 +1532,14 @@ server <- function(input, output, session) {
         })
         # Combine the data (assuming they have the same structure)
         data_recent <- do.call(rbind, data_recent)
+        
+      } else if(input$country_selected_ts %in% c("Tanzania", "Kenya", "Ethiopia", "Nigeria", "South Africa")){ 
+        
+        data_recent <- s3read_using(FUN = read_parquet,
+                                    object = paste0("usaid/", gsub("\\s+", "", tolower(input$country_selected_ts)), ".parquet"),
+                                    bucket = Sys.getenv("S3_WRITE"))
+        gc()
+        
       } else {
         # If only one file exists, read it directly
         data_recent <- read_parquet_file(my_data_recent, columns_to_read = cols_to_read)
@@ -1469,7 +1547,7 @@ server <- function(input, output, session) {
       
       data_recent <- dplyr::bind_rows(data_recent)
       
-      
+      print("ts_upload File read is complete!")
       print(dim(data_recent))
       print(names(data_recent))
       
@@ -1485,71 +1563,75 @@ server <- function(input, output, session) {
       
     })
 
-    # now, repeat with earlier dataset
-    withProgress(message = 'Loading Historical Data', value = 0.7, {
+    # # now, repeat with earlier dataset
+    # withProgress(message = 'Loading Historical Data', value = 0.7, {
+    #   
+    #   # Select table name that contains name of OU, which is input$country_selected,
+    #   # contains "Site" as opposed to aggregate data, and "Recent" as opposed to historical
+    #   # my_data_recent is then the table name to extract
+    #   # western hemisphere does not exist in s3
+    #   # it is made up of south america, and carribean
+    #   if (input$country_selected_ts == "Western Hemisphere") {
+    #     
+    #     ous <- c(
+    #       "Central and South America Region",
+    #       "Caribbean"
+    #     )
+    #     
+    #     ous_pattern <- paste(ous, collapse = "|")
+    #     
+    #     my_data_historical <- my_items[
+    #       grepl(ous_pattern, my_items$file_names, ignore.case = TRUE) &
+    #         grepl("Site", my_items$file_names, ignore.case = TRUE) &
+    #         grepl("Historic", my_items$file_names, ignore.case = TRUE),
+    #     ]$path_names
+    #     
+    #     my_data_historical
+    #   } else {
+    #     
+    #     my_data_historical <- my_items[grepl(input$country_selected_ts, my_items$file_names, ignore.case = TRUE) &
+    #                                      grepl("Site", my_items$file_names, ignore.case = TRUE) &
+    #                                      grepl("Historic", my_items$file_names, ignore.case = TRUE),]$path_names
+    #   }
+    #   
+    #   
+    #   print(paste0("historical: ", my_data_historical))
+    # 
+    #   #data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
+    #   # Check if more than one file exists
+    #   if (length(my_data_historical) > 1) {
+    #     # Loop through and read each file
+    #     data_historical <- lapply(my_data_historical, function(file) {
+    #       read_parquet_file(file, columns_to_read = cols_to_read)
+    #     })
+    #     # Combine the data (assuming they have the same structure)
+    #     data_historical <- do.call(rbind, data_historical)
+    #   } else {
+    #     # If only one file exists, read it directly
+    #     data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
+    #   }
+    #   
+    #   data_historical <- dplyr::bind_rows(data_historical)
+    #   
+    #   print(dim(data_historical))
+    #   
+    #   if("prime_partner_name" %in% names(data_historical)){
+    #     data_historical$primepartner <- data_historical$prime_partner_name
+    #   }
+    #   if("funding_agency" %in% names(data_historical)){
+    #     data_historical$fundingagency <- data_historical$funding_agency
+    #   }
+    #   if("countryname" %in% names(data_historical)){
+    #     data_historical$country <- data_historical$countryname
+    #   }
+# 
+#       # Combine the two datasets
+#       data_all <- bind_rows(data_recent, data_historical)
       
-      # Select table name that contains name of OU, which is input$country_selected,
-      # contains "Site" as opposed to aggregate data, and "Recent" as opposed to historical
-      # my_data_recent is then the table name to extract
-      # western hemisphere does not exist in s3
-      # it is made up of south america, and carribean
-      if (input$country_selected_ts == "Western Hemisphere") {
-        
-        ous <- c(
-          "Central and South America Region",
-          "Caribbean"
-        )
-        
-        ous_pattern <- paste(ous, collapse = "|")
-        
-        my_data_historical <- my_items[
-          grepl(ous_pattern, my_items$file_names, ignore.case = TRUE) &
-            grepl("Site", my_items$file_names, ignore.case = TRUE) &
-            grepl("Historic", my_items$file_names, ignore.case = TRUE),
-        ]$path_names
-        
-        my_data_historical
-      } else {
-        
-        my_data_historical <- my_items[grepl(input$country_selected_ts, my_items$file_names, ignore.case = TRUE) &
-                                         grepl("Site", my_items$file_names, ignore.case = TRUE) &
-                                         grepl("Historic", my_items$file_names, ignore.case = TRUE),]$path_names
-      }
-      
-      
-      print(paste0("historical: ", my_data_historical))
-
-      #data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
-      # Check if more than one file exists
-      if (length(my_data_historical) > 1) {
-        # Loop through and read each file
-        data_historical <- lapply(my_data_historical, function(file) {
-          read_parquet_file(file, columns_to_read = cols_to_read)
-        })
-        # Combine the data (assuming they have the same structure)
-        data_historical <- do.call(rbind, data_historical)
-      } else {
-        # If only one file exists, read it directly
-        data_historical <- read_parquet_file(my_data_historical, columns_to_read = cols_to_read)
-      }
-      
-      data_historical <- dplyr::bind_rows(data_historical)
-      
-      print(dim(data_historical))
-      
-      if("prime_partner_name" %in% names(data_historical)){
-        data_historical$primepartner <- data_historical$prime_partner_name
-      }
-      if("funding_agency" %in% names(data_historical)){
-        data_historical$fundingagency <- data_historical$funding_agency
-      }
-      if("countryname" %in% names(data_historical)){
-        data_historical$country <- data_historical$countryname
-      }
-
-      # Combine the two datasets
-      data_all <- bind_rows(data_recent, data_historical)
-      
+      data_all <- data_recent
+      rm(data_recent)
+      gc()
+    
       # drop extraneous rows from funding agency
       data_all <- data_all[!(tolower(data_all$fundingagency) %in% c("dedup", "default", "data reported above facility level")), ]
       
@@ -1630,7 +1712,7 @@ server <- function(input, output, session) {
                  "Select Year/Quarter for Analysis and Run Data Checks.",
                  type="success")
       
-    })
+    # })
   })
   
   
@@ -1758,12 +1840,16 @@ server <- function(input, output, session) {
     input_reactive_ts$mer_data <-
       input_reactive_ts$mer_data[!input_reactive_ts$mer_data$primepartner %in% c("Dedup", "TBD"),]
 
-    # drop columns no longer needed
-    input_reactive_ts$mer_data <-
-      input_reactive_ts$mer_data[,!names(input_reactive_ts$mer_data) %in% c("numeratordenom",
-                                        "standardizeddisaggregate",
-                                        "ageasentered",
-                                        "statushiv")]
+    
+    # # drop columns no longer needed
+    # input_reactive_ts$mer_data <-
+    #   input_reactive_ts$mer_data[,!names(input_reactive_ts$mer_data) %in% c("numeratordenom",
+    #                                     "standardizeddisaggregate",
+    #                                     "ageasentered",
+    #                                     "statushiv")]
+    
+    input_reactive_ts$mer_data <- input_reactive_ts$mer_data %>%
+      select(-numeratordenom, -standardizeddisaggregate, -statushiv, -ageasentered)
     
     # Pivot longer to get all the values in one column
     input_reactive_ts$mer_data_long <- pivot_longer(input_reactive_ts$mer_data,
@@ -1816,7 +1902,14 @@ server <- function(input, output, session) {
     input_reactive_ts$mer_data_long <- input_reactive_ts$mer_data_long %>% arrange(desc(fiscal_year))
     input_reactive_ts$mer_data_long <- input_reactive_ts$mer_data_long %>%
       group_by(facility, indicator) %>%
-      mutate(primepartner = primepartner[1])
+      mutate(primepartner = last(primepartner),
+             fundingagency = last(fundingagency))
+    
+    updatePickerInput(session,
+                      "tsfunder",
+                      choices = unique(input_reactive_ts$mer_data_long$fundingagency),
+                      selected = unique(input_reactive_ts$mer_data_long$fundingagency),
+                      options = list(`actions-box` = TRUE))
 
     # summarize indicator value by facility/indicator/fiscal_year/qtr
     input_reactive_ts$mer_data_long <- input_reactive_ts$mer_data_long %>%

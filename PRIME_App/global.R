@@ -11,6 +11,7 @@ library(imputeTS)
 library(zoo)
 library(matlib)
 library(futile.logger)
+library(caret)
 
 #App Packages#
 library(shiny)
