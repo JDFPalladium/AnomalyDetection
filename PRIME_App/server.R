@@ -1,4 +1,5 @@
-library(data.table)
+#library(data.table)
+#library(caret)
 
 # add read parquet
 # qtr columns are automatically read in
@@ -179,7 +180,7 @@ has_auth_code <- function(params) {
 
 server <- function(input, output, session) {
 
-  user_input  <-  reactiveValues(authenticated = FALSE,
+  user_input  <-  reactiveValues(authenticated = TRUE,
                                  status = "",
                                  d2_session = NULL,
                                  memo_authorized = FALSE,
