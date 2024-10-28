@@ -2130,6 +2130,9 @@ server <- function(input, output, session) {
       "recommender_summary.xlsx"
     },
     content = function(file) {
+      
+      Sys.sleep(3)
+      
       # Get cover sheet
       wb <- loadWorkbook("RecommenderCoverSheet.xlsx")
       
@@ -2183,6 +2186,8 @@ server <- function(input, output, session) {
       "recommender_all.xlsx"
     },
     content = function(file) {
+      
+      Sys.sleep(3)
       
       # Get cover sheet
       wb <- loadWorkbook("RecommenderCoverSheet.xlsx")
@@ -2271,6 +2276,9 @@ server <- function(input, output, session) {
       "timeseries_summary.xlsx"
     },
     content = function(file) {
+      
+      Sys.sleep(3)
+      
       wb <- loadWorkbook("TimeSeriesCoverSheet.xlsx")
       # Create styles
       headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
@@ -2304,6 +2312,9 @@ server <- function(input, output, session) {
       "timeseries_all.xlsx"
     },
     content = function(file) {
+      
+      Sys.sleep(3)
+      
       wb <- loadWorkbook("TimeSeriesCoverSheet.xlsx")
       # Create styles
       headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
