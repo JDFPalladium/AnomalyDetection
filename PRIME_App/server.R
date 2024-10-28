@@ -1910,86 +1910,87 @@ server <- function(input, output, session) {
                       selected = unique(input_reactive_ts$mer_data_long$fundingagency),
                       options = list(`actions-box` = TRUE))
 
-    # summarize indicator value by facility/indicator/fiscal_year/qtr
-    input_reactive_ts$mer_data_long <- input_reactive_ts$mer_data_long %>%
-      group_by(psnu, primepartner, facility, indicator, fiscal_year, qtr) %>%
-      summarize(value = sum(value, na.rm = TRUE), .groups = "drop")
+    # # summarize indicator value by facility/indicator/fiscal_year/qtr
+    # input_reactive_ts$mer_data_long <- input_reactive_ts$mer_data_long %>%
+    #   group_by(psnu, primepartner, facility, indicator, fiscal_year, qtr) %>%
+    #   summarize(value = sum(value, na.rm = TRUE), .groups = "drop")
+    # 
+    # ## create a shell so that we can get all valid year-quarter combinations for later filtering
+    # earliest_year <- min(input_reactive_ts$mer_data_long$fiscal_year)
+    # shell <-
+    #   expand.grid(fiscal_year = earliest_year:recent_year, qtr = 1:4) %>% # all years and quarters
+    #   filter(!(fiscal_year >= recent_year & # now filter out rows where the year-quarter is later than the one selected
+    #              qtr > as.numeric(
+    #                gsub(".*?([0-9]+).*", "\\1", recent_qtr)
+    #              ))) %>%
+    #   arrange(desc(fiscal_year), desc(qtr)) %>%
+    #   mutate(keep = paste0(fiscal_year, qtr))
+    # 
+    # # take our long dataset and keep values from the timeperiods in the shell we just created
+    # input_reactive_ts$obs_to_keep <- input_reactive_ts$mer_data_long %>%
+    #   mutate(yrqtr = paste0(fiscal_year, qtr)) %>%
+    #   mutate(keep = ifelse(yrqtr %in% shell$keep, 1, 0)) %>%
+    #   group_by(psnu, facility, indicator) %>%
+    #   mutate(count = sum(keep)) %>%
+    #   filter(count >= 10) %>%
+    #   ungroup() %>%
+    #   # added this to remove future observations
+    #   filter(keep == 1) %>%
+    #   select(-count,-yrqtr,-keep)
+    # 
+    # # convert facility to character string
+    # input_reactive_ts$obs_to_keep$facility <- as.character(input_reactive_ts$obs_to_keep$facility)
 
-    ## create a shell so that we can get all valid year-quarter combinations for later filtering
-    earliest_year <- min(input_reactive_ts$mer_data_long$fiscal_year)
-    shell <-
-      expand.grid(fiscal_year = earliest_year:recent_year, qtr = 1:4) %>% # all years and quarters
-      filter(!(fiscal_year >= recent_year & # now filter out rows where the year-quarter is later than the one selected
-                 qtr > as.numeric(
-                   gsub(".*?([0-9]+).*", "\\1", recent_qtr)
-                 ))) %>%
-      arrange(desc(fiscal_year), desc(qtr)) %>%
-      mutate(keep = paste0(fiscal_year, qtr))
-
-    # take our long dataset and keep values from the timeperiods in the shell we just created
-    input_reactive_ts$obs_to_keep <- input_reactive_ts$mer_data_long %>%
-      mutate(yrqtr = paste0(fiscal_year, qtr)) %>%
-      mutate(keep = ifelse(yrqtr %in% shell$keep, 1, 0)) %>%
-      group_by(psnu, facility, indicator) %>%
-      mutate(count = sum(keep)) %>%
-      filter(count >= 10) %>%
-      ungroup() %>%
-      # added this to remove future observations
-      filter(keep == 1) %>%
-      select(-count,-yrqtr,-keep)
-    
-    # convert facility to character string
-    input_reactive_ts$obs_to_keep$facility <- as.character(input_reactive_ts$obs_to_keep$facility)
-
-    input_reactive_ts$obs_to_keep
-    
-      cols_to_keep <-
-        c(
-          "facility",
-          "indicator",
-          "psnu",
-          "operatingunit",
-          "country",
-          "numeratordenom",
-          "standardizeddisaggregate",
-          "statushiv",
-          "ageasentered",
-          "primepartner",
-          "fiscal_year",
-          "qtr1",
-          "qtr2",
-          "qtr3",
-          "qtr4",
-          "fundingagency"
-        )
+    # input_reactive_ts$obs_to_keep
+    # 
+    #   cols_to_keep <-
+    #     c(
+    #       "facility",
+    #       "indicator",
+    #       "psnu",
+    #       "operatingunit",
+    #       "country",
+    #       "numeratordenom",
+    #       "standardizeddisaggregate",
+    #       "statushiv",
+    #       "ageasentered",
+    #       "primepartner",
+    #       "fiscal_year",
+    #       "qtr1",
+    #       "qtr2",
+    #       "qtr3",
+    #       "qtr4",
+    #       "fundingagency"
+    #     )
+    #   
+    #   # run some final checks - make sure all necessary columns are there
+    #   if (sum(!cols_to_keep %in% names(input_reactive_ts$data_loaded)) > 0) {
+    #     shinyalert(
+    #       "Check the data file",
+    #       "One or more of the required columns are missing from your dataset. Please make sure
+    #     that your dataset contains all the following columns: facility, indicator, psnu,
+    #     numeratordenom, standardizeddisaggregate, fiscal_year, qtr1, qtr2, qtr3, and qtr4.",
+    #       type = "error"
+    #     )
+    #   }
+    # 
+    #   # make sure we have enough time periods
+    #   if (n_distinct(input_reactive_ts$obs_to_keep[, c("fiscal_year", "qtr")]) < 12) {
+    #     shinyalert(
+    #       "Check the data file",
+    #       "There are fewer than 12 quarters of data.",
+    #       type = "error"
+    #     )
+    #   } else {
+    #     shinyalert("Proceed", "Continue to run models.", type = "success")
+    #   }
       
-      # run some final checks - make sure all necessary columns are there
-      if (sum(!cols_to_keep %in% names(input_reactive_ts$data_loaded)) > 0) {
-        shinyalert(
-          "Check the data file",
-          "One or more of the required columns are missing from your dataset. Please make sure
-        that your dataset contains all the following columns: facility, indicator, psnu,
-        numeratordenom, standardizeddisaggregate, fiscal_year, qtr1, qtr2, qtr3, and qtr4.",
-          type = "error"
-        )
-      }
-
-      # make sure we have enough time periods
-      if (n_distinct(input_reactive_ts$obs_to_keep[, c("fiscal_year", "qtr")]) < 12) {
-        shinyalert(
-          "Check the data file",
-          "There are fewer than 12 quarters of data.",
-          type = "error"
-        )
-      } else {
-        shinyalert("Proceed", "Continue to run models.", type = "success")
-      }
-      
+      shinyalert("Proceed", "Continue to run models.", type = "success")
       # delete data from those intermediate tables to free up memory
       # only keep obs_to_keep, which is what we'll feed to the model
-      input_reactive_ts$mer_data <- NULL
-      input_reactive_ts$mer_data_long <- NULL
-      gc()
+      # input_reactive_ts$mer_data <- NULL
+      # input_reactive_ts$mer_data_long <- NULL
+      # gc()
       
     })
   })
@@ -2010,6 +2011,46 @@ server <- function(input, output, session) {
   # execute code chunk when run model button is pressed
   observeEvent(input$tsrun, {
 
+    # filter to user-selected funding agencies and indicators
+    input_reactive_ts$mer_data_long <- input_reactive_ts$mer_data_long[input_reactive_ts$mer_data_long$fundingagency %in% input$tsfunder,]
+    
+    # summarize indicator value by facility/indicator/fiscal_year/qtr
+    input_reactive_ts$mer_data_long <- input_reactive_ts$mer_data_long %>%
+      group_by(psnu, primepartner, facility, indicator, fiscal_year, qtr) %>%
+      summarize(value = sum(value, na.rm = TRUE), .groups = "drop")
+    
+    ## create a shell so that we can get all valid year-quarter combinations for later filtering
+    earliest_year <- min(input_reactive_ts$mer_data_long$fiscal_year)
+    recent_year <- input$tsyear
+    recent_qtr <- input$tsquarter
+    shell <-
+      expand.grid(fiscal_year = earliest_year:recent_year, qtr = 1:4) %>% # all years and quarters
+      filter(!(fiscal_year >= recent_year & # now filter out rows where the year-quarter is later than the one selected
+                 qtr > as.numeric(
+                   gsub(".*?([0-9]+).*", "\\1", recent_qtr)
+                 ))) %>%
+      arrange(desc(fiscal_year), desc(qtr)) %>%
+      mutate(keep = paste0(fiscal_year, qtr))
+    
+    # take our long dataset and keep values from the timeperiods in the shell we just created
+    input_reactive_ts$obs_to_keep <- input_reactive_ts$mer_data_long %>%
+      mutate(yrqtr = paste0(fiscal_year, qtr)) %>%
+      mutate(keep = ifelse(yrqtr %in% shell$keep, 1, 0)) %>%
+      group_by(psnu, facility, indicator) %>%
+      mutate(count = sum(keep)) %>%
+      filter(count >= 10) %>%
+      ungroup() %>%
+      # added this to remove future observations
+      filter(keep == 1) %>%
+      select(-count,-yrqtr,-keep)
+    
+    # convert facility to character string
+    input_reactive_ts$obs_to_keep$facility <- as.character(input_reactive_ts$obs_to_keep$facility)
+    
+    input_reactive_ts$mer_data <- NULL
+    input_reactive_ts$mer_data_long <- NULL
+    gc()
+    
     # runTimeSeries is defined in utils. returns a list of tables of results by ARIMA, STL, and ETS and 
     # summary tables by indicator, facility, and IP
     tsoutputs <- runTimeSeries(
@@ -2287,17 +2328,17 @@ server <- function(input, output, session) {
       addStyle(wb, sheet = 'Summary', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$Summary))
       
       addWorksheet(wb, 'ARIMA', tabColour = "green")
-      writeData(wb, sheet = 'ARIMA', forout_reactive_ts$ARIMA)
+      writeData(wb, sheet = 'ARIMA', forout_reactive_ts$ARIMA %>% filter(outlier == 1))
       setColWidths(wb, sheet = 'ARIMA', 1:3, width = "auto")
       addStyle(wb, sheet = 'ARIMA', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$ARIMA))
       
       addWorksheet(wb, 'ETS', tabColour = "green")
-      writeData(wb, sheet = 'ETS', forout_reactive_ts$ETS)
+      writeData(wb, sheet = 'ETS', forout_reactive_ts$ETS %>% filter(outlier == 1))
       setColWidths(wb, sheet = 'ETS', 1:3, width = "auto")
       addStyle(wb, sheet = 'ETS', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$ETS))
       
       addWorksheet(wb, 'STL', tabColour = "green")
-      writeData(wb, sheet = 'STL', forout_reactive_ts$STL)
+      writeData(wb, sheet = 'STL', forout_reactive_ts$STL %>% filter(outlier == 1))
       setColWidths(wb, sheet = 'STL', 1:3, width = "auto")
       addStyle(wb, sheet = 'STL', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$STL))
       
