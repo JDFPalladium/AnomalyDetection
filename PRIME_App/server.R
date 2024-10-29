@@ -2277,9 +2277,16 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       
-      Sys.sleep(3)
+      # Sys.sleep(3)
       
-      wb <- loadWorkbook("TimeSeriesCoverSheet.xlsx")
+      # Create a temporary copy of TimeSeriesCoverSheet.xlsx
+      temp_file <- tempfile(fileext = ".xlsx")
+      file.copy("TimeSeriesCoverSheet.xlsx", temp_file, overwrite = TRUE)
+      
+      # Load the temporary workbook
+      wb <- loadWorkbook(temp_file)
+      
+      # wb <- loadWorkbook("TimeSeriesCoverSheet.xlsx")
       # Create styles
       headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
       textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
@@ -2304,6 +2311,7 @@ server <- function(input, output, session) {
       addStyle(wb, sheet = 'Summary', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$Summary))
       
       saveWorkbook(wb, file, overwrite = TRUE)
+      unlink(temp_file)
     }
   )
   
@@ -2313,9 +2321,17 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       
-      Sys.sleep(3)
+      # Sys.sleep(3)
+      shinyalert(title = "loading file", text = "loading file")
+      # Create a temporary copy of TimeSeriesCoverSheet.xlsx
+      temp_file <- tempfile(fileext = ".xlsx")
+      file.copy("TimeSeriesCoverSheet.xlsx", temp_file, overwrite = TRUE)
       
-      wb <- loadWorkbook("TimeSeriesCoverSheet.xlsx")
+      # Load the temporary workbook
+      wb <- loadWorkbook(temp_file)
+      shinyalert(title = "file loaded", text = "file loaded")
+      # wb <- loadWorkbook("TimeSeriesCoverSheet.xlsx")
+      
       # Create styles
       headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
       textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
@@ -2340,22 +2356,22 @@ server <- function(input, output, session) {
       addStyle(wb, sheet = 'Summary', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$Summary))
       
       addWorksheet(wb, 'ARIMA', tabColour = "green")
-      writeData(wb, sheet = 'ARIMA', forout_reactive_ts$ARIMA %>% filter(outlier == 1))
+      writeData(wb, sheet = 'ARIMA', forout_reactive_ts$ARIMA)
       setColWidths(wb, sheet = 'ARIMA', 1:3, width = "auto")
       addStyle(wb, sheet = 'ARIMA', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$ARIMA))
       
       addWorksheet(wb, 'ETS', tabColour = "green")
-      writeData(wb, sheet = 'ETS', forout_reactive_ts$ETS %>% filter(outlier == 1))
+      writeData(wb, sheet = 'ETS', forout_reactive_ts$ETS)
       setColWidths(wb, sheet = 'ETS', 1:3, width = "auto")
       addStyle(wb, sheet = 'ETS', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$ETS))
       
       addWorksheet(wb, 'STL', tabColour = "green")
-      writeData(wb, sheet = 'STL', forout_reactive_ts$STL %>% filter(outlier == 1))
+      writeData(wb, sheet = 'STL', forout_reactive_ts$STL)
       setColWidths(wb, sheet = 'STL', 1:3, width = "auto")
       addStyle(wb, sheet = 'STL', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$STL))
       
       saveWorkbook(wb, file, overwrite = TRUE)
-      
+      unlink(temp_file)
     }
   )
   
