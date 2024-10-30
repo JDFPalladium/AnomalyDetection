@@ -180,7 +180,7 @@ has_auth_code <- function(params) {
 
 server <- function(input, output, session) {
 
-  user_input  <-  reactiveValues(authenticated = FALSE,
+  user_input  <-  reactiveValues(authenticated = TRUE,
                                  status = "",
                                  d2_session = NULL,
                                  memo_authorized = FALSE,
@@ -2277,30 +2277,33 @@ server <- function(input, output, session) {
     },
     content = function(file) {
       
+      print(file.exists("TimeSeriesCoverSheet.xlsx"))  # Should return TRUE if file is accessible
+      print(file.access("TimeSeriesCoverSheet.xlsx", 4)) # Should return 0 if read permission is allowed
+      print(normalizePath("TimeSeriesCoverSheet.xlsx"))
       wb <- loadWorkbook("TimeSeriesCoverSheet.xlsx")
       
-      # # Create styles
-      # headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
-      # textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
-      # 
-      # addWorksheet(wb, 'IP Scorecard', tabColour = "blue")
-      # writeData(wb, sheet = 'IP Scorecard', "This tab contains a summary of anomalies by IP by indicator.")
-      # writeData(wb, sheet = 'IP Scorecard', forout_reactive_ts$IPScorecard, startRow = 3)
-      # setColWidths(wb, sheet = 'IP Scorecard', 1:20, width = "auto")
-      # addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 1, cols = 1)
-      # addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive_ts$IPScorecard))
-      # 
-      # addWorksheet(wb, 'Facility Scorecard', tabColour = "blue")
-      # writeData(wb, sheet = 'Facility Scorecard', "This tab contains a summary of anomalies by facility.")
-      # writeData(wb, sheet = 'Facility Scorecard', forout_reactive_ts$FacilityScorecard, startRow = 3)
-      # setColWidths(wb, sheet = 'Facility Scorecard', 1:20, width = "auto")
-      # addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 1, cols = 1)
-      # addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive_ts$FacilityScorecard))
-      # 
-      # addWorksheet(wb, 'Summary', tabColour = "orange")
-      # writeData(wb, sheet = 'Summary', forout_reactive_ts$Summary)
-      # setColWidths(wb, sheet = 'Summary', 1:3, width = "auto")
-      # addStyle(wb, sheet = 'Summary', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$Summary))
+      # Create styles
+      headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
+      textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
+
+      addWorksheet(wb, 'IP Scorecard', tabColour = "blue")
+      writeData(wb, sheet = 'IP Scorecard', "This tab contains a summary of anomalies by IP by indicator.")
+      writeData(wb, sheet = 'IP Scorecard', forout_reactive_ts$IPScorecard, startRow = 3)
+      setColWidths(wb, sheet = 'IP Scorecard', 1:20, width = "auto")
+      addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 1, cols = 1)
+      addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive_ts$IPScorecard))
+
+      addWorksheet(wb, 'Facility Scorecard', tabColour = "blue")
+      writeData(wb, sheet = 'Facility Scorecard', "This tab contains a summary of anomalies by facility.")
+      writeData(wb, sheet = 'Facility Scorecard', forout_reactive_ts$FacilityScorecard, startRow = 3)
+      setColWidths(wb, sheet = 'Facility Scorecard', 1:20, width = "auto")
+      addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 1, cols = 1)
+      addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive_ts$FacilityScorecard))
+
+      addWorksheet(wb, 'Summary', tabColour = "orange")
+      writeData(wb, sheet = 'Summary', forout_reactive_ts$Summary)
+      setColWidths(wb, sheet = 'Summary', 1:3, width = "auto")
+      addStyle(wb, sheet = 'Summary', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$Summary))
       
       saveWorkbook(wb, file, overwrite = TRUE)
 
@@ -2312,47 +2315,49 @@ server <- function(input, output, session) {
       "timeseries_all.xlsx"
     },
     content = function(file) {
-      
+      print(file.exists("TimeSeriesCoverSheet.xlsx"))  # Should return TRUE if file is accessible
+      print(file.access("TimeSeriesCoverSheet.xlsx", 4)) # Should return 0 if read permission is allowed
+      print(normalizePath("TimeSeriesCoverSheet.xlsx"))
       # Load the temporary workbook
       wb <- loadWorkbook("TimeSeriesCoverSheet.xlsx")
       
-      # # Create styles
-      # headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
-      # textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
-      # 
-      # addWorksheet(wb, 'IP Scorecard', tabColour = "blue")
-      # writeData(wb, sheet = 'IP Scorecard', "This tab contains a summary of anomalies by IP by indicator.")
-      # writeData(wb, sheet = 'IP Scorecard', forout_reactive_ts$IPScorecard, startRow = 3)
-      # setColWidths(wb, sheet = 'IP Scorecard', 1:20, width = "auto")
-      # addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 1, cols = 1)
-      # addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive_ts$IPScorecard))
-      # 
-      # addWorksheet(wb, 'Facility Scorecard', tabColour = "blue")
-      # writeData(wb, sheet = 'Facility Scorecard', "This tab contains a summary of anomalies by facility.")
-      # writeData(wb, sheet = 'Facility Scorecard', forout_reactive_ts$FacilityScorecard, startRow = 3)
-      # setColWidths(wb, sheet = 'Facility Scorecard', 1:20, width = "auto")
-      # addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 1, cols = 1)
-      # addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive_ts$FacilityScorecard))
-      # 
-      # addWorksheet(wb, 'Summary', tabColour = "orange")
-      # writeData(wb, sheet = 'Summary', forout_reactive_ts$Summary)
-      # setColWidths(wb, sheet = 'Summary', 1:3, width = "auto")
-      # addStyle(wb, sheet = 'Summary', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$Summary))
-      # 
-      # addWorksheet(wb, 'ARIMA', tabColour = "green")
-      # writeData(wb, sheet = 'ARIMA', forout_reactive_ts$ARIMA)
-      # setColWidths(wb, sheet = 'ARIMA', 1:3, width = "auto")
-      # addStyle(wb, sheet = 'ARIMA', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$ARIMA))
-      # 
-      # addWorksheet(wb, 'ETS', tabColour = "green")
-      # writeData(wb, sheet = 'ETS', forout_reactive_ts$ETS)
-      # setColWidths(wb, sheet = 'ETS', 1:3, width = "auto")
-      # addStyle(wb, sheet = 'ETS', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$ETS))
-      # 
-      # addWorksheet(wb, 'STL', tabColour = "green")
-      # writeData(wb, sheet = 'STL', forout_reactive_ts$STL)
-      # setColWidths(wb, sheet = 'STL', 1:3, width = "auto")
-      # addStyle(wb, sheet = 'STL', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$STL))
+      # Create styles
+      headerStyle <- createStyle(fontSize = 14, textDecoration = "bold", fgFill = "#d3d3d3")
+      textStyle <- createStyle(fontSize = 16, textDecoration = "bold", fgFill = "#add8e6")
+
+      addWorksheet(wb, 'IP Scorecard', tabColour = "blue")
+      writeData(wb, sheet = 'IP Scorecard', "This tab contains a summary of anomalies by IP by indicator.")
+      writeData(wb, sheet = 'IP Scorecard', forout_reactive_ts$IPScorecard, startRow = 3)
+      setColWidths(wb, sheet = 'IP Scorecard', 1:20, width = "auto")
+      addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 1, cols = 1)
+      addStyle(wb, sheet = 'IP Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive_ts$IPScorecard))
+
+      addWorksheet(wb, 'Facility Scorecard', tabColour = "blue")
+      writeData(wb, sheet = 'Facility Scorecard', "This tab contains a summary of anomalies by facility.")
+      writeData(wb, sheet = 'Facility Scorecard', forout_reactive_ts$FacilityScorecard, startRow = 3)
+      setColWidths(wb, sheet = 'Facility Scorecard', 1:20, width = "auto")
+      addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 1, cols = 1)
+      addStyle(wb, sheet = 'Facility Scorecard', headerStyle, rows = 3, cols = 1:ncol(forout_reactive_ts$FacilityScorecard))
+
+      addWorksheet(wb, 'Summary', tabColour = "orange")
+      writeData(wb, sheet = 'Summary', forout_reactive_ts$Summary)
+      setColWidths(wb, sheet = 'Summary', 1:3, width = "auto")
+      addStyle(wb, sheet = 'Summary', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$Summary))
+
+      addWorksheet(wb, 'ARIMA', tabColour = "green")
+      writeData(wb, sheet = 'ARIMA', forout_reactive_ts$ARIMA)
+      setColWidths(wb, sheet = 'ARIMA', 1:3, width = "auto")
+      addStyle(wb, sheet = 'ARIMA', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$ARIMA))
+
+      addWorksheet(wb, 'ETS', tabColour = "green")
+      writeData(wb, sheet = 'ETS', forout_reactive_ts$ETS)
+      setColWidths(wb, sheet = 'ETS', 1:3, width = "auto")
+      addStyle(wb, sheet = 'ETS', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$ETS))
+
+      addWorksheet(wb, 'STL', tabColour = "green")
+      writeData(wb, sheet = 'STL', forout_reactive_ts$STL)
+      setColWidths(wb, sheet = 'STL', 1:3, width = "auto")
+      addStyle(wb, sheet = 'STL', headerStyle, rows = 1, cols = 1:ncol(forout_reactive_ts$STL))
       
       saveWorkbook(wb, file, overwrite = TRUE)
 
