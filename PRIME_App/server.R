@@ -96,6 +96,7 @@ read_parquet_file <- function(my_file, n_rows = Inf, columns_to_read = NULL) {
   
   # Filter the columns after reading the entire file
   # Automatically include any column that starts with "qtr"
+  print(colnames(parquet_data))
   qtr_columns <- grep("^qtr", colnames(parquet_data), value = TRUE)
   if (!is.null(columns_to_read)) {
     parquet_data <- parquet_data[, union(columns_to_read, qtr_columns), drop = FALSE]
@@ -754,21 +755,21 @@ server <- function(input, output, session) {
     input_reactive$data_loaded <- data_recent
     rm(data_recent)
     gc()
-  
-    print(table(input_reactive$data_loaded$country))
     
+    print(unique(input_reactive$data_loaded$country))
     
-    if (input_reactive$data_loaded$operatingunit[1] == "Asia Region") {
+    if (input$country_selected == "Asia") {
       input_reactive$data_loaded <- input_reactive$data_loaded %>% filter(country %in% input$asiafilter)
     }
-    if (input_reactive$data_loaded$operatingunit[1] == "West Africa Region") {
+    if (input$country_selected == "West Africa") {
       input_reactive$data_loaded <- input_reactive$data_loaded %>% filter(country %in% input$westafricafilter)
     }
-    if (input_reactive$data_loaded$operatingunit[1] == "Western Hemisphere Region") {
+    if (input$country_selected == "Western Hemisphere") {
       input_reactive$data_loaded <- input_reactive$data_loaded %>% filter(country %in% input$westernhemishpherefilter)
     }
 
     
+    print(unique(input_reactive$data_loaded$country))
     
     print(nrow(input_reactive$data_loaded))
     updateNumericInput(session,
@@ -1639,15 +1640,15 @@ server <- function(input, output, session) {
       input_reactive_ts$data_loaded <- data_all
 
       # If region is selected, filter for country/countries
-      if (input_reactive_ts$data_loaded$operatingunit[1] == "Asia Region") {
+      if (input$country_selected_ts == "Asia") {
         input_reactive_ts$data_loaded <- input_reactive_ts$data_loaded %>% filter(country == input$asiafilter_ts)
       }
       
-      if (input_reactive_ts$data_loaded$operatingunit[1] == "West Africa Region") {
+      if (input$country_selected_ts == "West Africa") {
         input_reactive_ts$data_loaded <- input_reactive_ts$data_loaded %>% filter(country == input$westafricafilter_ts)
       }
       
-      if (input_reactive_ts$data_loaded$operatingunit[1] == "Western Hemisphere Region") {
+      if (input$country_selected_ts == "Western Hemisphere") {
         input_reactive_ts$data_loaded <- input_reactive_ts$data_loaded %>% filter(country == input$westernhemishpherefilter_ts)
       }
       
