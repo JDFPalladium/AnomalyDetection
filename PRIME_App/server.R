@@ -699,7 +699,42 @@ server <- function(input, output, session) {
       
       my_data_recent
       
-    } else {
+    } else if (input$country_selected == "Asia") {
+        
+        ous <- c(
+          "Central Asia Region",
+          "Pacific Region",
+          "South and Southeast Asia Region"
+        )
+        
+        ous_pattern <- paste(ous, collapse = "|")
+        
+        my_data_recent <- my_items[
+          grepl(ous_pattern, my_items$file_names, ignore.case = TRUE) &
+            grepl("Site", my_items$file_names, ignore.case = TRUE) &
+            grepl("Recent", my_items$file_names, ignore.case = TRUE),
+        ]$path_names
+        
+        my_data_recent
+        
+      } else if (input$country_selected == "West Africa") {
+        
+        ous <- c(
+          "West Africa Region 1",
+          "West Africa Region 2"
+        )
+        
+        ous_pattern <- paste(ous, collapse = "|")
+        
+        my_data_recent <- my_items[
+          grepl(ous_pattern, my_items$file_names, ignore.case = TRUE) &
+            grepl("Site", my_items$file_names, ignore.case = TRUE) &
+            grepl("Recent", my_items$file_names, ignore.case = TRUE),
+        ]$path_names
+        
+        my_data_recent
+        
+      } else  {
       
       my_data_recent <- my_items[grepl(input$country_selected, my_items$file_names, ignore.case = TRUE) &
                                    grepl("Site", my_items$file_names, ignore.case = TRUE) &
@@ -1514,6 +1549,42 @@ server <- function(input, output, session) {
         ]$path_names
         
         my_data_recent
+        
+      } else if (input$country_selected_ts == "Asia") {
+        
+        ous <- c(
+          "Central Asia Region",
+          "Pacific Region",
+          "South and Southeast Asia Region"
+        )
+        
+        ous_pattern <- paste(ous, collapse = "|")
+        
+        my_data_recent <- my_items[
+          grepl(ous_pattern, my_items$file_names, ignore.case = TRUE) &
+            grepl("Site", my_items$file_names, ignore.case = TRUE) &
+            grepl("Recent", my_items$file_names, ignore.case = TRUE),
+        ]$path_names
+        
+        my_data_recent
+        
+      } else if (input$country_selected_ts == "West Africa") {
+        
+        ous <- c(
+          "West Africa Region 1",
+          "West Africa Region 2"
+        )
+        
+        ous_pattern <- paste(ous, collapse = "|")
+        
+        my_data_recent <- my_items[
+          grepl(ous_pattern, my_items$file_names, ignore.case = TRUE) &
+            grepl("Site", my_items$file_names, ignore.case = TRUE) &
+            grepl("Recent", my_items$file_names, ignore.case = TRUE),
+        ]$path_names
+        
+        my_data_recent
+        
       } else {
         
         my_data_recent <- my_items[grepl(input$country_selected_ts, my_items$file_names, ignore.case = TRUE) &
@@ -1641,15 +1712,15 @@ server <- function(input, output, session) {
 
       # If region is selected, filter for country/countries
       if (input$country_selected_ts == "Asia") {
-        input_reactive_ts$data_loaded <- input_reactive_ts$data_loaded %>% filter(country == input$asiafilter_ts)
+        input_reactive_ts$data_loaded <- input_reactive_ts$data_loaded %>% filter(country %in% input$asiafilter_ts)
       }
       
       if (input$country_selected_ts == "West Africa") {
-        input_reactive_ts$data_loaded <- input_reactive_ts$data_loaded %>% filter(country == input$westafricafilter_ts)
+        input_reactive_ts$data_loaded <- input_reactive_ts$data_loaded %>% filter(country %in% input$westafricafilter_ts)
       }
       
       if (input$country_selected_ts == "Western Hemisphere") {
-        input_reactive_ts$data_loaded <- input_reactive_ts$data_loaded %>% filter(country == input$westernhemishpherefilter_ts)
+        input_reactive_ts$data_loaded <- input_reactive_ts$data_loaded %>% filter(country %in% input$westernhemishpherefilter_ts)
       }
       
       ## Logic to calculate what years and quarters are valid
