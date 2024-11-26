@@ -11,6 +11,7 @@ library(imputeTS)
 library(zoo)
 library(matlib)
 library(futile.logger)
+library(caret)
 
 #App Packages#
 library(shiny)
@@ -74,7 +75,7 @@ quarterly_indicators <-
     "TX_RTT",
     "VMMC_CIRC"
   )
-ASIA <- c("Burma", "Cambodia", "India", "Indonesia", "Kazakhstan",
+ASIA <- c("Burma", "Indonesia", "Kazakhstan",
           "Kyrgyzstan", "Laos", "Nepal", "Papua New Guinea",
           "Philippines", "Tajikistan", "Thailand")
 WESTAFRICA <- c("Benin", "Burkina Faso", "Ghana", "Liberia",
@@ -84,7 +85,7 @@ WESTERNHEMISPHERE <- c("Jamaica", "Trinidad and Tobago", "Guyana",
                  "El Salvador", "Honduras", "Nicaragua",
                  "Brazil", "Colombia", "Peru")
 COUNTRIES <- c("Malawi", "Botswana", "Eswatini", "Asia", "West Africa", "Western Hemisphere",
-               "Zambia", "Zimbabwe", "Nigeria", "Angola", "Burundi", "Cameroon",
+               "Zambia", "Zimbabwe", "Nigeria", "Angola", "Burundi", "Cameroon", "India",
               "Cote d'Ivoire", "Democratic Republic of the Congo", "Dominican Republic",
               "Ethiopia", "Haiti", "Kenya", "Lesotho", "Mozambique", "Namibia", "Rwanda",
               "South Africa", "South Sudan", "Tanzania", "Uganda", "Ukraine", "Vietnam")

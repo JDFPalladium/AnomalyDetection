@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "locale": "C",
+  "platform": "4.1.1",
+  "metadata": {
+    "appmode": "static",
+    "primary_rmd": null,
+    "primary_html": "App/google-analytics.html",
+    "content_category": null,
+    "has_parameters": false
+  },
+  "packages": null,
+  "files": {
+    ".Rprofile": {
+      "checksum": "f018cd139466cf25ef51dcc34f34e223"
+    },
+    "App/app.R": {
+      "checksum": "12acaacd7f203b1425ac864da0133bb0"
+    },
+    "App/google-analytics.html": {
+      "checksum": "464bc755e739a5931ea603ba4425355f"
+    },
+    "App/intro_text.html": {
+      "checksum": "d2dca7b07675182f531d44066917b52b"
+    },
+    "App/RecommenderCoverSheet.xlsx": {
+      "checksum": "8b5ed984671c3e73fb430a3b1e5d15a3"
+    },
+    "App/TimeSeriesCoverSheet.xlsx": {
+      "checksum": "597a912c0c3cb80fb95f9d5eef5f6685"
+    },
+    "App/utils.R": {
+      "checksum": "2a4d1235ce0a4e8f738a9678a286555e"
+    },
+    "PRIME_App/description.txt": {
+      "checksum": "06cc05677a2a03cb1bd0c7a8e5ceaca1"
+    },
+    "PRIME_App/global.R": {
+      "checksum": "40c3f73f765c597836343c789145c8e5"
+    },
+    "PRIME_App/intro_text.html": {
+      "checksum": "af96fcad5ad484926de78a9a96a497f6"
+    },
+    "PRIME_App/RecommenderCoverSheet.xlsx": {
+      "checksum": "8b5ed984671c3e73fb430a3b1e5d15a3"
+    },
+    "PRIME_App/server.R": {
+      "checksum": "b6ee1080c7de008023ca08da486d3f12"
+    },
+    "PRIME_App/TimeSeriesCoverSheet.xlsx": {
+      "checksum": "597a912c0c3cb80fb95f9d5eef5f6685"
+    },
+    "PRIME_App/ui.R": {
+      "checksum": "60b42da3f2286bd28226c46adf767648"
+    },
+    "PRIME_App/USAID_logo.png": {
+      "checksum": "00b4f6953126efebcfde93dad6771562"
+    },
+    "PRIME_App/utils.R": {
+      "checksum": "0c19a26c5882d046b1367282031a9b5e"
+    },
+    "README.md": {
+      "checksum": "1396ffaffe88ed561d4c8de0a75ee140"
+    },
+    "renv.lock": {
+      "checksum": "5e2e5e2ae3737c02129473ea4cc72f80"
+    }
+  },
+  "users": null
+}
