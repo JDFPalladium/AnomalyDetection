@@ -127,12 +127,12 @@ read_parquet_file <- function(my_file, n_rows = Inf, columns_to_read = NULL) {
 
 
 # connect to s3
-tryCatch({
-  pdaprules::s3_connect()
-},
-error = function(e) {
-  print(e)
-})
+# tryCatch({
+#   pdaprules::s3_connect()
+# },
+# error = function(e) {
+#   print(e)
+# })
 
 # test connection
 # my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"), filter_parquet = TRUE)
@@ -1525,8 +1525,27 @@ server <- function(input, output, session) {
     
     withProgress(message = 'Loading Recent Data', value = 0.3, {
 
+      bucket <- Sys.getenv("S3_READ")
       
-      my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"), filter_parquet = TRUE)
+      message("S3_READ configured: ", nzchar(bucket))
+      message("Region: ", Sys.getenv("REGION"))
+      message("Selected country: ", input$country_selected)
+      
+      #my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"), filter_parquet = TRUE)
+      my_items <- tryCatch(
+        s3_list_bucket_items(
+          bucket = bucket,
+          filter_parquet = TRUE
+        ),
+        error = function(e) {
+          stop(
+            "S3 bucket listing failed: ",
+            conditionMessage(e),
+            call. = FALSE
+          )
+        }
+      )
+
 
       # Select table name that contains name of OU, which is input$country_selected,
       # contains "Site" as opposed to aggregate data, and "Recent" as opposed to historical
