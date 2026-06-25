@@ -181,7 +181,7 @@ has_auth_code <- function(params) {
 
 server <- function(input, output, session) {
 
-  user_input  <-  reactiveValues(authenticated = FALSE,
+  user_input  <-  reactiveValues(authenticated = TRUE,
                                  status = "",
                                  d2_session = NULL,
                                  memo_authorized = FALSE,
@@ -1527,6 +1527,9 @@ server <- function(input, output, session) {
 
       
       my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"), filter_parquet = TRUE)
+      message("S3_READ configured: ", nzchar(bucket))
+      message("Region: ", Sys.getenv("REGION"))
+      message("Selected country: ", input$country_selected)
 
       # Select table name that contains name of OU, which is input$country_selected,
       # contains "Site" as opposed to aggregate data, and "Recent" as opposed to historical
