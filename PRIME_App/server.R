@@ -127,12 +127,12 @@ read_parquet_file <- function(my_file, n_rows = Inf, columns_to_read = NULL) {
 
 
 # connect to s3
-tryCatch({
-  pdaprules::s3_connect()
-},
-error = function(e) {
-  print(e)
-})
+# tryCatch({
+#   pdaprules::s3_connect()
+# },
+# error = function(e) {
+#   print(e)
+# })
 
 # test connection
 # my_items <- s3_list_bucket_items(bucket = Sys.getenv("S3_READ"), filter_parquet = TRUE)
